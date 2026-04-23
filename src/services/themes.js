@@ -132,6 +132,29 @@ async function getAppliedTheme(worldName) {
   return readTheme(worldName, activeTheme);
 }
 
+async function resolveAppliedTheme(worldName, overrideThemeName) {
+  if (typeof overrideThemeName === "string" && overrideThemeName.trim() !== "") {
+    return {
+      source: "page",
+      theme: await readTheme(worldName, overrideThemeName.trim())
+    };
+  }
+
+  const activeTheme = await getAppliedTheme(worldName);
+
+  if (!activeTheme) {
+    return {
+      source: null,
+      theme: null
+    };
+  }
+
+  return {
+    source: "world",
+    theme: activeTheme
+  };
+}
+
 module.exports = {
   buildThemeFileName,
   getActiveTheme,
@@ -142,6 +165,7 @@ module.exports = {
   listThemes,
   loadThemes,
   readTheme,
+  resolveAppliedTheme,
   setActiveTheme,
   themeNameFromFile
 };

@@ -44,12 +44,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 6.1 validation: verified
 - Themed rendered page output: implemented
 - Task 6.2 validation: verified
+- Per-page theme override: implemented
+- Task 6.3 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 6 — Theme System
-- Current recommended next task: `Task 6.3`
+- Current recommended next task: `Task 7.1`
 
 ## Status Legend
 
@@ -562,6 +564,33 @@ Validation:
 - Tests cover rendered page output with and without active theme, CSS asset loading, active theme resolution, and route behavior
 - Direct verification returned sanitized HTML plus the expected theme href for a rendered page
 
+### Task 6.3 — Add per-page theme override
+
+Status: `[x] Done`
+
+Implemented:
+- Top-level page theme override parsing with the `<!-- theme: name -->` convention
+- Removal of the override marker from rendered markdown output
+- Theme resolution that prefers the page override before the active world theme
+- Theme source metadata in rendered page responses
+
+Files created or modified:
+- `src/services/page-output.js`
+- `src/services/themes.js`
+- `test/services/page-output.test.js`
+- `test/services/themes.test.js`
+- `project_status.md`
+
+Notes:
+- The override stays optional and lightweight
+- Page content and theme data remain separate in the rendered output payload
+- The override marker is treated as metadata and does not appear in rendered HTML
+
+Validation:
+- `npm test` passed
+- Tests cover override parsing, override stripping, page-level theme precedence, and fallback to the world theme
+- Direct verification returned the page-selected theme reference when an override marker was present
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -600,7 +629,7 @@ Validation:
 
 - [x] Task 6.1 — Implement theme loading
 - [x] Task 6.2 — Apply theme to rendered pages
-- [ ] Task 6.3 — Support per-page theme override
+- [x] Task 6.3 — Support per-page theme override
 
 ### Phase 7 — Templates
 
@@ -623,5 +652,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 6.3`.
+2. Execute `Task 7.1`.
 3. Update this file after each completed task.

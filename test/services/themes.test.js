@@ -14,6 +14,7 @@ const {
   listThemes,
   loadThemes,
   readTheme,
+  resolveAppliedTheme,
   setActiveTheme,
   themeNameFromFile
 } = require("../../src/services/themes");
@@ -118,6 +119,21 @@ test("getAppliedTheme resolves the active theme details", async () => {
   assert.equal(theme.name, "eldoria");
   assert.equal(theme.fileName, "eldoria.css");
   assert.equal(theme.css, "body { color: red; }");
+});
+
+test("resolveAppliedTheme prefers a page override over the active world theme", async () => {
+  const worldName = "themes-resolve-override-world";
+  await resetWorld(worldName);
+  const worldPaths = getWorldPaths(worldName);
+  await fs.mkdir(worldPaths.themes, { recursive: true });
+  await fs.writeFile(path.join(worldPaths.themes, "eldoria.css"), "body { color: red; }", "utf8");
+  await fs.writeFile(path.join(worldPaths.themes, "ashlands.css"), "body { color: orange; }", "utf8");
+  await setActiveTheme(worldName, "eldoria");
+
+  const result = await resolveAppliedTheme(worldName, "ashlands");
+
+  assert.equal(result.source, "page");
+  assert.equal(result.theme.name, "ashlands");
 });
 
 test("GET /themes returns the theme list payload", async () => {

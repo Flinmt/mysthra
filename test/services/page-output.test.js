@@ -5,11 +5,24 @@ const test = require("node:test");
 
 const { getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
-const { renderPageOutput, setActiveTheme } = require("../../src/services");
+const {
+  parsePageThemeOverride,
+  renderPageOutput,
+  setActiveTheme,
+  stripPageThemeOverride
+} = require("../../src/services");
 
 async function resetWorld(worldName) {
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
 }
+
+test("parsePageThemeOverride reads the top-level theme marker", () => {
+  assert.equal(parsePageThemeOverride("<!-- theme: ashlands -->\n# Eldoria\n"), "ashlands");
+});
+
+test("stripPageThemeOverride removes the top-level theme marker from markdown", () => {
+  assert.equal(stripPageThemeOverride("<!-- theme: ashlands -->\n# Eldoria\n"), "# Eldoria\n");
+});
 
 test("renderPageOutput returns rendered html with no theme when none is active", async () => {
   const worldName = "page-output-no-theme-world";
@@ -26,6 +39,7 @@ test("renderPageOutput returns rendered html with no theme when none is active",
   const result = await renderPageOutput(worldName, "eldoria");
 
   assert.equal(result.page.slug, "eldoria");
+  assert.equal(result.page.themeOverride, null);
   assert.equal(result.html, "<h1>Eldoria</h1>\n<p>A northern empire.</p>");
   assert.equal(result.theme, null);
 });
@@ -55,7 +69,36 @@ test("renderPageOutput returns the active theme reference separately from html",
   assert.deepEqual(result.theme, {
     name: "eldoria",
     fileName: "eldoria.css",
-    href: "/themes/eldoria.css?world=page-output-theme-world"
+    href: "/themes/eldoria.css?world=page-output-theme-world",
+    source: "world"
+  });
+});
+
+test("renderPageOutput prefers a page theme override over the active world theme", async () => {
+  const worldName = "page-output-override-world";
+  await resetWorld(worldName);
+  const worldPaths = getWorldPaths(worldName);
+  await fs.mkdir(worldPaths.pages, { recursive: true });
+  await fs.mkdir(worldPaths.themes, { recursive: true });
+
+  await fs.writeFile(
+    path.join(worldPaths.pages, "eldoria.md"),
+    "<!-- theme: ashlands -->\n# Eldoria\nBurning plains.\n",
+    "utf8"
+  );
+  await fs.writeFile(path.join(worldPaths.themes, "eldoria.css"), "body { color: blue; }", "utf8");
+  await fs.writeFile(path.join(worldPaths.themes, "ashlands.css"), "body { color: orange; }", "utf8");
+  await setActiveTheme(worldName, "eldoria");
+
+  const result = await renderPageOutput(worldName, "eldoria");
+
+  assert.equal(result.page.themeOverride, "ashlands");
+  assert.equal(result.page.content, "# Eldoria\nBurning plains.\n");
+  assert.deepEqual(result.theme, {
+    name: "ashlands",
+    fileName: "ashlands.css",
+    href: "/themes/ashlands.css?world=page-output-override-world",
+    source: "page"
   });
 });
 
@@ -99,4 +142,5 @@ test("GET /pages/:id/rendered returns the rendered page output", async () => {
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.html, "<h1>Eldoria</h1>\n<p>Hello <span>world</span></p>");
   assert.equal(result.body.theme.href, "/themes/northern.css?world=page-output-route-world");
+  assert.equal(result.body.theme.source, "world");
 });
