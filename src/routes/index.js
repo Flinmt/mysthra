@@ -1,5 +1,5 @@
 const { sendJson } = require("../utils/http");
-const { listPages, readPage } = require("../services");
+const { createPage, listPages, readPage } = require("../services");
 
 function getRequestUrl(requestUrl) {
   return new URL(requestUrl, "http://localhost");
@@ -26,19 +26,59 @@ function getErrorStatusCode(error) {
     return 400;
   }
 
+  if (error.code === "INVALID_PAGE_INPUT" || error.code === "INVALID_PAGE_TITLE") {
+    return 400;
+  }
+
   if (error.code === "PAGE_NOT_FOUND") {
     return 404;
+  }
+
+  if (error.code === "PAGE_ALREADY_EXISTS") {
+    return 409;
   }
 
   return 500;
 }
 
 function getErrorMessage(error, statusCode) {
-  if (statusCode === 400 || statusCode === 404) {
+  if (statusCode === 400 || statusCode === 404 || statusCode === 409) {
     return error.message;
   }
 
   return "Internal Server Error";
+}
+
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+
+    request.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    request.on("end", () => {
+      resolve(body);
+    });
+
+    request.on("error", reject);
+  });
+}
+
+async function parseJsonBody(request) {
+  const rawBody = await readRequestBody(request);
+
+  if (!rawBody.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch (error) {
+    const parseError = new Error("Request body must be valid JSON");
+    parseError.code = "INVALID_JSON";
+    throw parseError;
+  }
 }
 
 async function router(request, response) {
@@ -80,6 +120,37 @@ async function router(request, response) {
     } catch (error) {
       const statusCode = getErrorStatusCode(error);
       const message = getErrorMessage(error, statusCode);
+
+      sendJson(response, statusCode, {
+        error: message
+      });
+      return;
+    }
+  }
+
+  if (request.method === "POST" && request.url === "/pages") {
+    try {
+      const body = await parseJsonBody(request);
+      const worldName = typeof body.world === "string" ? body.world : "";
+
+      if (!worldName) {
+        sendJson(response, 400, {
+          error: "Missing required field: world"
+        });
+        return;
+      }
+
+      const page = await createPage(worldName, body);
+
+      sendJson(response, 201, page);
+      return;
+    } catch (error) {
+      const statusCode = error.code === "INVALID_JSON"
+        ? 400
+        : getErrorStatusCode(error);
+      const message = error.code === "INVALID_JSON"
+        ? error.message
+        : getErrorMessage(error, statusCode);
 
       sendJson(response, statusCode, {
         error: message
