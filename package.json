@@ -1,0 +1,14 @@
+{
+  "name": "mythra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted collaborative worldbuilding platform backend",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
