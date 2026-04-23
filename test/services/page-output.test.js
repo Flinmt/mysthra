@@ -6,9 +6,11 @@ const test = require("node:test");
 const { getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
 const {
+  parsePageTemplateOverride,
   parsePageThemeOverride,
   renderPageOutput,
   setActiveTheme,
+  stripPageTemplateOverride,
   stripPageThemeOverride
 } = require("../../src/services");
 
@@ -22,6 +24,14 @@ test("parsePageThemeOverride reads the top-level theme marker", () => {
 
 test("stripPageThemeOverride removes the top-level theme marker from markdown", () => {
   assert.equal(stripPageThemeOverride("<!-- theme: ashlands -->\n# Eldoria\n"), "# Eldoria\n");
+});
+
+test("parsePageTemplateOverride reads the top-level template marker", () => {
+  assert.equal(parsePageTemplateOverride("<!-- template: chronicle -->\n# Eldoria\n"), "chronicle");
+});
+
+test("stripPageTemplateOverride removes the top-level template marker from markdown", () => {
+  assert.equal(stripPageTemplateOverride("<!-- template: chronicle -->\n# Eldoria\n"), "# Eldoria\n");
 });
 
 test("renderPageOutput returns rendered html with no theme when none is active", async () => {
@@ -40,7 +50,10 @@ test("renderPageOutput returns rendered html with no theme when none is active",
 
   assert.equal(result.page.slug, "eldoria");
   assert.equal(result.page.themeOverride, null);
+  assert.equal(result.page.templateOverride, null);
   assert.equal(result.html, "<h1>Eldoria</h1>\n<p>A northern empire.</p>");
+  assert.equal(result.documentHtml, "<h1>Eldoria</h1>\n<p>A northern empire.</p>");
+  assert.equal(result.template, null);
   assert.equal(result.theme, null);
 });
 
@@ -66,6 +79,7 @@ test("renderPageOutput returns the active theme reference separately from html",
   const result = await renderPageOutput(worldName, "tharos");
 
   assert.equal(result.html, "<h1>King Tharos</h1>\n<p>Ruled by fear.</p>");
+  assert.equal(result.documentHtml, "<h1>King Tharos</h1>\n<p>Ruled by fear.</p>");
   assert.deepEqual(result.theme, {
     name: "eldoria",
     fileName: "eldoria.css",
@@ -100,6 +114,40 @@ test("renderPageOutput prefers a page theme override over the active world theme
     href: "/themes/ashlands.css?world=page-output-override-world",
     source: "page"
   });
+});
+
+test("renderPageOutput wraps rendered html with a page template override", async () => {
+  const worldName = "page-output-template-world";
+  await resetWorld(worldName);
+  const worldPaths = getWorldPaths(worldName);
+  await fs.mkdir(worldPaths.pages, { recursive: true });
+  await fs.mkdir(worldPaths.themes, { recursive: true });
+  await fs.mkdir(worldPaths.templates, { recursive: true });
+
+  await fs.writeFile(
+    path.join(worldPaths.pages, "eldoria.md"),
+    "<!-- template: chronicle -->\n# Eldoria\nNorthern empire.\n",
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(worldPaths.templates, "chronicle.html"),
+    "<html><head><title>{{title}}</title><link rel=\"stylesheet\" href=\"{{themeHref}}\"></head><body><main>{{content}}</main></body></html>",
+    "utf8"
+  );
+  await fs.writeFile(path.join(worldPaths.themes, "eldoria.css"), "body { color: blue; }", "utf8");
+  await setActiveTheme(worldName, "eldoria");
+
+  const result = await renderPageOutput(worldName, "eldoria");
+
+  assert.equal(result.page.templateOverride, "chronicle");
+  assert.deepEqual(result.template, {
+    name: "chronicle",
+    fileName: "chronicle.html"
+  });
+  assert.equal(
+    result.documentHtml,
+    "<html><head><title>Eldoria</title><link rel=\"stylesheet\" href=\"/themes/eldoria.css?world=page-output-template-world\"></head><body><main><h1>Eldoria</h1>\n<p>Northern empire.</p></main></body></html>"
+  );
 });
 
 test("GET /pages/:id/rendered returns the rendered page output", async () => {
@@ -141,6 +189,7 @@ test("GET /pages/:id/rendered returns the rendered page output", async () => {
 
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.html, "<h1>Eldoria</h1>\n<p>Hello <span>world</span></p>");
+  assert.equal(result.body.documentHtml, "<h1>Eldoria</h1>\n<p>Hello <span>world</span></p>");
   assert.equal(result.body.theme.href, "/themes/northern.css?world=page-output-route-world");
   assert.equal(result.body.theme.source, "world");
 });

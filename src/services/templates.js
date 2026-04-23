@@ -2,6 +2,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const { ensureWorldStructure, getWorldPaths, resolveWorldPath, validateFileName } = require("../data");
+const { escapeHtml, sanitizeHtml } = require("./rendering");
 
 function templateNameFromFile(fileName) {
   return path.basename(fileName, ".html");
@@ -68,9 +69,38 @@ async function loadTemplates(worldName) {
   };
 }
 
+function injectTemplateContent(templateHtml, contentHtml) {
+  const template = String(templateHtml);
+
+  if (template.includes("{{content}}")) {
+    return template.replace(/{{content}}/g, contentHtml);
+  }
+
+  if (template.includes("</body>")) {
+    return template.replace("</body>", `${contentHtml}</body>`);
+  }
+
+  return `${template}${contentHtml}`;
+}
+
+function applyTemplate(templateHtml, context = {}) {
+  const contentHtml = typeof context.content === "string" ? context.content : "";
+  const title = typeof context.title === "string" ? context.title : "";
+  const themeHref = typeof context.themeHref === "string" ? context.themeHref : "";
+
+  let output = injectTemplateContent(templateHtml, contentHtml);
+
+  output = output.replace(/{{title}}/g, escapeHtml(title));
+  output = output.replace(/{{themeHref}}/g, escapeHtml(themeHref));
+
+  return sanitizeHtml(output);
+}
+
 module.exports = {
+  applyTemplate,
   buildTemplateFileName,
   getTemplatePath,
+  injectTemplateContent,
   listTemplates,
   loadTemplates,
   readTemplate,

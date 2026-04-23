@@ -6,7 +6,9 @@ const test = require("node:test");
 const { getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
 const {
+  applyTemplate,
   buildTemplateFileName,
+  injectTemplateContent,
   listTemplates,
   loadTemplates,
   readTemplate,
@@ -23,6 +25,29 @@ test("templateNameFromFile removes the html extension", () => {
 
 test("buildTemplateFileName appends the html extension", () => {
   assert.equal(buildTemplateFileName("chronicle"), "chronicle.html");
+});
+
+test("injectTemplateContent uses the explicit content placeholder when present", () => {
+  assert.equal(
+    injectTemplateContent("<main>{{content}}</main>", "<p>Hello</p>"),
+    "<main><p>Hello</p></main>"
+  );
+});
+
+test("applyTemplate injects content placeholders and preserves sanitization", () => {
+  const result = applyTemplate(
+    "<html><head><title>{{title}}</title></head><body><main>{{content}}</main><script>alert(1)</script></body></html>",
+    {
+      title: "Eldoria",
+      content: "<p>Hello</p>",
+      themeHref: "/themes/eldoria.css"
+    }
+  );
+
+  assert.equal(
+    result,
+    "<html><head><title>Eldoria</title></head><body><main><p>Hello</p></main></body></html>"
+  );
 });
 
 test("listTemplates returns html templates for a world", async () => {

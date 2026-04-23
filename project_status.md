@@ -48,12 +48,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 6.3 validation: verified
 - Template loading: implemented
 - Task 7.1 validation: verified
+- Template injection flow: implemented
+- Task 7.2 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 7 — Templates
-- Current recommended next task: `Task 7.2`
+- Current recommended next task: `Task 8.1`
 
 ## Status Legend
 
@@ -620,6 +622,34 @@ Validation:
 - Tests cover template naming, listing, reading, aggregate loading, and route behavior
 - Direct verification returned the expected template list and raw HTML content payloads
 
+### Task 7.2 — Define template injection strategy
+
+Status: `[x] Done`
+
+Implemented:
+- Template application helpers in `src/services/templates.js`
+- Placeholder strategy with support for `{{content}}`, `{{title}}`, and `{{themeHref}}`
+- Fallback injection when a template omits `{{content}}`
+- Optional per-page template binding through the `<!-- template: name -->` marker
+- Wrapped rendered page output in `src/services/page-output.js` via `documentHtml`
+
+Files created or modified:
+- `src/services/templates.js`
+- `src/services/page-output.js`
+- `test/services/templates.test.js`
+- `test/services/page-output.test.js`
+- `project_status.md`
+
+Notes:
+- Templates remain optional; without a template override, `documentHtml` falls back to the rendered page HTML
+- Sanitization is preserved by wrapping already-sanitized page HTML and sanitizing the final document output
+- The implementation currently binds templates to pages, which is enough to support the next frontend phase cleanly
+
+Validation:
+- `npm test` passed
+- Tests cover placeholder replacement, template wrapping, template override parsing, and final rendered document output
+- Direct verification returned wrapped HTML with title and theme href injected into the template
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -663,7 +693,7 @@ Validation:
 ### Phase 7 — Templates
 
 - [x] Task 7.1 — Add HTML template support
-- [ ] Task 7.2 — Bind templates to pages/entities
+- [x] Task 7.2 — Bind templates to pages/entities
 
 ### Phase 8 — Frontend
 
@@ -681,5 +711,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 7.2`.
+2. Execute `Task 8.1`.
 3. Update this file after each completed task.
