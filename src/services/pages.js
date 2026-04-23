@@ -1,10 +1,15 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
-const { ensureWorldStructure, getWorldPaths } = require("../data");
+const { ensureWorldStructure, getWorldPaths, resolveWorldPath, validateFileName } = require("../data");
 
 function slugFromFileName(fileName) {
   return path.basename(fileName, ".md");
+}
+
+function buildPageFileName(pageIdOrSlug) {
+  const safePageId = validateFileName(pageIdOrSlug);
+  return `${safePageId}.md`;
 }
 
 function titleFromMarkdown(content, slug) {
@@ -44,8 +49,39 @@ async function listPages(worldName) {
   return pages;
 }
 
+async function readPage(worldName, pageIdOrSlug) {
+  await ensureWorldStructure(worldName);
+
+  const fileName = buildPageFileName(pageIdOrSlug);
+  const filePath = resolveWorldPath(worldName, "pages", fileName);
+
+  try {
+    const content = await fs.readFile(filePath, "utf8");
+    const slug = slugFromFileName(fileName);
+
+    return {
+      id: slug,
+      title: titleFromMarkdown(content, slug),
+      slug,
+      filePath,
+      content
+    };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      const notFoundError = new Error("Page not found");
+      notFoundError.code = "PAGE_NOT_FOUND";
+      notFoundError.page = pageIdOrSlug;
+      throw notFoundError;
+    }
+
+    throw error;
+  }
+}
+
 module.exports = {
+  buildPageFileName,
   listPages,
+  readPage,
   slugFromFileName,
   titleFromMarkdown
 };

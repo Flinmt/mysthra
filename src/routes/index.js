@@ -1,9 +1,44 @@
 const { sendJson } = require("../utils/http");
-const { listPages } = require("../services");
+const { listPages, readPage } = require("../services");
+
+function getRequestUrl(requestUrl) {
+  return new URL(requestUrl, "http://localhost");
+}
 
 function getQueryParams(requestUrl) {
-  const url = new URL(requestUrl, "http://localhost");
+  const url = getRequestUrl(requestUrl);
   return url.searchParams;
+}
+
+function getPageIdFromPath(requestUrl) {
+  const url = getRequestUrl(requestUrl);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length === 2 && pathSegments[0] === "pages") {
+    return decodeURIComponent(pathSegments[1]);
+  }
+
+  return null;
+}
+
+function getErrorStatusCode(error) {
+  if (error.code === "INVALID_PATH") {
+    return 400;
+  }
+
+  if (error.code === "PAGE_NOT_FOUND") {
+    return 404;
+  }
+
+  return 500;
+}
+
+function getErrorMessage(error, statusCode) {
+  if (statusCode === 400 || statusCode === 404) {
+    return error.message;
+  }
+
+  return "Internal Server Error";
 }
 
 async function router(request, response) {
@@ -27,6 +62,15 @@ async function router(request, response) {
         return;
       }
 
+      const pageId = getPageIdFromPath(request.url);
+
+      if (pageId) {
+        const page = await readPage(worldName, pageId);
+
+        sendJson(response, 200, page);
+        return;
+      }
+
       const pages = await listPages(worldName);
 
       sendJson(response, 200, {
@@ -34,8 +78,8 @@ async function router(request, response) {
       });
       return;
     } catch (error) {
-      const statusCode = error.code === "INVALID_PATH" ? 400 : 500;
-      const message = statusCode === 400 ? error.message : "Internal Server Error";
+      const statusCode = getErrorStatusCode(error);
+      const message = getErrorMessage(error, statusCode);
 
       sendJson(response, statusCode, {
         error: message
