@@ -40,12 +40,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 5.2 validation: verified
 - Page/entity link resolution: implemented
 - Task 5.3 validation: verified
+- Theme loading: implemented
+- Task 6.1 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 6.1`
+- Current recommended next task: `Task 6.2`
 
 ## Status Legend
 
@@ -501,6 +503,32 @@ Validation:
 - Tests cover page resolution, entity resolution, unresolved targets, cross-type entity listing, and page-level wikilink resolution
 - Direct verification returned the expected entity and unresolved matches for a sample page
 
+### Task 6.1 — Load world themes
+
+Status: `[x] Done`
+
+Implemented:
+- Theme service in `src/services/themes.js`
+- Listing of `.css` theme files from each world `themes/` directory
+- Active theme selection storage via a small config file
+- `GET /themes?world=...` endpoint for theme listing
+
+Files created or modified:
+- `src/services/themes.js`
+- `src/services/index.js`
+- `src/routes/index.js`
+- `test/services/themes.test.js`
+- `project_status.md`
+
+Notes:
+- Active theme selection is stored separately from the CSS files
+- Theme loading remains isolated from content rendering, as required for this phase
+
+Validation:
+- `npm test` passed
+- Tests cover theme listing, active theme reading, active theme selection, aggregated theme loading, and route behavior
+- Direct verification returned the expected theme list and active theme payload
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -537,7 +565,7 @@ Validation:
 
 ### Phase 6 — Themes
 
-- [ ] Task 6.1 — Implement theme loading
+- [x] Task 6.1 — Implement theme loading
 - [ ] Task 6.2 — Support per-page theme override
 
 ### Phase 7 — Templates
@@ -561,5 +589,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 6.1`.
+2. Execute `Task 6.2`.
 3. Update this file after each completed task.

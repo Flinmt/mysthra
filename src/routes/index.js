@@ -1,5 +1,5 @@
 const { sendJson } = require("../utils/http");
-const { createPage, deletePage, listPages, readPage, updatePage } = require("../services");
+const { createPage, deletePage, listPages, loadThemes, readPage, updatePage } = require("../services");
 
 function getRequestUrl(requestUrl) {
   return new URL(requestUrl, "http://localhost");
@@ -116,6 +116,33 @@ async function router(request, response) {
       sendJson(response, 200, {
         items: pages
       });
+      return;
+    } catch (error) {
+      const statusCode = getErrorStatusCode(error);
+      const message = getErrorMessage(error, statusCode);
+
+      sendJson(response, statusCode, {
+        error: message
+      });
+      return;
+    }
+  }
+
+  if (request.method === "GET" && request.url.startsWith("/themes")) {
+    try {
+      const queryParams = getQueryParams(request.url);
+      const worldName = queryParams.get("world");
+
+      if (!worldName) {
+        sendJson(response, 400, {
+          error: "Missing required query parameter: world"
+        });
+        return;
+      }
+
+      const themes = await loadThemes(worldName);
+
+      sendJson(response, 200, themes);
       return;
     } catch (error) {
       const statusCode = getErrorStatusCode(error);
