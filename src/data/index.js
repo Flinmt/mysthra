@@ -1,1 +1,5 @@
-"use strict";
+const filesystem = require("./filesystem");
+
+module.exports = {
+  ...filesystem
+};
