@@ -34,12 +34,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 4.2 validation: verified
 - Relation generation: implemented
 - Task 4.3 validation: verified
+- Entity format definition: implemented
+- Task 5.1 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 5.1`
+- Current recommended next task: `Task 5.2`
 
 ## Status Legend
 
@@ -418,6 +420,31 @@ Validation:
 - Tests cover relation building, persistence to `relations.json`, and replacement of stale relations for the same page
 - Direct verification produced the expected saved relation data for a sample page
 
+### Task 5.1 — Define entity file format
+
+Status: `[x] Done`
+
+Implemented:
+- Entity schema module in `src/services/entities.js`
+- Supported entity types for `character`, `location`, `item`, and `event`
+- Base entity structure with `id`, `type`, `name`, and `description`
+- Validation and normalization helpers for entity ids and types
+
+Files created or modified:
+- `src/services/entities.js`
+- `src/services/index.js`
+- `test/services/entities.test.js`
+- `project_status.md`
+
+Notes:
+- Entity ids are normalized to a slug-safe format
+- Validation rejects unsupported entity types and non-normalized ids
+
+Validation:
+- `npm test` passed
+- Tests cover supported types, normalization, schema creation, and invalid entity definitions
+- Direct verification produced the expected normalized entity payload for a sample character
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -448,7 +475,7 @@ Validation:
 
 ### Phase 5 — Entity System
 
-- [ ] Task 5.1 — Define entity file format
+- [x] Task 5.1 — Define entity file format
 - [ ] Task 5.2 — Implement entity CRUD
 - [ ] Task 5.3 — Link entities with pages
 
@@ -478,5 +505,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 5.1`.
+2. Execute `Task 5.2`.
 3. Update this file after each completed task.
