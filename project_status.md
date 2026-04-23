@@ -24,12 +24,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 2.5 validation: verified
 - Markdown rendering: implemented
 - Task 3.1 validation: verified
+- Embedded HTML rendering: implemented
+- Task 3.2 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 3.2`
+- Current recommended next task: `Task 3.3`
 
 ## Status Legend
 
@@ -287,6 +289,29 @@ Validation:
 - `npm test` passed
 - Tests cover HTML escaping, inline formatting, headings, paragraphs, lists, code blocks, and raw HTML escaping behavior
 
+### Task 3.2 — Allow embedded HTML
+
+Status: `[x] Done`
+
+Implemented:
+- Inline HTML preservation in the markdown renderer
+- HTML block preservation for tag-based content blocks
+- HTML-aware helpers in `src/services/rendering.js`
+- Rendering behavior kept modular for the later sanitization phase
+
+Files created or modified:
+- `src/services/rendering.js`
+- `test/services/rendering.test.js`
+- `project_status.md`
+
+Notes:
+- Embedded HTML is now preserved in renderer output
+- Sanitization is intentionally deferred to Task `3.3`, so this phase focuses only on compatibility
+
+Validation:
+- `npm test` passed
+- Tests cover inline HTML tags, HTML block preservation, and compatibility with standard markdown rendering
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -306,7 +331,7 @@ Validation:
 ### Phase 3 — Markdown Rendering
 
 - [x] Task 3.1 — Add markdown renderer
-- [ ] Task 3.2 — Allow embedded HTML
+- [x] Task 3.2 — Allow embedded HTML
 - [ ] Task 3.3 — Sanitize HTML
 
 ### Phase 4 — Wikilink System
@@ -347,5 +372,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 3.2`.
+2. Execute `Task 3.3`.
 3. Update this file after each completed task.

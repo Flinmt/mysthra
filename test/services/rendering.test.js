@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   escapeHtml,
+  isHtmlTag,
   renderInline,
   renderMarkdown
 } = require("../../src/services/rendering");
@@ -21,6 +22,12 @@ test("renderInline handles emphasis, strong text, code and links", () => {
     html,
     "Use <em>italics</em>, <strong>bold</strong>, <code>code</code>, and <a href=\"/docs\">docs</a>."
   );
+});
+
+test("isHtmlTag detects basic HTML tags", () => {
+  assert.equal(isHtmlTag("<div>"), true);
+  assert.equal(isHtmlTag("</div>"), true);
+  assert.equal(isHtmlTag("plain text"), false);
 });
 
 test("renderMarkdown renders headings and paragraphs", () => {
@@ -47,5 +54,17 @@ test("renderMarkdown renders fenced code blocks safely", () => {
 test("renderMarkdown escapes raw HTML in standard markdown rendering", () => {
   const html = renderMarkdown("Hello <script>alert(1)</script>");
 
-  assert.equal(html, "<p>Hello &lt;script&gt;alert(1)&lt;/script&gt;</p>");
+  assert.equal(html, "<p>Hello <script>alert(1)</script></p>");
+});
+
+test("renderMarkdown preserves inline HTML tags inside paragraphs", () => {
+  const html = renderMarkdown("Hello <span class=\"note\">world</span>");
+
+  assert.equal(html, "<p>Hello <span class=\"note\">world</span></p>");
+});
+
+test("renderMarkdown preserves HTML blocks", () => {
+  const html = renderMarkdown("<div class=\"card\">\nContent block\n</div>");
+
+  assert.equal(html, "<div class=\"card\">\nContent block\n</div>");
 });

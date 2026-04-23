@@ -7,8 +7,17 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function isHtmlTag(text) {
+  return /^<\/?[A-Za-z][^>]*>$/.test(text.trim());
+}
+
+function isHtmlBlockStart(line) {
+  return /^<\/?[A-Za-z][^>]*>$/.test(line.trim()) && !line.trim().startsWith("</");
+}
+
 function renderInline(markdown) {
-  let html = escapeHtml(markdown);
+  const parts = String(markdown).split(/(<[^>]+>)/g);
+  let html = parts.map((part) => (isHtmlTag(part) ? part : escapeHtml(part))).join("");
 
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
@@ -57,6 +66,10 @@ function renderCodeBlock(lines) {
   return `<pre><code>${escapeHtml(content)}</code></pre>`;
 }
 
+function renderHtmlBlock(lines) {
+  return lines.join("\n");
+}
+
 function renderMarkdown(markdown) {
   const lines = String(markdown).replace(/\r\n/g, "\n").split("\n");
   const blocks = [];
@@ -84,6 +97,28 @@ function renderMarkdown(markdown) {
       }
 
       blocks.push(renderCodeBlock(codeLines));
+      continue;
+    }
+
+    if (isHtmlBlockStart(line)) {
+      const htmlLines = [line];
+      index += 1;
+
+      while (index < lines.length) {
+        const currentLine = lines[index];
+        htmlLines.push(currentLine);
+        index += 1;
+
+        if (!currentLine.trim()) {
+          break;
+        }
+
+        if (/^<\/[A-Za-z][^>]*>$/.test(currentLine.trim())) {
+          break;
+        }
+      }
+
+      blocks.push(renderHtmlBlock(htmlLines));
       continue;
     }
 
@@ -144,8 +179,11 @@ function renderMarkdown(markdown) {
 
 module.exports = {
   escapeHtml,
+  isHtmlBlockStart,
+  isHtmlTag,
   renderCodeBlock,
   renderHeading,
+  renderHtmlBlock,
   renderInline,
   renderList,
   renderMarkdown,
