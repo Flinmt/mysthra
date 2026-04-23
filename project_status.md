@@ -7,8 +7,10 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Spec source of truth: `specs.md`
 - Task plan source: `tasks.md`
 - Backend skeleton: created
+- Task 1.1 validation: partially verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
+- Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 1 — Core Foundation
 - Current recommended next task: `Task 1.2`
@@ -22,8 +24,10 @@ This file tracks implementation progress for the Mythra project based on `specs.
 ## Environment Notes
 
 - `node` is now available in the environment
+- `npm` is now available in the environment
 - Current runtime does not yet match the version declared by the project
 - Project has no npm package dependencies yet
+- Sandbox blocks opening a listening HTTP port during verification
 
 ## Completed Work
 
@@ -50,6 +54,13 @@ Files created:
 Notes:
 - The structure is ready for the next filesystem-focused tasks
 - Runtime version should be upgraded to Node 20+ for full alignment with the project config
+
+Validation:
+- `node -v` returned `v18.19.1`
+- `npm -v` returned `9.2.0`
+- Direct router verification for `GET /health` returned `200`
+- Direct router verification for an unknown route returned `404`
+- Full server listen test could not complete because the environment blocked binding to port `3000` with `EPERM`
 
 ## Task Checklist
 
