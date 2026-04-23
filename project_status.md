@@ -28,12 +28,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 3.2 validation: verified
 - HTML sanitization: implemented
 - Task 3.3 validation: verified
+- Wikilink parsing: implemented
+- Task 4.1 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 4.1`
+- Current recommended next task: `Task 4.2`
 
 ## Status Legend
 
@@ -337,6 +339,31 @@ Validation:
 - `npm test` passed
 - Tests cover script removal, inline event handler stripping, and sanitized markdown rendering output
 
+### Task 4.1 — Parse wikilinks
+
+Status: `[x] Done`
+
+Implemented:
+- Separate wikilink parser module in `src/services/wikilinks.js`
+- Extraction of `[[Entity Name]]` targets from markdown content
+- Normalization of extracted targets for consistent spacing
+- Wikilink metadata output including raw token, target, index, and length
+
+Files created or modified:
+- `src/services/wikilinks.js`
+- `src/services/index.js`
+- `test/services/wikilinks.test.js`
+- `project_status.md`
+
+Notes:
+- The parser is intentionally separate from the renderer, matching the phase requirement
+- This phase focuses on detection and extraction only; HTML conversion stays for Task `4.2`
+
+Validation:
+- `npm test` passed
+- Tests cover target normalization, empty cases, multiple links, malformed input, and multiline extraction
+- Direct verification returned the expected extracted targets for a sample markdown line
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -361,7 +388,7 @@ Validation:
 
 ### Phase 4 — Wikilink System
 
-- [ ] Task 4.1 — Parse wikilinks
+- [x] Task 4.1 — Parse wikilinks
 - [ ] Task 4.2 — Convert wikilinks to HTML links
 - [ ] Task 4.3 — Generate relation data
 
@@ -397,5 +424,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 4.1`.
+2. Execute `Task 4.2`.
 3. Update this file after each completed task.
