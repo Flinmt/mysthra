@@ -1,0 +1,51 @@
+const fs = require("node:fs/promises");
+const path = require("node:path");
+
+const { ensureWorldStructure, getWorldPaths } = require("../data");
+
+function slugFromFileName(fileName) {
+  return path.basename(fileName, ".md");
+}
+
+function titleFromMarkdown(content, slug) {
+  const firstHeadingMatch = content.match(/^#\s+(.+)$/m);
+
+  if (firstHeadingMatch) {
+    return firstHeadingMatch[1].trim();
+  }
+
+  return slug;
+}
+
+async function listPages(worldName) {
+  await ensureWorldStructure(worldName);
+
+  const { pages: pagesDirectory } = getWorldPaths(worldName);
+  const directoryEntries = await fs.readdir(pagesDirectory, { withFileTypes: true });
+  const markdownFiles = directoryEntries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  const pages = await Promise.all(
+    markdownFiles.map(async (file) => {
+      const filePath = path.join(pagesDirectory, file.name);
+      const content = await fs.readFile(filePath, "utf8");
+      const slug = slugFromFileName(file.name);
+
+      return {
+        id: slug,
+        title: titleFromMarkdown(content, slug),
+        slug,
+        filePath
+      };
+    })
+  );
+
+  return pages;
+}
+
+module.exports = {
+  listPages,
+  slugFromFileName,
+  titleFromMarkdown
+};
