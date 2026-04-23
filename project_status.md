@@ -32,12 +32,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 4.1 validation: verified
 - Wikilink HTML rendering: implemented
 - Task 4.2 validation: verified
+- Relation generation: implemented
+- Task 4.3 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 4.3`
+- Current recommended next task: `Task 5.1`
 
 ## Status Legend
 
@@ -391,6 +393,31 @@ Validation:
 - Tests cover slug conversion, HTML anchor generation, and unresolved link behavior
 - Direct verification produced the expected anchor tags for sample wikilinks
 
+### Task 4.3 — Generate relation data
+
+Status: `[x] Done`
+
+Implemented:
+- Relation generation service in `src/services/relations.js`
+- Wikilink extraction from page content for relation building
+- Basic relation format with `from`, `to`, `label`, and `type`
+- Persistence of relations in `relations/relations.json`
+
+Files created or modified:
+- `src/services/relations.js`
+- `src/services/index.js`
+- `test/services/relations.test.js`
+- `project_status.md`
+
+Notes:
+- Relation generation currently replaces previous relations for the same source page
+- The stored structure is graph-ready and stays file-based as required
+
+Validation:
+- `npm test` passed
+- Tests cover relation building, persistence to `relations.json`, and replacement of stale relations for the same page
+- Direct verification produced the expected saved relation data for a sample page
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -417,7 +444,7 @@ Validation:
 
 - [x] Task 4.1 — Parse wikilinks
 - [x] Task 4.2 — Convert wikilinks to HTML links
-- [ ] Task 4.3 — Generate relation data
+- [x] Task 4.3 — Generate relation data
 
 ### Phase 5 — Entity System
 
@@ -451,5 +478,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 4.3`.
+2. Execute `Task 5.1`.
 3. Update this file after each completed task.
