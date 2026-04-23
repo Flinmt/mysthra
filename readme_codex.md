@@ -28,9 +28,12 @@ Codex must work in **small iterations**.
 For EACH task:
 
 1. Implement the task
-2. Show created/modified files
-3. Explain what was done
-4. Wait for confirmation before continuing
+2. Run tests related to that task to validate it
+3. Confirm the tests passed
+4. Update `project_status.md`
+5. Show created/modified files
+6. Explain what was done
+7. Wait for confirmation before continuing
 
 ---
 
@@ -49,6 +52,8 @@ Requirements:
 - Do not add extra features
 
 After completing:
+- Run tests for the task and confirm they passed
+- Update `project_status.md`
 - Show all created/modified files
 - Explain decisions briefly
 - Confirm task completion
@@ -248,6 +253,8 @@ Keep everything aligned with specs.md
 - Never assume features not in spec
 - Always keep filesystem as source of truth
 - Always prioritize simplicity
+- Always validate each completed task with tests before moving on
+- Always update `project_status.md` after successful task validation
 
 ---
 
