@@ -38,12 +38,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 5.1 validation: verified
 - Entity CRUD: implemented
 - Task 5.2 validation: verified
+- Page/entity link resolution: implemented
+- Task 5.3 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 5.3`
+- Current recommended next task: `Task 6.1`
 
 ## Status Legend
 
@@ -473,6 +475,32 @@ Validation:
 - Tests cover create, read, list, update, and delete operations
 - Direct verification returned the expected stored entities for a sample character list
 
+### Task 5.3 — Link entities from pages
+
+Status: `[x] Done`
+
+Implemented:
+- Centralized link resolver service in `src/services/link-resolver.js`
+- Resolution of wikilinks to pages, entities, or unresolved targets
+- Support for page link priority when both a page and entity share the same target
+- Page-level resolution of all wikilinks in a markdown document
+
+Files created or modified:
+- `src/services/link-resolver.js`
+- `src/services/index.js`
+- `test/services/link-resolver.test.js`
+- `project_status.md`
+
+Notes:
+- Resolution logic is now centralized as requested by the task
+- Page targets resolve before entity targets to keep page navigation stable
+- Unresolved links still return a normalized slug for later creation flows
+
+Validation:
+- `npm test` passed
+- Tests cover page resolution, entity resolution, unresolved targets, cross-type entity listing, and page-level wikilink resolution
+- Direct verification returned the expected entity and unresolved matches for a sample page
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -505,7 +533,7 @@ Validation:
 
 - [x] Task 5.1 — Define entity file format
 - [x] Task 5.2 — Implement entity CRUD
-- [ ] Task 5.3 — Link entities with pages
+- [x] Task 5.3 — Link entities with pages
 
 ### Phase 6 — Themes
 
@@ -533,5 +561,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 5.3`.
+2. Execute `Task 6.1`.
 3. Update this file after each completed task.
