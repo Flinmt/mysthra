@@ -143,6 +143,38 @@ async function createPage(worldName, input) {
   return readPage(worldName, slug);
 }
 
+async function updatePage(worldName, pageIdOrSlug, input) {
+  await ensureWorldStructure(worldName);
+
+  const content = typeof input?.content === "string" ? input.content : null;
+
+  if (content === null) {
+    const error = new Error("Content is required");
+    error.code = "INVALID_PAGE_INPUT";
+    throw error;
+  }
+
+  const fileName = buildPageFileName(pageIdOrSlug);
+  const filePath = resolveWorldPath(worldName, "pages", fileName);
+
+  try {
+    await fs.access(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      const notFoundError = new Error("Page not found");
+      notFoundError.code = "PAGE_NOT_FOUND";
+      notFoundError.page = pageIdOrSlug;
+      throw notFoundError;
+    }
+
+    throw error;
+  }
+
+  await fs.writeFile(filePath, content, "utf8");
+
+  return readPage(worldName, pageIdOrSlug);
+}
+
 module.exports = {
   buildPageFileName,
   createPage,
@@ -150,5 +182,6 @@ module.exports = {
   readPage,
   slugFromTitle,
   slugFromFileName,
-  titleFromMarkdown
+  titleFromMarkdown,
+  updatePage
 };

@@ -12,7 +12,8 @@ const {
   readPage,
   slugFromTitle,
   slugFromFileName,
-  titleFromMarkdown
+  titleFromMarkdown,
+  updatePage
 } = require("../../src/services/pages");
 
 async function resetWorld(worldName) {
@@ -273,4 +274,83 @@ test("GET /pages accepts POST to create a page", async () => {
   assert.equal(result.statusCode, 201);
   assert.equal(result.body.slug, "northern-empire");
   assert.equal(result.body.content, "# Northern Empire\nLore\n");
+});
+
+test("updatePage replaces page content safely", async () => {
+  const worldName = "page-update-world";
+  await resetWorld(worldName);
+
+  await createPage(worldName, {
+    title: "Eldoria",
+    content: "# Eldoria\nOld content\n"
+  });
+
+  const updatedPage = await updatePage(worldName, "eldoria", {
+    content: "# Eldoria\nUpdated content\n"
+  });
+
+  assert.equal(updatedPage.title, "Eldoria");
+  assert.equal(updatedPage.content, "# Eldoria\nUpdated content\n");
+});
+
+test("updatePage returns not found when the page does not exist", async () => {
+  const worldName = "page-update-missing-world";
+  await resetWorld(worldName);
+
+  await assert.rejects(
+    () => updatePage(worldName, "unknown-page", { content: "# Missing\n" }),
+    { code: "PAGE_NOT_FOUND" }
+  );
+});
+
+test("PUT /pages/:id updates a page payload", async () => {
+  const worldName = "route-page-update-world";
+  await resetWorld(worldName);
+
+  await createPage(worldName, {
+    title: "Eldoria",
+    content: "# Eldoria\nOriginal\n"
+  });
+
+  const body = JSON.stringify({
+    content: "# Eldoria\nChanged\n"
+  });
+
+  const result = {
+    statusCode: null,
+    headers: null,
+    body: null
+  };
+
+  const request = {
+    method: "PUT",
+    url: "/pages/eldoria?world=route-page-update-world",
+    on(event, handler) {
+      if (event === "data") {
+        handler(body);
+      }
+      if (event === "end") {
+        handler();
+      }
+      if (event === "error") {
+        this.errorHandler = handler;
+      }
+    }
+  };
+
+  const response = {
+    writeHead(statusCode, headers) {
+      result.statusCode = statusCode;
+      result.headers = headers;
+    },
+    end(payload) {
+      result.body = JSON.parse(payload);
+    }
+  };
+
+  await router(request, response);
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.slug, "eldoria");
+  assert.equal(result.body.content, "# Eldoria\nChanged\n");
 });

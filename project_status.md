@@ -18,12 +18,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 2.2 validation: verified
 - Page creation: implemented
 - Task 2.3 validation: verified
+- Page update: implemented
+- Task 2.4 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 2 — Page System
-- Current recommended next task: `Task 2.4`
+- Current recommended next task: `Task 2.5`
 
 ## Status Legend
 
@@ -206,6 +208,32 @@ Validation:
 - Tests cover slug generation, create success, explicit slug usage, conflict prevention, and overwrite support
 - Direct route verification returned `201` with the expected created page payload
 
+### Task 2.4 — Implement page update
+
+Status: `[x] Done`
+
+Implemented:
+- Page update service in `src/services/pages.js`
+- Safe content replacement by `id` or slug
+- UTF-8 markdown file writing
+- Missing page handling with explicit not found errors
+- `PUT /pages/:id?world=...` endpoint with JSON body parsing
+
+Files created or modified:
+- `src/services/pages.js`
+- `src/routes/index.js`
+- `test/services/pages.test.js`
+- `project_status.md`
+
+Notes:
+- Update currently replaces page content only, keeping filename and slug stable
+- The endpoint expects `content` in the request body and returns the updated page payload
+
+Validation:
+- `npm test` passed
+- Tests cover update success, missing page handling, and route-level update behavior
+- Direct route verification returned `404` with `Page not found` for an unknown page
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -219,7 +247,7 @@ Validation:
 - [x] Task 2.1 — Implement page listing
 - [x] Task 2.2 — Implement page reading
 - [x] Task 2.3 — Implement page creation
-- [ ] Task 2.4 — Implement page update
+- [x] Task 2.4 — Implement page update
 - [ ] Task 2.5 — Implement page deletion
 
 ### Phase 3 — Markdown Rendering
@@ -266,5 +294,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 2.4`.
+2. Execute `Task 2.5`.
 3. Update this file after each completed task.
