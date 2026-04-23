@@ -70,6 +70,17 @@ function renderHtmlBlock(lines) {
   return lines.join("\n");
 }
 
+function sanitizeHtml(html) {
+  let sanitized = String(html);
+
+  sanitized = sanitized.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+  sanitized = sanitized.replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "");
+  sanitized = sanitized.replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "");
+  sanitized = sanitized.replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, "");
+
+  return sanitized;
+}
+
 function renderMarkdown(markdown) {
   const lines = String(markdown).replace(/\r\n/g, "\n").split("\n");
   const blocks = [];
@@ -177,6 +188,11 @@ function renderMarkdown(markdown) {
   return blocks.filter(Boolean).join("\n");
 }
 
+function renderMarkdownToHtml(markdown) {
+  const html = renderMarkdown(markdown);
+  return sanitizeHtml(html);
+}
+
 module.exports = {
   escapeHtml,
   isHtmlBlockStart,
@@ -187,5 +203,7 @@ module.exports = {
   renderInline,
   renderList,
   renderMarkdown,
-  renderParagraph
+  renderMarkdownToHtml,
+  renderParagraph,
+  sanitizeHtml
 };

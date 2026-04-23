@@ -26,12 +26,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 3.1 validation: verified
 - Embedded HTML rendering: implemented
 - Task 3.2 validation: verified
+- HTML sanitization: implemented
+- Task 3.3 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 3.3`
+- Current recommended next task: `Task 4.1`
 
 ## Status Legend
 
@@ -312,6 +314,29 @@ Validation:
 - `npm test` passed
 - Tests cover inline HTML tags, HTML block preservation, and compatibility with standard markdown rendering
 
+### Task 3.3 — Sanitize HTML
+
+Status: `[x] Done`
+
+Implemented:
+- Isolated HTML sanitization step in `src/services/rendering.js`
+- Removal of `<script>` tags from rendered output
+- Removal of unsafe inline event handler attributes such as `onclick`
+- Sanitized rendering entrypoint for markdown-to-HTML output
+
+Files created or modified:
+- `src/services/rendering.js`
+- `test/services/rendering.test.js`
+- `project_status.md`
+
+Notes:
+- Sanitization is intentionally simple and targeted to the requirements of this phase
+- The isolated sanitizer keeps the rendering pipeline ready for future hardening if needed
+
+Validation:
+- `npm test` passed
+- Tests cover script removal, inline event handler stripping, and sanitized markdown rendering output
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -332,7 +357,7 @@ Validation:
 
 - [x] Task 3.1 — Add markdown renderer
 - [x] Task 3.2 — Allow embedded HTML
-- [ ] Task 3.3 — Sanitize HTML
+- [x] Task 3.3 — Sanitize HTML
 
 ### Phase 4 — Wikilink System
 
@@ -372,5 +397,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 3.3`.
+2. Execute `Task 4.1`.
 3. Update this file after each completed task.

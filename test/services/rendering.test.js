@@ -5,7 +5,9 @@ const {
   escapeHtml,
   isHtmlTag,
   renderInline,
-  renderMarkdown
+  renderMarkdown,
+  renderMarkdownToHtml,
+  sanitizeHtml
 } = require("../../src/services/rendering");
 
 test("escapeHtml escapes unsafe HTML characters", () => {
@@ -67,4 +69,22 @@ test("renderMarkdown preserves HTML blocks", () => {
   const html = renderMarkdown("<div class=\"card\">\nContent block\n</div>");
 
   assert.equal(html, "<div class=\"card\">\nContent block\n</div>");
+});
+
+test("sanitizeHtml removes script tags", () => {
+  const html = sanitizeHtml("<p>Hello</p><script>alert(1)</script><p>World</p>");
+
+  assert.equal(html, "<p>Hello</p><p>World</p>");
+});
+
+test("sanitizeHtml removes unsafe inline event handlers", () => {
+  const html = sanitizeHtml("<div onclick=\"alert(1)\" onmouseover='x()' onload=test>Safe</div>");
+
+  assert.equal(html, "<div>Safe</div>");
+});
+
+test("renderMarkdownToHtml sanitizes rendered output", () => {
+  const html = renderMarkdownToHtml("Hello <span onclick=\"alert(1)\">world</span><script>alert(1)</script>");
+
+  assert.equal(html, "<p>Hello <span>world</span></p>");
 });
