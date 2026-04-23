@@ -36,12 +36,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 4.3 validation: verified
 - Entity format definition: implemented
 - Task 5.1 validation: verified
+- Entity CRUD: implemented
+- Task 5.2 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 5.2`
+- Current recommended next task: `Task 5.3`
 
 ## Status Legend
 
@@ -445,6 +447,32 @@ Validation:
 - Tests cover supported types, normalization, schema creation, and invalid entity definitions
 - Direct verification produced the expected normalized entity payload for a sample character
 
+### Task 5.2 — Implement entity CRUD
+
+Status: `[x] Done`
+
+Implemented:
+- Filesystem CRUD in `src/services/entities.js`
+- Per-type entity storage under `entities/{type}/{id}.json`
+- Safe create, read, list, update, and delete operations
+- Automatic directory bootstrap for entity type folders
+
+Files created or modified:
+- `src/services/entities.js`
+- `src/services/index.js`
+- `test/services/entities-crud.test.js`
+- `project_status.md`
+
+Notes:
+- Entity persistence stays fully file-based and grouped by type
+- Update operations preserve entity `id` and `type` stability
+- The route/API layer for entities can now build on this service layer cleanly
+
+Validation:
+- `npm test` passed
+- Tests cover create, read, list, update, and delete operations
+- Direct verification returned the expected stored entities for a sample character list
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -476,7 +504,7 @@ Validation:
 ### Phase 5 — Entity System
 
 - [x] Task 5.1 — Define entity file format
-- [ ] Task 5.2 — Implement entity CRUD
+- [x] Task 5.2 — Implement entity CRUD
 - [ ] Task 5.3 — Link entities with pages
 
 ### Phase 6 — Themes
@@ -505,5 +533,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 5.2`.
+2. Execute `Task 5.3`.
 3. Update this file after each completed task.
