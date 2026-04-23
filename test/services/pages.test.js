@@ -8,6 +8,7 @@ const { router } = require("../../src/routes");
 const {
   buildPageFileName,
   createPage,
+  deletePage,
   listPages,
   readPage,
   slugFromTitle,
@@ -353,4 +354,74 @@ test("PUT /pages/:id updates a page payload", async () => {
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.slug, "eldoria");
   assert.equal(result.body.content, "# Eldoria\nChanged\n");
+});
+
+test("deletePage removes an existing markdown page", async () => {
+  const worldName = "page-delete-world";
+  await resetWorld(worldName);
+
+  const page = await createPage(worldName, {
+    title: "Eldoria",
+    content: "# Eldoria\nTo be deleted\n"
+  });
+
+  const deletion = await deletePage(worldName, "eldoria");
+
+  assert.deepEqual(deletion, {
+    id: "eldoria",
+    slug: "eldoria",
+    deleted: true
+  });
+
+  await assert.rejects(
+    () => fs.access(page.filePath),
+    { code: "ENOENT" }
+  );
+});
+
+test("deletePage returns not found when the page does not exist", async () => {
+  const worldName = "page-delete-missing-world";
+  await resetWorld(worldName);
+
+  await assert.rejects(
+    () => deletePage(worldName, "unknown-page"),
+    { code: "PAGE_NOT_FOUND" }
+  );
+});
+
+test("DELETE /pages/:id deletes a page payload", async () => {
+  const worldName = "route-page-delete-world";
+  await resetWorld(worldName);
+
+  await createPage(worldName, {
+    title: "Eldoria",
+    content: "# Eldoria\nDelete me\n"
+  });
+
+  const result = {
+    statusCode: null,
+    headers: null,
+    body: null
+  };
+
+  const request = {
+    method: "DELETE",
+    url: "/pages/eldoria?world=route-page-delete-world"
+  };
+
+  const response = {
+    writeHead(statusCode, headers) {
+      result.statusCode = statusCode;
+      result.headers = headers;
+    },
+    end(payload) {
+      result.body = JSON.parse(payload);
+    }
+  };
+
+  await router(request, response);
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.slug, "eldoria");
+  assert.equal(result.body.deleted, true);
 });

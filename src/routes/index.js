@@ -1,5 +1,5 @@
 const { sendJson } = require("../utils/http");
-const { createPage, listPages, readPage, updatePage } = require("../services");
+const { createPage, deletePage, listPages, readPage, updatePage } = require("../services");
 
 function getRequestUrl(requestUrl) {
   return new URL(requestUrl, "http://localhost");
@@ -192,6 +192,42 @@ async function router(request, response) {
       const message = error.code === "INVALID_JSON"
         ? error.message
         : getErrorMessage(error, statusCode);
+
+      sendJson(response, statusCode, {
+        error: message
+      });
+      return;
+    }
+  }
+
+  if (request.method === "DELETE" && request.url.startsWith("/pages/")) {
+    try {
+      const queryParams = getQueryParams(request.url);
+      const worldName = queryParams.get("world");
+
+      if (!worldName) {
+        sendJson(response, 400, {
+          error: "Missing required query parameter: world"
+        });
+        return;
+      }
+
+      const pageId = getPageIdFromPath(request.url);
+
+      if (!pageId) {
+        sendJson(response, 400, {
+          error: "Missing required page id"
+        });
+        return;
+      }
+
+      const result = await deletePage(worldName, pageId);
+
+      sendJson(response, 200, result);
+      return;
+    } catch (error) {
+      const statusCode = getErrorStatusCode(error);
+      const message = getErrorMessage(error, statusCode);
 
       sendJson(response, statusCode, {
         error: message

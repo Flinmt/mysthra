@@ -175,9 +175,23 @@ async function updatePage(worldName, pageIdOrSlug, input) {
   return readPage(worldName, pageIdOrSlug);
 }
 
+async function deletePage(worldName, pageIdOrSlug) {
+  await ensureWorldStructure(worldName);
+
+  const page = await readPage(worldName, pageIdOrSlug);
+  await fs.unlink(page.filePath);
+
+  return {
+    id: page.id,
+    slug: page.slug,
+    deleted: true
+  };
+}
+
 module.exports = {
   buildPageFileName,
   createPage,
+  deletePage,
   listPages,
   readPage,
   slugFromTitle,

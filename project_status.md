@@ -20,12 +20,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 2.3 validation: verified
 - Page update: implemented
 - Task 2.4 validation: verified
+- Page deletion: implemented
+- Task 2.5 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
 - Current phase: Phase 2 — Page System
-- Current recommended next task: `Task 2.5`
+- Current recommended next task: `Task 3.1`
 
 ## Status Legend
 
@@ -234,6 +236,31 @@ Validation:
 - Tests cover update success, missing page handling, and route-level update behavior
 - Direct route verification returned `404` with `Page not found` for an unknown page
 
+### Task 2.5 — Implement page deletion
+
+Status: `[x] Done`
+
+Implemented:
+- Page deletion service in `src/services/pages.js`
+- Safe delete flow based on valid page file resolution
+- Existence check through page read before removal
+- `DELETE /pages/:id?world=...` endpoint
+
+Files created or modified:
+- `src/services/pages.js`
+- `src/routes/index.js`
+- `test/services/pages.test.js`
+- `project_status.md`
+
+Notes:
+- Deletion currently removes only valid markdown page files
+- The endpoint returns a compact confirmation payload with `id`, `slug`, and `deleted`
+
+Validation:
+- `npm test` passed
+- Tests cover delete success, missing page handling, and route-level delete behavior
+- Direct route verification returned `404` with `Page not found` for an unknown page
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -248,7 +275,7 @@ Validation:
 - [x] Task 2.2 — Implement page reading
 - [x] Task 2.3 — Implement page creation
 - [x] Task 2.4 — Implement page update
-- [ ] Task 2.5 — Implement page deletion
+- [x] Task 2.5 — Implement page deletion
 
 ### Phase 3 — Markdown Rendering
 
@@ -294,5 +321,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 2.5`.
+2. Execute `Task 3.1`.
 3. Update this file after each completed task.
