@@ -1,5 +1,14 @@
-const { sendJson } = require("../utils/http");
-const { createPage, deletePage, listPages, loadThemes, readPage, updatePage } = require("../services");
+const { sendJson, sendText } = require("../utils/http");
+const {
+  createPage,
+  deletePage,
+  listPages,
+  loadThemes,
+  readPage,
+  readTheme,
+  renderPageOutput,
+  updatePage
+} = require("../services");
 
 function getRequestUrl(requestUrl) {
   return new URL(requestUrl, "http://localhost");
@@ -21,6 +30,28 @@ function getPageIdFromPath(requestUrl) {
   return null;
 }
 
+function getRenderedPageIdFromPath(requestUrl) {
+  const url = getRequestUrl(requestUrl);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length === 3 && pathSegments[0] === "pages" && pathSegments[2] === "rendered") {
+    return decodeURIComponent(pathSegments[1]);
+  }
+
+  return null;
+}
+
+function getThemeNameFromPath(requestUrl) {
+  const url = getRequestUrl(requestUrl);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length === 2 && pathSegments[0] === "themes" && pathSegments[1].endsWith(".css")) {
+    return decodeURIComponent(pathSegments[1]).slice(0, -4);
+  }
+
+  return null;
+}
+
 function getErrorStatusCode(error) {
   if (error.code === "INVALID_PATH") {
     return 400;
@@ -36,6 +67,10 @@ function getErrorStatusCode(error) {
 
   if (error.code === "PAGE_ALREADY_EXISTS") {
     return 409;
+  }
+
+  if (error.code === "THEME_NOT_FOUND") {
+    return 404;
   }
 
   return 500;
@@ -102,6 +137,15 @@ async function router(request, response) {
         return;
       }
 
+      const renderedPageId = getRenderedPageIdFromPath(request.url);
+
+      if (renderedPageId) {
+        const output = await renderPageOutput(worldName, renderedPageId);
+
+        sendJson(response, 200, output);
+        return;
+      }
+
       const pageId = getPageIdFromPath(request.url);
 
       if (pageId) {
@@ -137,6 +181,15 @@ async function router(request, response) {
         sendJson(response, 400, {
           error: "Missing required query parameter: world"
         });
+        return;
+      }
+
+      const themeName = getThemeNameFromPath(request.url);
+
+      if (themeName) {
+        const theme = await readTheme(worldName, themeName);
+
+        sendText(response, 200, theme.css, "text/css; charset=utf-8");
         return;
       }
 

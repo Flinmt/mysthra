@@ -42,12 +42,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 5.3 validation: verified
 - Theme loading: implemented
 - Task 6.1 validation: verified
+- Themed rendered page output: implemented
+- Task 6.2 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
-- Current phase: Phase 3 — Markdown Rendering
-- Current recommended next task: `Task 6.2`
+- Current phase: Phase 6 — Theme System
+- Current recommended next task: `Task 6.3`
 
 ## Status Legend
 
@@ -529,6 +531,37 @@ Validation:
 - Tests cover theme listing, active theme reading, active theme selection, aggregated theme loading, and route behavior
 - Direct verification returned the expected theme list and active theme payload
 
+### Task 6.2 — Apply theme to rendered pages
+
+Status: `[x] Done`
+
+Implemented:
+- Rendered page output service in `src/services/page-output.js`
+- Composition of page reading, markdown rendering, sanitization, and active theme lookup
+- Theme asset reading with CSS metadata and stable asset href generation
+- `GET /pages/:id/rendered?world=...` endpoint for themed rendered output
+- `GET /themes/:file.css?world=...` endpoint for loading theme CSS assets
+
+Files created or modified:
+- `src/services/page-output.js`
+- `src/services/themes.js`
+- `src/services/index.js`
+- `src/routes/index.js`
+- `src/utils/http.js`
+- `test/services/page-output.test.js`
+- `test/services/themes.test.js`
+- `project_status.md`
+
+Notes:
+- Rendered HTML and theme data stay separate in the response payload
+- The rendered page output references the active world theme through a CSS asset href
+- The theme system remains decoupled from markdown rendering internals
+
+Validation:
+- `npm test` passed
+- Tests cover rendered page output with and without active theme, CSS asset loading, active theme resolution, and route behavior
+- Direct verification returned sanitized HTML plus the expected theme href for a rendered page
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -566,7 +599,8 @@ Validation:
 ### Phase 6 — Themes
 
 - [x] Task 6.1 — Implement theme loading
-- [ ] Task 6.2 — Support per-page theme override
+- [x] Task 6.2 — Apply theme to rendered pages
+- [ ] Task 6.3 — Support per-page theme override
 
 ### Phase 7 — Templates
 
@@ -589,5 +623,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 6.2`.
+2. Execute `Task 6.3`.
 3. Update this file after each completed task.

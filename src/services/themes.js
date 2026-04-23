@@ -1,7 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
-const { ensureWorldStructure, getWorldPaths } = require("../data");
+const { ensureWorldStructure, getWorldPaths, resolveWorldPath, validateFileName } = require("../data");
 
 function getThemeSelectionFilePath(worldName) {
   const worldPaths = getWorldPaths(worldName);
@@ -10,6 +10,21 @@ function getThemeSelectionFilePath(worldName) {
 
 function themeNameFromFile(fileName) {
   return path.basename(fileName, ".css");
+}
+
+function buildThemeFileName(themeName) {
+  const safeThemeName = validateFileName(themeName);
+  return `${safeThemeName}.css`;
+}
+
+function getThemeAssetPath(worldName, themeName) {
+  const fileName = buildThemeFileName(themeName);
+  return resolveWorldPath(worldName, "themes", fileName);
+}
+
+function getThemeAssetHref(worldName, themeName) {
+  const fileName = buildThemeFileName(themeName);
+  return `/themes/${encodeURIComponent(fileName)}?world=${encodeURIComponent(worldName)}`;
 }
 
 async function listThemes(worldName) {
@@ -79,11 +94,54 @@ async function loadThemes(worldName) {
   };
 }
 
+async function readTheme(worldName, themeName) {
+  await ensureWorldStructure(worldName);
+
+  const fileName = buildThemeFileName(themeName);
+  const filePath = getThemeAssetPath(worldName, themeName);
+
+  try {
+    const css = await fs.readFile(filePath, "utf8");
+
+    return {
+      name: themeNameFromFile(fileName),
+      fileName,
+      filePath,
+      href: getThemeAssetHref(worldName, themeName),
+      css
+    };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      const notFoundError = new Error("Theme not found");
+      notFoundError.code = "THEME_NOT_FOUND";
+      notFoundError.value = themeName;
+      throw notFoundError;
+    }
+
+    throw error;
+  }
+}
+
+async function getAppliedTheme(worldName) {
+  const activeTheme = await getActiveTheme(worldName);
+
+  if (!activeTheme) {
+    return null;
+  }
+
+  return readTheme(worldName, activeTheme);
+}
+
 module.exports = {
+  buildThemeFileName,
   getActiveTheme,
+  getAppliedTheme,
+  getThemeAssetHref,
+  getThemeAssetPath,
   getThemeSelectionFilePath,
   listThemes,
   loadThemes,
+  readTheme,
   setActiveTheme,
   themeNameFromFile
 };
