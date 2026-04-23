@@ -22,12 +22,14 @@ This file tracks implementation progress for the Mythra project based on `specs.
 - Task 2.4 validation: verified
 - Page deletion: implemented
 - Task 2.5 validation: verified
+- Markdown rendering: implemented
+- Task 3.1 validation: verified
 - Node.js installed: yes
 - Current Node.js version: `v18.19.1`
 - Current npm version: `9.2.0`
 - Required Node.js version in `package.json`: `>=20`
-- Current phase: Phase 2 — Page System
-- Current recommended next task: `Task 3.1`
+- Current phase: Phase 3 — Markdown Rendering
+- Current recommended next task: `Task 3.2`
 
 ## Status Legend
 
@@ -261,6 +263,30 @@ Validation:
 - Tests cover delete success, missing page handling, and route-level delete behavior
 - Direct route verification returned `404` with `Page not found` for an unknown page
 
+### Task 3.1 — Add markdown renderer
+
+Status: `[x] Done`
+
+Implemented:
+- Markdown rendering module in `src/services/rendering.js`
+- Standard markdown support for headings, paragraphs, unordered lists, ordered lists, links, emphasis, strong text, inline code, and fenced code blocks
+- HTML escaping in the base renderer to keep raw HTML inert until the later HTML-support phase
+- Modular rendering helpers exported for reuse in later wikilink and sanitization work
+
+Files created or modified:
+- `src/services/rendering.js`
+- `src/services/index.js`
+- `test/services/rendering.test.js`
+- `project_status.md`
+
+Notes:
+- The renderer intentionally escapes raw HTML for now because embedded HTML support belongs to Task `3.2`
+- The implementation stays dependency-free and lightweight, matching the current project approach
+
+Validation:
+- `npm test` passed
+- Tests cover HTML escaping, inline formatting, headings, paragraphs, lists, code blocks, and raw HTML escaping behavior
+
 ## Task Checklist
 
 ### Phase 1 — Core Foundation
@@ -279,7 +305,7 @@ Validation:
 
 ### Phase 3 — Markdown Rendering
 
-- [ ] Task 3.1 — Add markdown renderer
+- [x] Task 3.1 — Add markdown renderer
 - [ ] Task 3.2 — Allow embedded HTML
 - [ ] Task 3.3 — Sanitize HTML
 
@@ -321,5 +347,5 @@ Validation:
 ## Next Actions
 
 1. Upgrade Node.js to version 20 or newer.
-2. Execute `Task 3.1`.
+2. Execute `Task 3.2`.
 3. Update this file after each completed task.
