@@ -4,7 +4,9 @@ const {
   deletePage,
   listPages,
   loadThemes,
+  loadTemplates,
   readPage,
+  readTemplate,
   readTheme,
   renderPageOutput,
   updatePage
@@ -52,6 +54,17 @@ function getThemeNameFromPath(requestUrl) {
   return null;
 }
 
+function getTemplateNameFromPath(requestUrl) {
+  const url = getRequestUrl(requestUrl);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length === 2 && pathSegments[0] === "templates" && pathSegments[1].endsWith(".html")) {
+    return decodeURIComponent(pathSegments[1]).slice(0, -5);
+  }
+
+  return null;
+}
+
 function getErrorStatusCode(error) {
   if (error.code === "INVALID_PATH") {
     return 400;
@@ -70,6 +83,10 @@ function getErrorStatusCode(error) {
   }
 
   if (error.code === "THEME_NOT_FOUND") {
+    return 404;
+  }
+
+  if (error.code === "TEMPLATE_NOT_FOUND") {
     return 404;
   }
 
@@ -196,6 +213,42 @@ async function router(request, response) {
       const themes = await loadThemes(worldName);
 
       sendJson(response, 200, themes);
+      return;
+    } catch (error) {
+      const statusCode = getErrorStatusCode(error);
+      const message = getErrorMessage(error, statusCode);
+
+      sendJson(response, statusCode, {
+        error: message
+      });
+      return;
+    }
+  }
+
+  if (request.method === "GET" && request.url.startsWith("/templates")) {
+    try {
+      const queryParams = getQueryParams(request.url);
+      const worldName = queryParams.get("world");
+
+      if (!worldName) {
+        sendJson(response, 400, {
+          error: "Missing required query parameter: world"
+        });
+        return;
+      }
+
+      const templateName = getTemplateNameFromPath(request.url);
+
+      if (templateName) {
+        const template = await readTemplate(worldName, templateName);
+
+        sendText(response, 200, template.content, "text/html; charset=utf-8");
+        return;
+      }
+
+      const templates = await loadTemplates(worldName);
+
+      sendJson(response, 200, templates);
       return;
     } catch (error) {
       const statusCode = getErrorStatusCode(error);
