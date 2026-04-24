@@ -18,7 +18,12 @@ const {
   createWorld,
   updateWorld,
   deleteWorld,
-  getWorldThumbnail
+  getWorldThumbnail,
+  getFileTree,
+  createDocument,
+  readDocument,
+  updateDocumentMetadata,
+  deleteDocument
 } = require("../services");
 
 function getRequestUrl(requestUrl) {
@@ -78,7 +83,7 @@ function getWorldIdFromPath(requestUrl) {
   const url = getRequestUrl(requestUrl);
   const pathSegments = url.pathname.split("/").filter(Boolean);
 
-  if (pathSegments.length === 3 && pathSegments[0] === "api" && pathSegments[1] === "worlds") {
+  if (pathSegments.length >= 3 && pathSegments[0] === "api" && pathSegments[1] === "worlds") {
     return decodeURIComponent(pathSegments[2]);
   }
 
@@ -254,7 +259,7 @@ async function router(request, response) {
       }
     }
 
-    if (request.method === "PUT" && pathname.startsWith("/api/worlds/")) {
+    if (request.method === "PUT" && pathname.match(/^\/api\/worlds\/[^\/]+$/)) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
@@ -269,7 +274,7 @@ async function router(request, response) {
       }
     }
 
-    if (request.method === "DELETE" && pathname.startsWith("/api/worlds/")) {
+    if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^\/]+$/)) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
@@ -282,6 +287,86 @@ async function router(request, response) {
       }
     }
 
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/tree$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const tree = await getFileTree(worldId);
+        return sendJson(response, 200, { items: tree });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
+        
+        const result = await createDocument(worldId, body.path, body.content || "");
+        return sendJson(response, 201, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const queryParams = getQueryParams(request.url);
+        const filePath = queryParams.get("path");
+        if (!filePath) return sendJson(response, 400, { error: "Missing path parameter" });
+        
+        const result = await readDocument(worldId, filePath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const queryParams = getQueryParams(request.url);
+        const filePath = queryParams.get("path");
+        if (!filePath) return sendJson(response, 400, { error: "Missing path parameter" });
+        
+        const result = await deleteDocument(worldId, filePath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "PUT" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/metadata$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.path || !body.metadata) return sendJson(response, 400, { error: "Missing path or metadata" });
+        
+        const result = await updateDocumentMetadata(worldId, body.path, body.metadata);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        console.error("METADATA UPDATE ERROR:", error);
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
     if (request.method === "GET" && pathname.startsWith("/api/worlds/") && pathname.endsWith("/thumbnail")) {
       try {
         const worldName = getWorldNameFromThumbnailPath(request.url);
@@ -289,8 +374,10 @@ async function router(request, response) {
         
         const thumbnail = await getWorldThumbnail(worldName);
         const content = await require("node:fs/promises").readFile(thumbnail.path);
-        
-        response.writeHead(200, { "Content-Type": thumbnail.mimeType });
+        response.writeHead(200, { 
+          "Content-Type": thumbnail.mimeType,
+          "Cache-Control": "public, max-age=86400"
+        });
         response.end(content);
         return;
       } catch (error) {

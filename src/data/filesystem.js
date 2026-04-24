@@ -55,6 +55,24 @@ function validateFileName(fileName) {
   return assertSafeName(fileName, "File name");
 }
 
+function validateRelativePath(relativePath) {
+  assertNonEmptyString(relativePath, "Relative path");
+  const normalized = relativePath.replace(/\\/g, "/").trim();
+  
+  if (normalized.includes("..")) {
+    throw createValidationError("Path contains unsafe directory traversal", relativePath);
+  }
+  
+  const segments = normalized.split('/').filter(Boolean);
+  for (const segment of segments) {
+    if (!SAFE_NAME_PATTERN.test(segment)) {
+      throw createValidationError("Path contains unsupported characters in segment: " + segment, relativePath);
+    }
+  }
+  
+  return segments.join("/");
+}
+
 function getDataRoot() {
   return path.resolve(process.cwd(), "data");
 }
@@ -136,5 +154,6 @@ module.exports = {
   resolveWorldPath,
   resolveWorldRoot,
   validateFileName,
-  validateWorldName
+  validateWorldName,
+  validateRelativePath
 };

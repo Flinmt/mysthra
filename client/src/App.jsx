@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { Route, Switch, useLocation } from 'wouter'
+import WorldWorkspace from './WorldWorkspace'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -18,7 +20,14 @@ function App() {
   }
 
   return isAuthenticated ? (
-    <Dashboard onLogout={() => setIsAuthenticated(false)} />
+    <Switch>
+      <Route path="/">
+        <Dashboard onLogout={() => setIsAuthenticated(false)} />
+      </Route>
+      <Route path="/world/:id">
+        {params => <WorldWorkspace params={params} />}
+      </Route>
+    </Switch>
   ) : (
     <Login onLogin={() => setIsAuthenticated(true)} />
   )
@@ -85,6 +94,7 @@ function Login({ onLogin }) {
 }
 
 function Dashboard({ onLogout }) {
+  const [, setLocation] = useLocation()
   const [worlds, setWorlds] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -139,7 +149,7 @@ function Dashboard({ onLogout }) {
         ) : (
           <div className="worlds-grid">
             {worlds.map(world => (
-              <div key={world.id} className="world-card glass-panel" style={{
+              <div key={world.id} className="world-card glass-panel" onClick={() => setLocation(`/world/${world.id}`)} style={{
                   backgroundImage: world.thumbnailUrl ? `url(${world.thumbnailUrl}?t=${Date.now()})` : 'none',
                   backgroundColor: !world.thumbnailUrl ? '#1e1e2f' : 'transparent'
                 }}>

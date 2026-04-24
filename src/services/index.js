@@ -8,6 +8,13 @@ const templates = require("./templates");
 const themes = require("./themes");
 const wikilinks = require("./wikilinks");
 const worlds = require("./worlds");
+const {
+  getFileTree,
+  createDocument,
+  readDocument,
+  updateDocumentMetadata,
+  deleteDocument
+} = require("./tree");
 
 module.exports = {
   ...entities,
@@ -19,5 +26,10 @@ module.exports = {
   ...templates,
   ...themes,
   ...wikilinks,
-  ...worlds
+  ...worlds,
+  getFileTree,
+  createDocument,
+  readDocument,
+  updateDocumentMetadata,
+  deleteDocument
 };
