@@ -1,27 +1,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2 } from 'lucide-react';
+import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 
 const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
 };
 
-function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onDeletePrompt }) {
+function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onDeletePrompt, isSearching }) {
   if (!nodes || nodes.length === 0) return null;
   return (
     <ul className="file-tree">
       {nodes.map(node => (
-        <FileTreeNode key={node.path} node={node} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onDeletePrompt={onDeletePrompt} />
+        <FileTreeNode key={node.path} node={node} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onDeletePrompt={onDeletePrompt} isSearching={isSearching} />
       ))}
     </ul>
   );
 }
 
-function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onDeletePrompt }) {
+function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onDeletePrompt, isSearching }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showIcons, setShowIcons] = useState(false);
   const isSelected = selectedFile?.path === node.path;
+  const showChildren = isOpen || isSearching;
   
   // Close icon dropdown when clicking elsewhere
   useEffect(() => {
@@ -39,7 +40,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
           onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
           style={{ width: 16, display: 'flex', justifyContent: 'center' }}
         >
-          {node.children && node.children.length > 0 ? (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
+          {node.children && node.children.length > 0 ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
         </span>
         <div onClick={() => onFileSelect(node)} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
           <span 
@@ -88,7 +89,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
           </button>
         </div>
       </div>
-      {isOpen && node.children && <FileTree nodes={node.children} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onDeletePrompt={onDeletePrompt} />}
+      {showChildren && node.children && <FileTree nodes={node.children} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onDeletePrompt={onDeletePrompt} isSearching={isSearching} />}
     </li>
   );
 }
@@ -109,6 +110,7 @@ export default function WorldWorkspace({ params }) {
   const [promptValue, setPromptValue] = useState('');
   const [promptError, setPromptError] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, node: null });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadTree = async () => {
     try {
@@ -247,6 +249,26 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  const filterTree = (nodes, query) => {
+    if (!query) return nodes;
+    const lowerQuery = query.toLowerCase();
+    
+    return nodes.reduce((acc, node) => {
+      const matchesName = node.name.toLowerCase().includes(lowerQuery);
+      const filteredChildren = node.children ? filterTree(node.children, query) : [];
+      
+      if (matchesName || filteredChildren.length > 0) {
+        acc.push({
+          ...node,
+          children: node.children ? filteredChildren : undefined,
+        });
+      }
+      return acc;
+    }, []);
+  };
+
+  const filteredTree = filterTree(tree, searchQuery);
+
   return (
     <div className="workspace-container">
       {/* Top Bar */}
@@ -281,13 +303,34 @@ export default function WorldWorkspace({ params }) {
       <div className="workspace-main">
         {/* Sidebar / File Explorer */}
         <aside className="workspace-sidebar glass-panel" style={sidebarStyle}>
+          
+          {/* Search Bar */}
+          <div className="search-container">
+            <Search size={16} className="search-icon" />
+            <input 
+              type="text" 
+              className="search-input" 
+              placeholder="Pesquisar..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
           <div className="sidebar-tree">
-            {tree.length === 0 ? (
+            {filteredTree.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)', padding: '16px', fontSize: '0.875rem' }}>
                 Nenhum arquivo encontrado.
               </p>
             ) : (
-              <FileTree nodes={tree} onFileSelect={setSelectedFile} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={handleIconSelect} onDeletePrompt={(node) => setDeleteModal({ isOpen: true, node })} />
+              <FileTree 
+                nodes={filteredTree} 
+                onFileSelect={setSelectedFile} 
+                selectedFile={selectedFile} 
+                openPrompt={openPrompt} 
+                onIconSelect={handleIconSelect} 
+                onDeletePrompt={(node) => setDeleteModal({ isOpen: true, node })} 
+                isSearching={!!searchQuery}
+              />
             )}
           </div>
 
