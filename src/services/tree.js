@@ -124,10 +124,32 @@ async function deleteDocument(worldName, docPath) {
   }
 }
 
+async function renameDocument(worldName, oldPath, newName) {
+  const safeName = validateWorldName(worldName);
+  const safeOldPath = validateRelativePath(oldPath);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  
+  const parentDir = path.dirname(safeOldPath);
+  const newPath = path.join(parentDir, newName);
+  
+  const fullOldPath = path.join(pagesDir, safeOldPath);
+  const fullNewPath = path.join(pagesDir, newPath);
+  
+  try {
+    await fs.rename(fullOldPath, fullNewPath);
+    return { success: true, newPath };
+  } catch (e) {
+    const error = new Error("Failed to rename document");
+    error.code = "RENAME_FAILED";
+    throw error;
+  }
+}
+
 module.exports = {
   getFileTree,
   createDocument,
   readDocument,
   updateDocumentMetadata,
-  deleteDocument
+  deleteDocument,
+  renameDocument
 };

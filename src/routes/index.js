@@ -23,7 +23,8 @@ const {
   createDocument,
   readDocument,
   updateDocumentMetadata,
-  deleteDocument
+  deleteDocument,
+  renameDocument
 } = require("../services");
 
 function getRequestUrl(requestUrl) {
@@ -343,6 +344,22 @@ async function router(request, response) {
         if (!filePath) return sendJson(response, 400, { error: "Missing path parameter" });
         
         const result = await deleteDocument(worldId, filePath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/rename$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.path || !body.newName) return sendJson(response, 400, { error: "Missing path or newName" });
+        
+        const result = await renameDocument(worldId, body.path, body.newName);
         return sendJson(response, 200, result);
       } catch (error) {
         const statusCode = getErrorStatusCode(error);

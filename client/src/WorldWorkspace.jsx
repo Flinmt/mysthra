@@ -2,28 +2,38 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search } from 'lucide-react';
 import Editor from '@monaco-editor/react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
 };
 
-function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onDeletePrompt, isSearching }) {
+function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching }) {
   if (!nodes || nodes.length === 0) return null;
   return (
     <ul className="file-tree">
       {nodes.map(node => (
-        <FileTreeNode key={node.path} node={node} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onDeletePrompt={onDeletePrompt} isSearching={isSearching} />
+        <FileTreeNode key={node.path} node={node} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} />
       ))}
     </ul>
   );
 }
 
-function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onDeletePrompt, isSearching }) {
+function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showIcons, setShowIcons] = useState(false);
+  const [editValue, setEditValue] = useState(node.name);
   const isSelected = selectedFile?.path === node.path;
+  const isRenaming = renamingPath === node.path;
   const showChildren = isOpen || isSearching;
   
+  useEffect(() => {
+    if (isRenaming) {
+      setEditValue(node.name);
+    }
+  }, [isRenaming, node.name]);
+
   // Close icon dropdown when clicking elsewhere
   useEffect(() => {
     if (!showIcons) return;
@@ -34,7 +44,14 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
 
   return (
     <li className="tree-document">
-      <div className={`tree-node ${isSelected ? 'selected' : ''}`}>
+      <div 
+        className={`tree-node ${isSelected ? 'selected' : ''}`}
+        onContextMenu={(e) => {
+          if (isRenaming) return;
+          e.preventDefault();
+          onContextMenu(e, node);
+        }}
+      >
         <span
           className="tree-icon"
           onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
@@ -42,11 +59,11 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
         >
           {node.children && node.children.length > 0 ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
         </span>
-        <div onClick={() => onFileSelect(node)} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+        <div onClick={() => !isRenaming && onFileSelect(node)} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
           <span 
             className="tree-icon" 
             style={{ color: 'var(--text-secondary)', position: 'relative', cursor: 'pointer' }}
-            onClick={(e) => { e.stopPropagation(); setShowIcons(!showIcons); }}
+            onClick={(e) => { e.stopPropagation(); !isRenaming && setShowIcons(!showIcons); }}
             title="Mudar Ícone"
           >
             {React.createElement(ICON_MAP[node.icon] || FileText, { size: 14 })}
@@ -70,31 +87,42 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
               </div>
             )}
           </span>
-          <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+          {isRenaming ? (
+            <input
+              className="tree-rename-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => onRename(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onRename(node, editValue);
+                } else if (e.key === 'Escape') {
+                  onRename(null);
+                }
+              }}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <button
             className="node-action-btn"
             onClick={(e) => { e.stopPropagation(); openPrompt(node.path); setIsOpen(true); }}
-            title="Novo sub-documento"
+            title="Criar"
           >
             <Plus size={14} />
           </button>
-          <button
-            className="node-action-btn delete-btn"
-            onClick={(e) => { e.stopPropagation(); onDeletePrompt(node); }}
-            title="Deletar documento"
-          >
-            <Trash2 size={14} />
-          </button>
         </div>
       </div>
-      {showChildren && node.children && <FileTree nodes={node.children} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onDeletePrompt={onDeletePrompt} isSearching={isSearching} />}
+      {showChildren && node.children && <FileTree nodes={node.children} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} />}
     </li>
   );
 }
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+
 
 export default function WorldWorkspace({ params }) {
   const worldId = params.id;
@@ -106,11 +134,46 @@ export default function WorldWorkspace({ params }) {
   const [fileContent, setFileContent] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [promptModal, setPromptModal] = useState({ isOpen: false, type: '', parentPath: '' });
-  const [promptValue, setPromptValue] = useState('');
-  const [promptError, setPromptError] = useState('');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, node: null });
   const [searchQuery, setSearchQuery] = useState('');
+  const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
+  const [renamingPath, setRenamingPath] = useState(null);
+
+  const handleCreate = async (parentPath = '') => {
+    try {
+      const tempName = `Novo Documento`;
+      const path = parentPath ? `${parentPath}/${tempName}` : tempName;
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content: '' })
+      });
+      
+      if (!res.ok) throw new Error('Erro ao criar');
+      
+      const newDoc = await res.json();
+      await loadTree();
+      
+      // Trigger renaming for the new document
+      setTimeout(() => {
+        setRenamingPath(newDoc.path);
+      }, 100);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setContextMenu(prev => prev.isOpen ? { ...prev, isOpen: false } : prev);
+    };
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('contextmenu', handleGlobalClick);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('contextmenu', handleGlobalClick);
+    };
+  }, []);
 
   const loadTree = async () => {
     try {
@@ -138,36 +201,7 @@ export default function WorldWorkspace({ params }) {
     }
   }, [selectedFile, worldId]);
 
-  const openPrompt = (parentPath = '') => {
-    setPromptModal({ isOpen: true, type: 'document', parentPath });
-    setPromptValue('');
-    setPromptError('');
-  };
 
-  const handlePromptSubmit = async () => {
-    try {
-      if (!promptValue.trim()) return;
-      const { parentPath } = promptModal;
-      let name = promptValue.trim();
-      let newPath = parentPath ? `${parentPath}/${name}` : name;
-
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: newPath, content: '# ' + name })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Erro ao criar documento');
-      }
-
-      setPromptModal({ isOpen: false, type: '', parentPath: '' });
-      loadTree();
-    } catch (e) {
-      setPromptError(e.message);
-    }
-  };
 
   const handleDeleteSubmit = async () => {
     try {
@@ -190,6 +224,41 @@ export default function WorldWorkspace({ params }) {
       loadTree();
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleRenameSubmit = async (node, newName) => {
+    if (!node) {
+      setRenamingPath(null);
+      return;
+    }
+    
+    try {
+      if (!newName || newName === node.name) {
+        setRenamingPath(null);
+        return;
+      }
+      
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: node.path, newName })
+      });
+      
+      if (!res.ok) throw new Error('Erro ao renomear');
+      
+      const result = await res.json();
+      
+      if (selectedFile && selectedFile.path.startsWith(node.path)) {
+        const relative = selectedFile.path.slice(node.path.length);
+        setSelectedFile({ ...selectedFile, path: result.newPath + relative });
+      }
+      
+      setRenamingPath(null);
+      loadTree();
+    } catch (e) {
+      console.error(e);
+      setRenamingPath(null);
     }
   };
 
@@ -278,6 +347,17 @@ export default function WorldWorkspace({ params }) {
     }));
   }, [selectedFile]);
 
+  const handleContextMenu = (e, node) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      isOpen: true,
+      x: e.clientX,
+      y: e.clientY,
+      node
+    });
+  };
+
   return (
     <div className="workspace-container">
       {/* Top Bar */}
@@ -335,17 +415,19 @@ export default function WorldWorkspace({ params }) {
                 nodes={filteredTree} 
                 onFileSelect={setSelectedFile} 
                 selectedFile={selectedFile} 
-                openPrompt={openPrompt} 
+                openPrompt={handleCreate} 
                 onIconSelect={handleIconSelect} 
-                onDeletePrompt={(node) => setDeleteModal({ isOpen: true, node })} 
+                onContextMenu={handleContextMenu}
+                renamingPath={renamingPath}
+                onRename={handleRenameSubmit}
                 isSearching={!!searchQuery}
               />
             )}
           </div>
 
           <div className="sidebar-footer">
-            <button className="btn-secondary sidebar-action-btn" title="Novo Documento na Raiz" onClick={() => openPrompt('')}>
-              <FilePlus size={16} /> <span className="btn-text">Documento Raiz</span>
+            <button className="btn-secondary sidebar-action-btn" title="Criar Documento" onClick={() => handleCreate('')}>
+              <FilePlus size={16} /> <span className="btn-text">Criar</span>
             </button>
           </div>
         </aside>
@@ -405,33 +487,7 @@ export default function WorldWorkspace({ params }) {
         </section>
       </div>
 
-      {promptModal.isOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-content glass-panel">
-            <h2>Novo Documento</h2>
-            {promptModal.parentPath && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>Em: {promptModal.parentPath}</p>}
 
-            {promptError && <div className="error-msg">{promptError}</div>}
-
-            <div className="input-group" style={{ marginTop: '16px' }}>
-              <label>Nome</label>
-              <input
-                type="text"
-                value={promptValue}
-                onChange={e => setPromptValue(e.target.value)}
-                autoFocus
-                onKeyDown={e => e.key === 'Enter' && handlePromptSubmit()}
-                placeholder={'Ex: História Antiga'}
-              />
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setPromptModal({ isOpen: false, type: '', parentPath: '' })}>Cancelar</button>
-              <button className="btn-primary" onClick={handlePromptSubmit}>Criar</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {deleteModal.isOpen && deleteModal.node && (
         <div className="modal-backdrop">
@@ -451,6 +507,36 @@ export default function WorldWorkspace({ params }) {
               <button className="btn-primary btn-danger" onClick={handleDeleteSubmit}>Deletar</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {contextMenu.isOpen && (
+        <div 
+          className="context-menu glass-panel" 
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button className="context-menu-item" onClick={() => {
+            setContextMenu({ ...contextMenu, isOpen: false });
+            handleCreate(contextMenu.node.path);
+          }}>
+            <Plus size={14} /> Criar
+          </button>
+          <button className="context-menu-item" onClick={() => {
+            const node = contextMenu.node;
+            setContextMenu({ ...contextMenu, isOpen: false });
+            setRenamingPath(node.path);
+          }}>
+            <Edit2 size={14} /> Renomear
+          </button>
+          <div className="context-menu-divider" />
+          <button className="context-menu-item danger" onClick={() => {
+            const node = contextMenu.node;
+            setContextMenu({ ...contextMenu, isOpen: false });
+            setDeleteModal({ isOpen: true, node });
+          }}>
+            <Trash2 size={14} /> Excluir
+          </button>
         </div>
       )}
     </div>
