@@ -1,21 +1,23 @@
 const entities = require("./entities");
 const linkResolver = require("./link-resolver");
-const pageOutput = require("./page-output");
 const pages = require("./pages");
+const pageOutput = require("./page-output");
 const relations = require("./relations");
 const rendering = require("./rendering");
 const templates = require("./templates");
 const themes = require("./themes");
 const wikilinks = require("./wikilinks");
+const worlds = require("./worlds");
 
 module.exports = {
   ...entities,
   ...linkResolver,
-  ...pageOutput,
   ...pages,
+  ...pageOutput,
   ...relations,
   ...rendering,
   ...templates,
   ...themes,
-  ...wikilinks
+  ...wikilinks,
+  ...worlds
 };
