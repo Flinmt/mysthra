@@ -269,6 +269,15 @@ export default function WorldWorkspace({ params }) {
 
   const filteredTree = filterTree(tree, searchQuery);
 
+  const breadcrumbs = useMemo(() => {
+    if (!selectedFile) return [];
+    const segments = selectedFile.path.split('/');
+    return segments.map((seg, i) => ({
+      name: seg,
+      path: segments.slice(0, i + 1).join('/')
+    }));
+  }, [selectedFile]);
+
   return (
     <div className="workspace-container">
       {/* Top Bar */}
@@ -349,27 +358,49 @@ export default function WorldWorkspace({ params }) {
               <h2>Selecione um arquivo</h2>
               <p>Crie ou abra um arquivo na barra lateral para começar a editar.</p>
             </div>
-          ) : viewMode === 'edit' ? (
-            <Editor
-              height="100%"
-              theme="vs-dark"
-              defaultLanguage="markdown"
-              value={fileContent}
-              onChange={setFileContent}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 16,
-                wordWrap: 'on',
-                padding: { top: 24 }
-              }}
-            />
           ) : (
-            <div className="preview-container glass-panel">
-              <div
-                className="markdown-preview"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked(fileContent)) }}
-              />
-            </div>
+            <>
+              {/* Breadcrumbs */}
+              <div className="breadcrumbs-container">
+                {breadcrumbs.map((bc, i) => (
+                  <React.Fragment key={bc.path}>
+                    <button 
+                      className={`breadcrumb-item ${i === breadcrumbs.length - 1 ? 'active' : ''}`}
+                      onClick={() => setSelectedFile({ path: bc.path, name: bc.name })}
+                    >
+                      {bc.name}
+                    </button>
+                    {i < breadcrumbs.length - 1 && (
+                      <ChevronRight size={14} className="breadcrumb-separator" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {viewMode === 'edit' ? (
+                <Editor
+                  height="100%"
+                  theme="vs-dark"
+                  defaultLanguage="markdown"
+                  value={fileContent}
+                  onChange={setFileContent}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 16,
+                    wordWrap: 'on',
+                    padding: { top: 60 },
+                    scrollBeyondLastLine: false
+                  }}
+                />
+              ) : (
+                <div className="preview-container glass-panel">
+                  <div
+                    className="markdown-preview"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked(fileContent)) }}
+                  />
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
