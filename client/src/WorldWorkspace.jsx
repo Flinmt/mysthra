@@ -628,43 +628,44 @@ export default function WorldWorkspace({ params }) {
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
 
-    // Provedor de Autocompletar para [[
-    if (!monaco.languages.getLanguages().some(l => l.id === 'markdown' && l._wikiRegistered)) {
-      monaco.languages.registerCompletionItemProvider('markdown', {
-        triggerCharacters: ['['],
-        provideCompletionItems: (model, position) => {
-          const lineContent = model.getLineContent(position.lineNumber);
-          const beforeCursor = lineContent.substring(0, position.column - 1);
-          
-          if (beforeCursor.endsWith('[[')) {
-            const suggestions = [];
-            const flatten = (nodes) => {
-              nodes.forEach(n => {
-                suggestions.push({
-                  label: n.name,
-                  kind: monaco.languages.CompletionItemKind.Reference,
-                  insertText: `${n.uid}|${n.name}]]`,
-                  detail: n.path,
-                  range: {
-                    startLineNumber: position.lineNumber,
-                    endLineNumber: position.lineNumber,
-                    startColumn: position.column,
-                    endColumn: position.column
-                  }
+    const languages = ['markdown', 'html'];
+    languages.forEach(langId => {
+      if (!monaco.languages.getLanguages().some(l => l.id === langId && l._wikiRegistered)) {
+        monaco.languages.registerCompletionItemProvider(langId, {
+          triggerCharacters: ['['],
+          provideCompletionItems: (model, position) => {
+            const lineContent = model.getLineContent(position.lineNumber);
+            const beforeCursor = lineContent.substring(0, position.column - 1);
+            
+            if (beforeCursor.endsWith('[[')) {
+              const suggestions = [];
+              const flatten = (nodes) => {
+                nodes.forEach(n => {
+                  suggestions.push({
+                    label: n.name,
+                    kind: monaco.languages.CompletionItemKind.Reference,
+                    insertText: `${n.uid}|${n.name}]]`,
+                    detail: n.path,
+                    range: {
+                      startLineNumber: position.lineNumber,
+                      endLineNumber: position.lineNumber,
+                      startColumn: position.column,
+                      endColumn: position.column
+                    }
+                  });
+                  if (n.children) flatten(n.children);
                 });
-                if (n.children) flatten(n.children);
-              });
-            };
-            flatten(treeRef.current);
-            return { suggestions };
+              };
+              flatten(treeRef.current);
+              return { suggestions };
+            }
+            return { suggestions: [] };
           }
-          return { suggestions: [] };
-        }
-      });
-      // Marcar como registrado para evitar duplicação em re-mounts
-      const lang = monaco.languages.getLanguages().find(l => l.id === 'markdown');
-      if (lang) lang._wikiRegistered = true;
-    }
+        });
+        const lang = monaco.languages.getLanguages().find(l => l.id === langId);
+        if (lang) lang._wikiRegistered = true;
+      }
+    });
 
     // Comando Ctrl+L para transformar seleção em link
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, () => {
@@ -1434,6 +1435,16 @@ export default function WorldWorkspace({ params }) {
     });
   };
 
+  const editorLanguage = useMemo(() => {
+    if (!fileContent) return 'markdown';
+    const htmlIndicators = ['<!doctype', '<html', '<div', '<section', '<p>', '<br>', '<style'];
+    const contentLower = fileContent.toLowerCase().trim();
+    if (htmlIndicators.some(indicator => contentLower.includes(indicator))) {
+      return 'html';
+    }
+    return 'markdown';
+  }, [fileContent]);
+
   return (
     <div className="workspace-container">
       {/* Top Bar */}
@@ -1755,7 +1766,7 @@ export default function WorldWorkspace({ params }) {
                   <Editor
                     height="100%"
                     theme="vs-dark"
-                    defaultLanguage="markdown"
+                    language={editorLanguage}
                     value={fileContent}
                     onChange={setFileContent}
                     onMount={handleEditorDidMount}
@@ -1772,12 +1783,15 @@ export default function WorldWorkspace({ params }) {
               ) : (
                 <div className="preview-container glass-panel" onClick={handlePreviewClick}>
                   <div
-                    className="markdown-preview"
+                    className={editorLanguage === 'html' ? 'html-preview' : 'markdown-preview'}
                     dangerouslySetInnerHTML={{ 
-                      __html: DOMPurify.sanitize(processWikiLinks(marked(fileContent)), {
-                        ADD_TAGS: ['audio', 'source', 'video'],
-                        ADD_ATTR: ['controls', 'src', 'style', 'data-wiki-target', 'data-is-uid', 'class']
-                      }) 
+                      __html: DOMPurify.sanitize(
+                        processWikiLinks(editorLanguage === 'html' ? fileContent : marked(fileContent)), 
+                        {
+                          ADD_TAGS: ['audio', 'source', 'video', 'style'],
+                          ADD_ATTR: ['controls', 'src', 'style', 'data-wiki-target', 'data-is-uid', 'class']
+                        }
+                      ) 
                     }}
                   />
                 </div>

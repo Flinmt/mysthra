@@ -996,10 +996,11 @@ body {
 .wiki-link {
   color: var(--accent-color);
   text-decoration: none;
-  border-bottom: 1px dashed rgba(124, 58, 237, 0.3);
+  border-bottom: 1px dashed rgba(124, 58, 237, 0.4);
   transition: all 0.2s ease;
   cursor: pointer;
   font-weight: 500;
+  display: inline;
 }
 
 .wiki-link:hover {
@@ -1007,6 +1008,14 @@ body {
   border-bottom-color: var(--accent-color);
   background: rgba(124, 58, 237, 0.1);
   border-radius: 2px;
+  text-decoration: none !important;
+}
+
+/* Se o link estiver dentro de um elemento com cor customizada, 
+   podemos forçar a herança se o usuário desejar usando color: inherit */
+.html-preview [style*="color"] .wiki-link {
+  color: inherit;
+  border-bottom-color: currentColor;
 }
 
 /* Wiki Resolver Modal */
