@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package } from 'lucide-react';
+import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -147,6 +147,201 @@ function AssetTree({ nodes, onAssetSelect, worldId, onDelete, onMove, onCreateFo
   );
 }
 
+function TemplateTree({ nodes, onTemplateSelect, onDelete, onMove, onCreateFolder, onCreateTemplate, renamingPath, onRename, onContextMenu, isSearching, worldId }) {
+  if (!nodes || nodes.length === 0) return null;
+  return (
+    <ul className="file-tree">
+      {nodes.map(node => (
+        <TemplateTreeNode 
+          key={node.path} 
+          node={node} 
+          onTemplateSelect={onTemplateSelect} 
+          onDelete={onDelete}
+          onMove={onMove}
+          onCreateFolder={onCreateFolder}
+          onCreateTemplate={onCreateTemplate}
+          renamingPath={renamingPath}
+          onRename={onRename}
+          onContextMenu={onContextMenu}
+          isSearching={isSearching}
+          worldId={worldId}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function TemplateTreeNode({ node, onTemplateSelect, onDelete, onMove, onCreateFolder, onCreateTemplate, renamingPath, onRename, onContextMenu, isSearching, worldId }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [editValue, setEditValue] = useState(node.name);
+  const [showPreview, setShowPreview] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [previewContent, setPreviewContent] = useState('');
+  const isFolder = node.type === 'folder';
+  const isRenaming = renamingPath === node.path;
+  const isChildRenaming = renamingPath && renamingPath.startsWith(node.path + '/');
+  const showChildren = isOpen || isSearching || isChildRenaming;
+
+  useEffect(() => {
+    if (isRenaming) setEditValue(node.name);
+  }, [isRenaming, node.name]);
+
+  const handleDragStart = (e) => {
+    e.dataTransfer.setData('sourcePath', node.path);
+    e.dataTransfer.setData('templatePath', node.path);
+    e.dataTransfer.setData('templateType', 'content');
+    e.dataTransfer.effectAllowed = 'copyMove';
+  };
+
+  const handleDragOver = (e) => {
+    if (isFolder && e.dataTransfer.types.includes('sourcepath')) {
+      e.preventDefault();
+      e.currentTarget.classList.add('drag-over');
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.currentTarget.classList.remove('drag-over');
+  };
+
+  const handleDrop = (e) => {
+    if (!isFolder) return;
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const sourcePath = e.dataTransfer.getData('sourcePath');
+    if (sourcePath && sourcePath !== node.path) {
+      onMove(sourcePath, node.path);
+    }
+  };
+
+  const fetchPreview = async () => {
+    if (isFolder || node.type !== 'content') return;
+    try {
+      const res = await fetch(`/api/templates/read?path=${encodeURIComponent(node.path)}`);
+      if (res.ok) {
+        const text = await res.text();
+        console.log('Template loaded (raw):', text);
+        setPreviewContent(text.slice(0, 500) + (text.length > 500 ? '...' : ''));
+      }
+    } catch (e) {}
+  };
+
+  return (
+    <li className="tree-document">
+      <div 
+        className="tree-node"
+        draggable={!isRenaming}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onContextMenu={(e) => {
+          if (isRenaming) return;
+          e.preventDefault();
+          onContextMenu(e, node);
+        }}
+        onMouseEnter={() => {
+          if (!isFolder && node.type === 'content') {
+            setShowPreview(true);
+            fetchPreview();
+          }
+        }}
+        onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setShowPreview(false)}
+        onClick={() => {
+          if (isRenaming) return;
+          if (isFolder) setIsOpen(!isOpen);
+          else onTemplateSelect(node);
+        }}
+      >
+        <span className="tree-icon" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
+          {isFolder ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, gap: 8 }}>
+          <span className="tree-icon" style={{ color: 'var(--text-secondary)' }}>
+            {isFolder ? (isOpen ? <FolderOpen size={14} /> : <Folder size={14} />) : (
+              node.type === 'content' ? <FileText size={14} /> : <Columns size={14} />
+            )}
+          </span>
+          {isRenaming ? (
+            <input
+              className="tree-rename-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => onRename(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onRename(node, editValue);
+                else if (e.key === 'Escape') onRename(null);
+              }}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="node-name">{node.name}</span>
+          )}
+        </div>
+        {isFolder && (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <button
+              className="node-action-btn"
+              onClick={(e) => { e.stopPropagation(); onCreateTemplate(node.path); setIsOpen(true); }}
+              title="Criar Template"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+      {showChildren && node.children && (
+        <TemplateTree 
+          nodes={node.children} 
+          onTemplateSelect={onTemplateSelect} 
+          onDelete={onDelete}
+          onMove={onMove}
+          onCreateFolder={onCreateFolder}
+          onCreateTemplate={onCreateTemplate}
+          renamingPath={renamingPath}
+          onRename={onRename}
+          onContextMenu={onContextMenu}
+          isSearching={isSearching}
+          worldId={worldId}
+        />
+      )}
+      {showPreview && <TemplatePreviewCard content={previewContent} name={node.name} pos={mousePos} />}
+    </li>
+  );
+}
+
+function TemplatePreviewCard({ content, name, pos }) {
+  const html = useMemo(() => {
+    return DOMPurify.sanitize(marked(content));
+  }, [content]);
+
+  return (
+    <div 
+      className="floating-preview-card glass-panel"
+      style={{ 
+        position: 'fixed',
+        left: Math.min(pos.x + 20, window.innerWidth - 320), 
+        top: Math.min(pos.y + 20, window.innerHeight - 400),
+        maxHeight: '300px',
+        width: '300px',
+        overflow: 'hidden',
+        zIndex: 1000,
+        pointerEvents: 'none'
+      }}
+    >
+      <div className="preview-header" style={{ padding: '8px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.2)' }}>
+        <FileText size={14} />
+        <span style={{ fontSize: '11px', fontWeight: 'bold' }}>Preview: {name}</span>
+      </div>
+      <div className="preview-body markdown-preview" dangerouslySetInnerHTML={{ __html: html }} style={{ fontSize: '12px', padding: '12px', overflowY: 'auto' }} />
+    </div>
+  );
+}
+
+
 function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreateFolder, renamingPath, onRename, onContextMenu, onExternalUpload, isSearching }) {
   const [isOpen, setIsOpen] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
@@ -255,6 +450,17 @@ function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreat
             <span className="asset-name-tree">{displayName}</span>
           )}
         </div>
+        {isFolder && (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <button
+              className="node-action-btn"
+              onClick={(e) => { e.stopPropagation(); onCreateFolder(node.path); setIsOpen(true); }}
+              title="Criar"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        )}
 
         {(isImage || isAudio) && showPreview && (
           <div 
@@ -320,6 +526,21 @@ export default function WorldWorkspace({ params }) {
   const [renamingPath, setRenamingPath] = useState(null);
   const [renamingMediaPath, setRenamingMediaPath] = useState(null);
   const [uploadingProgress, setUploadingProgress] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [renamingTemplatePath, setRenamingTemplatePath] = useState(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
 
   const handleCreate = async (parentPath = '') => {
     try {
@@ -377,6 +598,8 @@ export default function WorldWorkspace({ params }) {
   useEffect(() => {
     if (sidebarTab === 'assets') {
       loadMedia();
+    } else if (sidebarTab === 'templates') {
+      loadTemplates();
     }
   }, [sidebarTab, worldId]);
 
@@ -414,7 +637,7 @@ export default function WorldWorkspace({ params }) {
       ? `<audio controls src="${item.url}" style="width:100%; margin: 10px 0;"></audio>` 
       : `![${item.name}](${item.url})`;
     navigator.clipboard.writeText(code);
-    alert('Código copiado para a área de transferência!');
+    addToast('Código copiado para a área de transferência!', 'success');
   };
 
   const handleCreateMediaFolder = async (parentPath = '') => {
@@ -434,6 +657,183 @@ export default function WorldWorkspace({ params }) {
       console.error(e);
     }
   };
+
+  const loadTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      const res = await fetch(`/api/templates`);
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data.items || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const handleSaveTemplate = async (parentPathArg = "") => {
+    const nameStr = String(newTemplateName || "");
+    const contentStr = String(fileContent || "");
+    const parentPathStr = typeof parentPathArg === 'string' ? parentPathArg : "";
+    
+    console.log('Safe Save Template:', { nameStr, parentPathStr, contentLen: contentStr.length });
+    
+    if (!nameStr) {
+      addToast('Por favor, informe o nome do template.', 'warning');
+      return;
+    }
+    
+    setSavingTemplate(true);
+    try {
+      const res = await fetch(`/api/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nameStr,
+          content: contentStr,
+          parentPath: parentPathStr,
+          type: 'content'
+        })
+      });
+      
+      if (res.ok) {
+        setShowTemplateSaveModal(false);
+        setNewTemplateName('');
+        loadTemplates();
+        addToast('Template salvo com sucesso!', 'success');
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        addToast('Erro ao salvar template: ' + (errorData.error || 'Erro no servidor'), 'error');
+      }
+    } catch (e) {
+      console.error('Save Template Fatal Error:', e);
+      addToast('Erro de conexão ou erro interno ao salvar template.', 'error');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleEditTemplate = async (template) => {
+    if (template.type !== 'content') return;
+    try {
+      const res = await fetch(`/api/templates/read?path=${encodeURIComponent(template.path)}`);
+      if (res.ok) {
+        const content = await res.text();
+        console.log('Template Edit Content (raw):', content);
+        console.log('Template loaded:', template.name, 'Length:', content.length);
+        setFileContent(content);
+        setSelectedFile({ ...template, isTemplate: true });
+        setViewMode('edit');
+        if (editorRef.current) {
+          editorRef.current.setValue(content);
+        }
+      } else {
+        addToast('Erro ao carregar template', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      addToast('Erro ao carregar template para edição', 'error');
+    }
+  };
+
+  const handleCreateBlankTemplate = async (parentPathArg = '') => {
+    const parentPath = typeof parentPathArg === 'string' ? parentPathArg : "";
+    try {
+      const tempName = 'Novo Template';
+      const res = await fetch(`/api/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tempName, content: '', parentPath, type: 'content' })
+      });
+      if (res.ok) {
+        const newTemplate = await res.json();
+        loadTemplates();
+        setTimeout(() => setRenamingTemplatePath(newTemplate.path), 100);
+        addToast('Template criado!', 'success');
+      } else {
+        const err = await res.json();
+        addToast('Erro ao criar template: ' + (err.error || ''), 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      addToast('Erro de conexão ao criar template', 'error');
+    }
+  };
+
+  const handleCreateTemplateFolder = async (parentPathArg = '') => {
+    const parentPath = typeof parentPathArg === 'string' ? parentPathArg : "";
+    try {
+      const tempName = 'Nova Pasta';
+      const path = parentPath ? `${parentPath}/${tempName}` : tempName;
+      const res = await fetch(`/api/templates/folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      if (res.ok) {
+        loadTemplates();
+        setTimeout(() => setRenamingTemplatePath(path), 100);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        addToast('Erro ao criar pasta: ' + (errorData.error || 'Erro no servidor'), 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      addToast('Erro de conexão ao criar pasta', 'error');
+    }
+  };
+
+  const handleRenameTemplate = async (node, newName) => {
+    if (!node || !newName) {
+      setRenamingTemplatePath(null);
+      return;
+    }
+    
+    try {
+      const isFolder = node.type === 'folder';
+      const extension = isFolder ? "" : (node.path.includes('.') ? node.path.slice(node.path.lastIndexOf('.')) : "");
+      const finalName = newName + extension;
+      
+      const parentPath = node.path.split('/').slice(0, -1).join('/');
+      const targetPath = parentPath ? `${parentPath}/${finalName}` : finalName;
+      
+      const res = await fetch(`/api/templates/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: node.path, targetPath })
+      });
+      if (res.ok) {
+        setRenamingTemplatePath(null);
+        loadTemplates();
+      }
+    } catch (e) {
+      console.error(e);
+      setRenamingTemplatePath(null);
+    }
+  };
+
+  const handleMoveTemplate = async (sourcePath, targetPath) => {
+    const filename = sourcePath.includes('/') ? sourcePath.split('/').pop() : sourcePath;
+    const fullTargetPath = targetPath ? `${targetPath}/${filename}` : filename;
+    if (sourcePath === fullTargetPath) return;
+    try {
+      const res = await fetch(`/api/templates/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath, targetPath: fullTargetPath })
+      });
+      if (res.ok) loadTemplates();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteTemplate = async (node) => {
+    setDeleteModal({ isOpen: true, node, isTemplate: true });
+  };
+
 
   const handleRenameMediaSubmit = async (node, newName) => {
     if (!node) {
@@ -493,7 +893,7 @@ export default function WorldWorkspace({ params }) {
   };
 
   useEffect(() => {
-    if (selectedFile) {
+    if (selectedFile && !selectedFile.isTemplate) {
       fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(selectedFile.path)}`)
         .then(res => res.json())
         .then(data => setFileContent(data.content || ''))
@@ -511,9 +911,12 @@ export default function WorldWorkspace({ params }) {
         const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/media/${encodeURIComponent(deleteModal.node.path)}`, {
           method: 'DELETE'
         });
-        if (res.ok) {
-          loadMedia();
-        }
+        if (res.ok) loadMedia();
+      } else if (deleteModal.isTemplate) {
+        const res = await fetch(`/api/templates?path=${encodeURIComponent(deleteModal.node.path)}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) loadTemplates();
       } else {
         const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(deleteModal.node.path)}`, {
           method: 'DELETE'
@@ -528,7 +931,7 @@ export default function WorldWorkspace({ params }) {
         loadTree();
       }
       
-      setDeleteModal({ isOpen: false, node: null, isAsset: false });
+      setDeleteModal({ isOpen: false, node: null, isAsset: false, isTemplate: false });
     } catch (e) {
       console.error(e);
     }
@@ -552,15 +955,6 @@ export default function WorldWorkspace({ params }) {
         body: JSON.stringify({ path: node.path, newName })
       });
       
-      if (!res.ok) throw new Error('Erro ao renomear');
-      
-      const result = await res.json();
-      
-      if (selectedFile && selectedFile.path.startsWith(node.path)) {
-        const relative = selectedFile.path.slice(node.path.length);
-        setSelectedFile({ ...selectedFile, path: result.newPath + relative });
-      }
-      
       setRenamingPath(null);
       loadTree();
     } catch (e) {
@@ -569,18 +963,40 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+
   const handleSave = async () => {
     if (!selectedFile) return;
     setSaving(true);
     try {
-      await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
+      const isTemplate = selectedFile.isTemplate;
+      const url = isTemplate ? '/api/templates' : `/api/worlds/${encodeURIComponent(worldId)}/documents`;
+      
+      const body = isTemplate ? {
+        name: selectedFile.name,
+        content: fileContent,
+        parentPath: selectedFile.path.includes('/') ? selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/')) : '',
+        type: 'content'
+      } : {
+        path: selectedFile.path,
+        content: fileContent
+      };
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedFile.path, content: fileContent })
+        body: JSON.stringify(body)
       });
+      
+      if (res.ok) {
+        addToast(isTemplate ? 'Template salvo!' : 'Arquivo salvo!', 'success');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        addToast('Erro ao salvar: ' + (err.error || 'Erro desconhecido'), 'error');
+      }
       setSaving(false);
     } catch (e) {
       console.error(e);
+      addToast('Erro de conexão ao salvar', 'error');
       setSaving(false);
     }
   };
@@ -589,7 +1005,7 @@ export default function WorldWorkspace({ params }) {
     if (!file) return;
     
     if (file.size > 20 * 1024 * 1024) {
-      alert('O arquivo é muito grande. Limite: 20MB');
+      addToast('O arquivo é muito grande. Limite: 20MB', 'warning');
       return;
     }
 
@@ -807,16 +1223,35 @@ export default function WorldWorkspace({ params }) {
     return filter(mediaFiles);
   }, [mediaFiles, assetSearchQuery]);
 
+  const filteredTemplates = useMemo(() => {
+    if (!assetSearchQuery) return templates;
+    const filter = (items) => {
+      return items.reduce((acc, item) => {
+        const matches = item.name.toLowerCase().includes(assetSearchQuery.toLowerCase());
+        const filteredChildren = item.children ? filter(item.children) : null;
+        if (matches || (filteredChildren && filteredChildren.length > 0)) {
+          acc.push({ ...item, children: filteredChildren });
+        }
+        return acc;
+      }, []);
+    };
+    return filter(templates);
+  }, [templates, assetSearchQuery]);
+
   const breadcrumbs = useMemo(() => {
     if (!selectedFile) return [];
     const segments = selectedFile.path.split('/');
-    return segments.map((seg, i) => ({
+    const items = segments.map((seg, i) => ({
       name: seg,
       path: segments.slice(0, i + 1).join('/')
     }));
+    if (selectedFile.isTemplate) {
+      items[items.length - 1].name = `[TEMPLATE] ${items[items.length - 1].name}`;
+    }
+    return items;
   }, [selectedFile]);
 
-  const handleContextMenu = (e, node, isAsset = false) => {
+  const handleContextMenu = (e, node, isAsset = false, isTemplate = false) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
@@ -824,7 +1259,8 @@ export default function WorldWorkspace({ params }) {
       x: e.clientX,
       y: e.clientY,
       node,
-      isAsset
+      isAsset,
+      isTemplate
     });
   };
 
@@ -851,6 +1287,15 @@ export default function WorldWorkspace({ params }) {
               <><Edit2 size={16} style={{ marginRight: 8 }} /> Editor</>
             )}
           </button>
+          <button 
+            className="btn-secondary" 
+            onClick={() => setShowTemplateSaveModal(true)} 
+            disabled={!selectedFile}
+            title="Salvar como Template"
+            style={{ marginRight: 8 }}
+          >
+            <Bookmark size={16} style={{ marginRight: 8 }} /> Template
+          </button>
           <button className="btn-primary" onClick={handleSave} disabled={saving || !selectedFile}>
             <Save size={16} style={{ marginRight: 8 }} /> {saving ? 'Salvando...' : 'Salvar'}
           </button>
@@ -873,9 +1318,15 @@ export default function WorldWorkspace({ params }) {
             >
               <Layers size={14} /> Assets
             </button>
+            <button 
+              className={`tab-btn ${sidebarTab === 'templates' ? 'active' : ''}`}
+              onClick={() => setSidebarTab('templates')}
+            >
+              <Layout size={14} /> Templates
+            </button>
           </div>
 
-          {sidebarTab === 'project' ? (
+          {sidebarTab === 'project' && (
             <>
               <div className="search-container">
                 <Search size={16} className="search-icon" />
@@ -914,7 +1365,9 @@ export default function WorldWorkspace({ params }) {
                 </button>
               </div>
             </>
-          ) : (
+          )}
+
+          {sidebarTab === 'assets' && (
             <>
               <div className="search-container">
                 <Search size={16} className="search-icon" />
@@ -988,8 +1441,70 @@ export default function WorldWorkspace({ params }) {
                 </button>
               </div>
             </>
-          )}
-        </aside>
+          )}            {sidebarTab === 'templates' && (
+              <>
+                <div className="search-container">
+                  <Search size={16} className="search-icon" />
+                  <input 
+                    type="text" 
+                    className="search-input" 
+                    placeholder="Pesquisar..." 
+                    value={assetSearchQuery}
+                    onChange={(e) => setAssetSearchQuery(e.target.value)}
+                  />
+                </div>
+                
+                <div 
+                  className="sidebar-tree assets-tree"
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes('sourcepath')) {
+                      e.preventDefault();
+                      e.currentTarget.classList.add('drag-over');
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    e.currentTarget.classList.remove('drag-over');
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('drag-over');
+                    const sourcePath = e.dataTransfer.getData('sourcePath');
+                    if (sourcePath) handleMoveTemplate(sourcePath, '');
+                  }}
+                >
+                  {templatesLoading ? (
+                    <div className="loading-state">Carregando templates...</div>
+                  ) : templates.length === 0 ? (
+                    <div className="empty-state-sidebar">
+                      <p>Nenhum template encontrado.</p>
+                    </div>
+                  ) : (
+                    <TemplateTree 
+                      nodes={filteredTemplates}
+                      onTemplateSelect={handleEditTemplate}
+                      onDelete={handleDeleteTemplate}
+                      onMove={handleMoveTemplate}
+                      onCreateFolder={handleCreateTemplateFolder}
+                      onCreateTemplate={handleCreateBlankTemplate}
+                      renamingPath={renamingTemplatePath}
+                      onRename={handleRenameTemplate}
+                      onContextMenu={(e, node) => handleContextMenu(e, node, false, true)}
+                      isSearching={!!assetSearchQuery}
+                      worldId={worldId}
+                    />
+                  )}
+                </div>
+                <div className="sidebar-footer">
+                  <button className="btn-secondary sidebar-action-btn" title="Novo Template" onClick={() => handleCreateBlankTemplate('')}>
+                    <FilePlus size={16} /> <span className="btn-text">Template</span>
+                  </button>
+                  <button className="btn-secondary sidebar-action-btn" title="Nova Pasta" onClick={() => handleCreateTemplateFolder('')}>
+                    <FolderPlus size={16} /> <span className="btn-text">Pasta</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </aside>
 
         {/* Editor Area */}
         <section className="workspace-editor">
@@ -1019,22 +1534,47 @@ export default function WorldWorkspace({ params }) {
               </div>
 
               {viewMode === 'edit' ? (
-                <Editor
-                  height="100%"
-                  theme="vs-dark"
-                  defaultLanguage="markdown"
-                  value={fileContent}
-                  onChange={setFileContent}
-                  onMount={handleEditorDidMount}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 16,
-                    wordWrap: 'on',
-                    padding: { top: 60 },
-                    scrollBeyondLastLine: false,
-                    dropIntoEditor: { enabled: true }
+                <div 
+                  className="editor-main-wrapper"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
                   }}
-                />
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    const path = e.dataTransfer.getData('templatePath');
+                    if (path) {
+                      try {
+                        const res = await fetch(`/api/templates/read?path=${encodeURIComponent(path)}`);
+                        if (res.ok) {
+                          const content = await res.text();
+                          setFileContent(content);
+                          addToast('Template aplicado!', 'success');
+                        }
+                      } catch (err) {
+                        addToast('Erro ao aplicar template', 'error');
+                      }
+                    }
+                  }}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <Editor
+                    height="100%"
+                    theme="vs-dark"
+                    defaultLanguage="markdown"
+                    value={fileContent}
+                    onChange={setFileContent}
+                    onMount={handleEditorDidMount}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 16,
+                      wordWrap: 'on',
+                      padding: { top: 60 },
+                      scrollBeyondLastLine: false,
+                      dropIntoEditor: { enabled: true }
+                    }}
+                  />
+                </div>
               ) : (
                 <div className="preview-container glass-panel">
                   <div
@@ -1069,7 +1609,7 @@ export default function WorldWorkspace({ params }) {
             )}
             
             <div className="modal-actions" style={{ marginTop: '24px' }}>
-              <button className="btn-secondary" onClick={() => setDeleteModal({ isOpen: false, node: null, isAsset: false })}>Cancelar</button>
+              <button className="btn-secondary" onClick={() => setDeleteModal({ isOpen: false, node: null, isAsset: false, isTemplate: false })}>Cancelar</button>
               <button className="btn-primary btn-danger" onClick={handleDeleteSubmit}>Deletar</button>
             </div>
           </div>
@@ -1116,6 +1656,32 @@ export default function WorldWorkspace({ params }) {
                 <Trash2 size={14} /> Excluir
               </button>
             </>
+          ) : contextMenu.isTemplate ? (
+            <>
+              {contextMenu.node.type === 'folder' && (
+                <button className="context-menu-item" onClick={() => {
+                  setContextMenu({ ...contextMenu, isOpen: false });
+                  handleCreateTemplateFolder(contextMenu.node.path);
+                }}>
+                  <FolderPlus size={14} /> Nova Pasta
+                </button>
+              )}
+              <button className="context-menu-item" onClick={() => {
+                const node = contextMenu.node;
+                setContextMenu({ ...contextMenu, isOpen: false });
+                setRenamingTemplatePath(node.path);
+              }}>
+                <Edit2 size={14} /> Renomear
+              </button>
+              <div className="context-menu-divider" />
+              <button className="context-menu-item danger" onClick={() => {
+                const node = contextMenu.node;
+                setContextMenu({ ...contextMenu, isOpen: false });
+                handleDeleteTemplate(node);
+              }}>
+                <Trash2 size={14} /> Excluir
+              </button>
+            </>
           ) : (
             <>
               <button className="context-menu-item" onClick={() => {
@@ -1135,7 +1701,7 @@ export default function WorldWorkspace({ params }) {
               <button className="context-menu-item danger" onClick={() => {
                 const node = contextMenu.node;
                 setContextMenu({ ...contextMenu, isOpen: false });
-                setDeleteModal({ isOpen: true, node, isAsset: false });
+                setDeleteModal({ isOpen: true, node, isAsset: false, isTemplate: false });
               }}>
                 <Trash2 size={14} /> Excluir
               </button>
@@ -1143,6 +1709,50 @@ export default function WorldWorkspace({ params }) {
           )}
         </div>
       )}
+      {showTemplateSaveModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content glass-panel">
+            <h2>Salvar como Template</h2>
+            <p>Crie um template a partir do conteúdo atual do editor.</p>
+            <div className="input-group">
+              <label>Nome do Template</label>
+              <input 
+                type="text" 
+                value={newTemplateName}
+                onChange={e => setNewTemplateName(e.target.value)}
+                placeholder="Ex: Personagem, Local, etc."
+                autoFocus
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowTemplateSaveModal(false)}>Cancelar</button>
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  console.log('Botão Salvar clicado! Nome:', newTemplateName);
+                  handleSaveTemplate("");
+                }} 
+                disabled={!newTemplateName || savingTemplate}
+              >
+                {savingTemplate ? 'Salvando...' : 'Salvar Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast toast-${toast.type} glass-panel`}>
+            {toast.type === 'success' && <Castle size={16} />}
+            {toast.type === 'error' && <Skull size={16} />}
+            {toast.type === 'warning' && <Shield size={16} />}
+            {toast.type === 'info' && <Book size={16} />}
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

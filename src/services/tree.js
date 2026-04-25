@@ -145,11 +145,30 @@ async function renameDocument(worldName, oldPath, newName) {
   }
 }
 
+async function moveDocument(worldName, sourcePath, targetPath) {
+  const safeName = validateWorldName(worldName);
+  const safeSource = validateRelativePath(sourcePath);
+  const safeTarget = validateRelativePath(targetPath);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  
+  const fullSource = path.join(pagesDir, safeSource);
+  const fullTarget = path.join(pagesDir, safeTarget);
+  
+  try {
+    await fs.mkdir(path.dirname(fullTarget), { recursive: true });
+    await fs.rename(fullSource, fullTarget);
+    return { success: true, targetPath: safeTarget };
+  } catch (e) {
+    throw new Error("Failed to move document: " + e.message);
+  }
+}
+
 module.exports = {
   getFileTree,
   createDocument,
   readDocument,
   updateDocumentMetadata,
   deleteDocument,
-  renameDocument
+  renameDocument,
+  moveDocument
 };

@@ -15,7 +15,8 @@ const {
   readDocument,
   updateDocumentMetadata,
   deleteDocument,
-  renameDocument
+  renameDocument,
+  moveDocument
 } = require("./tree");
 
 module.exports = {
@@ -35,5 +36,6 @@ module.exports = {
   updateDocumentMetadata,
   deleteDocument,
   renameDocument,
+  moveDocument,
   ...media
 };

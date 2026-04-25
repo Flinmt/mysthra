@@ -81,6 +81,10 @@ function getWorldsRoot() {
   return path.join(getDataRoot(), "worlds");
 }
 
+function getTemplatesRoot() {
+  return path.join(getDataRoot(), "templates");
+}
+
 function assertPathInsideRoot(rootPath, targetPath) {
   const relativePath = path.relative(rootPath, targetPath);
 
@@ -133,6 +137,7 @@ async function ensureDirectory(directoryPath) {
 
 async function ensureWorldStructure(worldName) {
   await ensureDirectory(getWorldsRoot());
+  await ensureDirectory(getTemplatesRoot());
 
   const worldPaths = getWorldPaths(worldName);
   const directories = Object.values(worldPaths);
@@ -151,6 +156,7 @@ module.exports = {
   getDataRoot,
   getWorldPaths,
   getWorldsRoot,
+  getTemplatesRoot,
   resolveWorldPath,
   resolveWorldRoot,
   validateFileName,

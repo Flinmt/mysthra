@@ -8,9 +8,13 @@ const {
   deletePage,
   listPages,
   loadThemes,
-  loadTemplates,
+  listTemplates,
   readPage,
   readTemplate,
+  saveTemplate,
+  createTemplateFolder,
+  deleteTemplate,
+  moveTemplate,
   readTheme,
   renderPageOutput,
   updatePage,
@@ -25,6 +29,7 @@ const {
   updateDocumentMetadata,
   deleteDocument,
   renameDocument,
+  moveDocument,
   handleMediaUpload,
   getMediaFile,
   listMedia,
@@ -373,6 +378,22 @@ async function router(request, response) {
       }
     }
 
+    if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/move$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing sourcePath or targetPath" });
+        
+        const result = await moveDocument(worldId, body.sourcePath, body.targetPath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
 
     if (request.method === "PUT" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/metadata$/)) {
       try {
@@ -547,28 +568,56 @@ async function router(request, response) {
       }
     }
 
-    if (request.method === "GET" && pathname.startsWith("/api/templates")) {
+    if (pathname.startsWith("/api/templates")) {
       try {
-        const queryParams = getQueryParams(request.url);
-        const worldName = queryParams.get("world");
-
-        if (!worldName) {
-          return sendJson(response, 400, { error: "Missing required query parameter: world" });
+        if (request.method === "GET") {
+          const queryParams = getQueryParams(request.url);
+          const filePath = queryParams.get("path");
+          
+          if (pathname === "/api/templates" || pathname === "/api/templates/") {
+            const templates = await listTemplates();
+            return sendJson(response, 200, { items: templates });
+          }
+          
+          if (pathname === "/api/templates/read") {
+            if (!filePath) return sendJson(response, 400, { error: "Missing path" });
+            const template = await readTemplate(filePath);
+            return sendText(response, 200, template.content, template.type === 'content' ? "text/markdown" : "text/html");
+          }
         }
 
-        const templateName = getTemplateNameFromPath(request.url);
-        if (templateName) {
-          const template = await readTemplate(worldName, templateName);
-          return sendText(response, 200, template.content, "text/html; charset=utf-8");
+        if (request.method === "POST") {
+          const body = await parseJsonBody(request);
+          if (pathname === "/api/templates/folder") {
+            if (!body.path) return sendJson(response, 400, { error: "Missing path" });
+            const result = await createTemplateFolder(body.path);
+            return sendJson(response, 201, result);
+          }
+          
+          const result = await saveTemplate(body.name, body.content, body.parentPath || "", body.type);
+          return sendJson(response, 201, result);
         }
 
-        const templates = await loadTemplates(worldName);
-        return sendJson(response, 200, templates);
+        if (request.method === "DELETE") {
+          const queryParams = getQueryParams(request.url);
+          const filePath = queryParams.get("path");
+          if (!filePath) return sendJson(response, 400, { error: "Missing path" });
+          const result = await deleteTemplate(filePath);
+          return sendJson(response, 200, result);
+        }
+
+        if (request.method === "PATCH" && pathname === "/api/templates/move") {
+          const body = await parseJsonBody(request);
+          if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing paths" });
+          const result = await moveTemplate(body.sourcePath, body.targetPath);
+          return sendJson(response, 200, result);
+        }
       } catch (error) {
         const statusCode = getErrorStatusCode(error);
         return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
       }
     }
+
 
     if (request.method === "POST" && pathname === "/api/pages") {
       try {
