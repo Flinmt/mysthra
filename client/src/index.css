@@ -992,3 +992,90 @@ body {
   to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
+/* Wiki Links */
+.wiki-link {
+  color: var(--accent-color);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(124, 58, 237, 0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.wiki-link:hover {
+  color: #a78bfa;
+  border-bottom-color: var(--accent-color);
+  background: rgba(124, 58, 237, 0.1);
+  border-radius: 2px;
+}
+
+/* Wiki Resolver Modal */
+.wiki-resolver-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.resolver-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.resolver-item:hover {
+  background: rgba(124, 58, 237, 0.15);
+  border-color: var(--accent-color);
+  transform: translateX(4px);
+}
+
+.resolver-item-icon {
+  color: var(--accent-color);
+  display: flex;
+  align-items: center;
+}
+
+.resolver-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.resolver-item-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.resolver-item-path {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+.modal-search-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.modal-search-input:focus {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+}
+
+.accent-text {
+  color: var(--accent-color);
+}

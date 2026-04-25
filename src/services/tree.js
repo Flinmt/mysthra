@@ -1,5 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { getWorldPaths, validateRelativePath, ensureWorldStructure, validateWorldName } = require("../data/filesystem");
 
 async function getFileTree(worldName) {
@@ -25,13 +26,35 @@ async function getFileTree(worldName) {
         const currentRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
         
         let icon = null;
+        let uid = null;
         try {
           const metaPath = path.join(dirPath, entry.name, "metadata.json");
-          const metaStr = await fs.readFile(metaPath, "utf-8");
-          const meta = JSON.parse(metaStr);
+          let meta = {};
+          let metaExists = false;
+          try {
+            const metaStr = await fs.readFile(metaPath, "utf-8");
+            meta = JSON.parse(metaStr);
+            metaExists = true;
+          } catch (e) {
+            // Meta doesn't exist or is invalid
+          }
+
+          let changed = false;
           if (meta.icon) icon = meta.icon;
+          
+          if (meta.uid) {
+            uid = meta.uid;
+          } else {
+            uid = crypto.randomUUID();
+            meta.uid = uid;
+            changed = true;
+          }
+
+          if (changed) {
+            await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
+          }
         } catch (e) {
-          // No metadata or invalid JSON, ignore
+          // ignore error in individual meta reading
         }
         
         const children = await walk(path.join(dirPath, entry.name), currentRelativePath);
@@ -41,6 +64,7 @@ async function getFileTree(worldName) {
           path: currentRelativePath,
           type: "document",
           icon,
+          uid,
           children
         });
       }
@@ -66,8 +90,13 @@ async function createDocument(worldName, docPath, content) {
   
   const indexPath = path.join(fullDirPath, "index.md");
   await fs.writeFile(indexPath, content || "", "utf-8");
+
+  // Create metadata with a new UID
+  const uid = crypto.randomUUID();
+  const metaPath = path.join(fullDirPath, "metadata.json");
+  await fs.writeFile(metaPath, JSON.stringify({ uid }, null, 2), "utf-8");
   
-  return { success: true, path: safePath };
+  return { success: true, path: safePath, uid };
 }
 
 async function readDocument(worldName, docPath) {

@@ -42,10 +42,24 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
     return () => window.removeEventListener('click', closeIt);
   }, [showIcons]);
 
+  const handleDragStart = (e) => {
+    if (isRenaming) return;
+    const dragData = {
+      uid: node.uid,
+      name: node.name,
+      path: node.path,
+      type: 'wiki-link'
+    };
+    e.dataTransfer.setData('wiki-link', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <li className="tree-document">
       <div 
         className={`tree-node ${isSelected ? 'selected' : ''}`}
+        draggable={!isRenaming && !isVisitor}
+        onDragStart={handleDragStart}
         onContextMenu={(e) => {
           if (isRenaming) return;
           e.preventDefault();
@@ -515,7 +529,7 @@ export default function WorldWorkspace({ params }) {
   const [worldData, setWorldData] = useState(null);
   const [tree, setTree] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [viewMode, setViewMode] = useState(isVisitor ? 'view' : 'edit'); 
+  const [viewMode, setViewMode] = useState('view'); // Inicia sempre em Preview (view)
   const [fileContent, setFileContent] = useState('');
   const [saving, setSaving] = useState(false);
   const editorRef = useRef(null);
@@ -523,7 +537,7 @@ export default function WorldWorkspace({ params }) {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, node: null, isAsset: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
-  const [sidebarTab, setSidebarTab] = useState('project'); // 'project' or 'assets'
+  const [sidebarTab, setSidebarTab] = useState('project'); // 'project', 'assets', or 'templates'
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
@@ -532,12 +546,213 @@ export default function WorldWorkspace({ params }) {
   const [uploadingProgress, setUploadingProgress] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [wikiResolver, setWikiResolver] = useState({ isOpen: false, query: '', name: '', onSelect: null });
+  const treeRef = useRef(tree);
+
+  useEffect(() => {
+    treeRef.current = tree;
+  }, [tree]);
+
+  const processWikiLinks = (content) => {
+    if (!content) return '';
+    // Suporta tanto [[nome]] quanto [[uid|nome]]
+    return content.replace(/\[\[(.*?)\]\]/g, (match, raw) => {
+      const parts = raw.split('|');
+      const target = parts[0].trim();
+      const alias = parts[1] ? parts[1].trim() : target;
+      
+      // Verifica se o target é um UID (formato uuid v4 aproximado) ou nome
+      const isUid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
+      
+      return `<a href="#" class="wiki-link" data-wiki-target="${target}" data-is-uid="${isUid}">${alias}</a>`;
+    });
+  };
+
+  const handleWikiLinkNavigation = (target, isUid = false) => {
+    const findInTree = (nodes, val, byUid = false) => {
+      for (const node of nodes) {
+        if (byUid) {
+          if (node.uid === val) return node;
+        } else {
+          if (node.name.toLowerCase() === val.toLowerCase()) return node;
+        }
+        if (node.children) {
+          const found = findInTree(node.children, val, byUid);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const match = findInTree(tree, target, isUid);
+
+    if (match) {
+      addToast(`Abrindo: ${match.name}`, 'success');
+      setViewMode('view');
+      setSelectedFile(match);
+    } else {
+      addToast(`Documento não encontrado para "${target}".`, 'warning');
+    }
+  };
+
+  const handlePreviewClick = (e) => {
+    const wikiLink = e.target.closest('.wiki-link');
+    if (wikiLink) {
+      e.preventDefault();
+      const target = wikiLink.getAttribute('data-wiki-target');
+      const isUid = wikiLink.getAttribute('data-is-uid') === 'true';
+      handleWikiLinkNavigation(target, isUid);
+    }
+  };
+
+  const handleWikiLinkSelection = (text) => {
+    // Abre sempre o modal para permitir busca e seleção precisa
+    setWikiResolver({ 
+      isOpen: true, 
+      query: text.trim(),
+      name: text.trim(), // Texto original para o alias do link
+      onSelect: (selected) => {
+        const uidLink = `[[${selected.uid}|${text}]]`;
+        const editor = editorRef.current;
+        const selection = editor.getSelection();
+        editor.executeEdits('wiki-link', [{
+          range: selection,
+          text: uidLink,
+          forceMoveMarkers: true
+        }]);
+      }
+    });
+  };
+
+  const handleEditorDidMount = (editor, monaco) => {
+    editorRef.current = editor;
+
+    // Provedor de Autocompletar para [[
+    if (!monaco.languages.getLanguages().some(l => l.id === 'markdown' && l._wikiRegistered)) {
+      monaco.languages.registerCompletionItemProvider('markdown', {
+        triggerCharacters: ['['],
+        provideCompletionItems: (model, position) => {
+          const lineContent = model.getLineContent(position.lineNumber);
+          const beforeCursor = lineContent.substring(0, position.column - 1);
+          
+          if (beforeCursor.endsWith('[[')) {
+            const suggestions = [];
+            const flatten = (nodes) => {
+              nodes.forEach(n => {
+                suggestions.push({
+                  label: n.name,
+                  kind: monaco.languages.CompletionItemKind.Reference,
+                  insertText: `${n.uid}|${n.name}]]`,
+                  detail: n.path,
+                  range: {
+                    startLineNumber: position.lineNumber,
+                    endLineNumber: position.lineNumber,
+                    startColumn: position.column,
+                    endColumn: position.column
+                  }
+                });
+                if (n.children) flatten(n.children);
+              });
+            };
+            flatten(treeRef.current);
+            return { suggestions };
+          }
+          return { suggestions: [] };
+        }
+      });
+      // Marcar como registrado para evitar duplicação em re-mounts
+      const lang = monaco.languages.getLanguages().find(l => l.id === 'markdown');
+      if (lang) lang._wikiRegistered = true;
+    }
+
+    // Comando Ctrl+L para transformar seleção em link
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, () => {
+      const selection = editor.getSelection();
+      const text = editor.getModel().getValueInRange(selection);
+      if (text) {
+        handleWikiLinkSelection(text);
+      }
+    });
+
+    // Drag & Drop / Paste support
+    const container = editor.getDomNode();
+    if (container) {
+      container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        
+        // Wiki-link Drop (from Project Tree)
+        const wikiData = e.dataTransfer.getData('wiki-link');
+        if (wikiData) {
+          try {
+            const data = JSON.parse(wikiData);
+            const uidLink = `[[${data.uid}|${data.name}]]`;
+            
+            const coords = { x: e.clientX, y: e.clientY };
+            const target = editor.getTargetAtClientPoint(coords.x, coords.y);
+            if (target && target.position) {
+              editor.executeEdits('wiki-link-drop', [{
+                range: {
+                  startLineNumber: target.position.lineNumber,
+                  startColumn: target.position.column,
+                  endLineNumber: target.position.lineNumber,
+                  endColumn: target.position.column
+                },
+                text: uidLink,
+                forceMoveMarkers: true
+              }]);
+            }
+          } catch(err) {
+            console.error('Error parsing wiki-link data:', err);
+          }
+          return;
+        }
+
+        // Internal Asset Drop
+        const assetData = e.dataTransfer.getData('assetNode');
+        if (assetData) {
+          const node = JSON.parse(assetData);
+          if (node.type !== 'folder') {
+            const code = node.type === 'audio' 
+              ? `<audio controls src="${node.url}" style="width:100%; margin: 10px 0;"></audio>` 
+              : `![${node.name}](${node.url})`;
+            
+            const coords = { x: e.clientX, y: e.clientY };
+            const target = editor.getTargetAtClientPoint(coords.x, coords.y);
+            if (target && target.position) {
+              editor.executeEdits('', [{
+                range: {
+                  startLineNumber: target.position.lineNumber,
+                  startColumn: target.position.column,
+                  endLineNumber: target.position.lineNumber,
+                  endColumn: target.position.column
+                },
+                text: code,
+                forceMoveMarkers: true
+              }]);
+            }
+            return;
+          }
+        }
+
+        // External File
+        const file = e.dataTransfer.files[0];
+        if (file) handleUpload(file);
+      }, true);
+
+      container.addEventListener('paste', (e) => {
+        const file = e.clipboardData.files[0];
+        if (file) {
+          e.preventDefault();
+          handleUpload(file);
+        }
+      }, true);
+    }
+  };
   const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [renamingTemplatePath, setRenamingTemplatePath] = useState(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
-  const [toasts, setToasts] = useState([]);
-
   const addToast = (message, type = 'info') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -1107,55 +1322,6 @@ export default function WorldWorkspace({ params }) {
     });
   };
 
-  const handleEditorDidMount = (editor) => {
-    editorRef.current = editor;
-    
-    const container = editor.getDomNode();
-    if (!container) return;
-
-    container.addEventListener('drop', (e) => {
-      e.preventDefault();
-      
-      // Internal Asset
-      const assetData = e.dataTransfer.getData('assetNode');
-      if (assetData) {
-        const node = JSON.parse(assetData);
-        if (node.type !== 'folder') {
-          const code = node.type === 'audio' 
-            ? `<audio controls src="${node.url}" style="width:100%; margin: 10px 0;"></audio>` 
-            : `![${node.name}](${node.url})`;
-          
-          const coords = { x: e.clientX, y: e.clientY };
-          const target = editor.getTargetAtClientPoint(coords.x, coords.y);
-          if (target && target.position) {
-            editor.executeEdits('', [{
-              range: {
-                startLineNumber: target.position.lineNumber,
-                startColumn: target.position.column,
-                endLineNumber: target.position.lineNumber,
-                endColumn: target.position.column
-              },
-              text: code,
-              forceMoveMarkers: true
-            }]);
-          }
-          return;
-        }
-      }
-
-      // External File
-      const file = e.dataTransfer.files[0];
-      if (file) handleUpload(file);
-    }, true);
-
-    container.addEventListener('paste', (e) => {
-      const file = e.clipboardData.files[0];
-      if (file) {
-        e.preventDefault();
-        handleUpload(file);
-      }
-    }, true);
-  };
 
   const sidebarStyle = useMemo(() => ({
     backgroundImage: `linear-gradient(to bottom, rgba(15, 17, 21, 0.75), rgba(15, 17, 21, 0.98)), url(/api/worlds/${encodeURIComponent(worldId)}/thumbnail?v=${Date.now()})`,
@@ -1604,13 +1770,13 @@ export default function WorldWorkspace({ params }) {
                   />
                 </div>
               ) : (
-                <div className="preview-container glass-panel">
+                <div className="preview-container glass-panel" onClick={handlePreviewClick}>
                   <div
                     className="markdown-preview"
                     dangerouslySetInnerHTML={{ 
-                      __html: DOMPurify.sanitize(marked(fileContent), {
+                      __html: DOMPurify.sanitize(processWikiLinks(marked(fileContent)), {
                         ADD_TAGS: ['audio', 'source', 'video'],
-                        ADD_ATTR: ['controls', 'src', 'style']
+                        ADD_ATTR: ['controls', 'src', 'style', 'data-wiki-target', 'data-is-uid', 'class']
                       }) 
                     }}
                   />
@@ -1763,6 +1929,85 @@ export default function WorldWorkspace({ params }) {
                 disabled={!newTemplateName || savingTemplate}
               >
                 {savingTemplate ? 'Salvando...' : 'Salvar Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {wikiResolver.isOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <Search size={20} className="accent-text" />
+              <h2 style={{ margin: 0 }}>Inserir Wiki-link</h2>
+            </div>
+            
+            <div className="search-input-wrapper" style={{ marginBottom: 20 }}>
+              <input 
+                type="text" 
+                className="modal-search-input"
+                placeholder="Pesquisar documento..."
+                value={wikiResolver.query}
+                onChange={e => setWikiResolver(prev => ({ ...prev, query: e.target.value }))}
+                autoFocus
+              />
+            </div>
+
+            <div className="wiki-resolver-list">
+              {(() => {
+                const results = [];
+                const searchNodes = (nodes) => {
+                  nodes.forEach(n => {
+                    if (n.name.toLowerCase().includes(wikiResolver.query.toLowerCase()) || 
+                        n.path.toLowerCase().includes(wikiResolver.query.toLowerCase())) {
+                      results.push(n);
+                    }
+                    if (n.children) searchNodes(n.children);
+                  });
+                };
+                searchNodes(tree);
+                
+                if (results.length === 0) {
+                  return (
+                    <div style={{ padding: '20px', textAlign: 'center', opacity: 0.5 }}>
+                      Nenhum documento encontrado para "{wikiResolver.query}"
+                    </div>
+                  );
+                }
+
+                return results.map((match, idx) => (
+                  <div 
+                    key={idx} 
+                    className="resolver-item glass-panel"
+                    onClick={() => {
+                      if (wikiResolver.onSelect) {
+                        wikiResolver.onSelect(match);
+                      } else {
+                        setSelectedFile(match);
+                        setViewMode('view');
+                      }
+                      setWikiResolver({ isOpen: false, query: '', name: '', onSelect: null });
+                    }}
+                  >
+                    <div className="resolver-item-icon">
+                      <FileText size={18} />
+                    </div>
+                    <div className="resolver-item-info">
+                      <div className="resolver-item-name">{match.name}</div>
+                      <div className="resolver-item-path">{match.path}</div>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '20px' }}>
+              <button 
+                className="btn-secondary" 
+                onClick={() => setWikiResolver({ isOpen: false, query: '', name: '', onSelect: null })}
+              >
+                Cancelar
               </button>
             </div>
           </div>
