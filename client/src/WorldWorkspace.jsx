@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark } from 'lucide-react';
+import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -9,18 +9,18 @@ const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
 };
 
-function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching }) {
+function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor }) {
   if (!nodes || nodes.length === 0) return null;
   return (
     <ul className="file-tree">
       {nodes.map(node => (
-        <FileTreeNode key={node.path} node={node} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} />
+        <FileTreeNode key={node.path} node={node} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} isVisitor={isVisitor} />
       ))}
     </ul>
   );
 }
 
-function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching }) {
+function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showIcons, setShowIcons] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
@@ -109,16 +109,18 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <button
-            className="node-action-btn"
-            onClick={(e) => { e.stopPropagation(); openPrompt(node.path); setIsOpen(true); }}
-            title="Criar"
-          >
-            <Plus size={14} />
-          </button>
+          {!isVisitor && (
+            <button
+              className="node-action-btn"
+              onClick={(e) => { e.stopPropagation(); openPrompt(node.path); setIsOpen(true); }}
+              title="Criar"
+            >
+              <Plus size={14} />
+            </button>
+          )}
         </div>
       </div>
-      {showChildren && node.children && <FileTree nodes={node.children} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} />}
+      {showChildren && node.children && <FileTree nodes={node.children} onFileSelect={onFileSelect} selectedFile={selectedFile} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} isVisitor={isVisitor} />}
     </li>
   );
 }
@@ -508,10 +510,12 @@ function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreat
 export default function WorldWorkspace({ params }) {
   const worldId = params.id;
   const [, setLocation] = useLocation();
+  const isVisitor = useMemo(() => new URLSearchParams(window.location.search).get('view') === 'true', []);
+  
   const [worldData, setWorldData] = useState(null);
   const [tree, setTree] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [viewMode, setViewMode] = useState('edit'); // 'edit' or 'view'
+  const [viewMode, setViewMode] = useState(isVisitor ? 'view' : 'edit'); 
   const [fileContent, setFileContent] = useState('');
   const [saving, setSaving] = useState(false);
   const editorRef = useRef(null);
@@ -1269,35 +1273,54 @@ export default function WorldWorkspace({ params }) {
       {/* Top Bar */}
       <header className="workspace-header">
         <div className="header-left">
-          <button className="icon-btn" onClick={() => setLocation('/')}>
-            <ArrowLeft size={18} />
-          </button>
+          {!isVisitor && (
+            <button className="icon-btn" onClick={() => setLocation('/')}>
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <h2>{worldData ? worldData.displayName : 'Carregando...'}</h2>
         </div>
         <div className="header-actions">
-          <button
-            className="btn-secondary"
-            onClick={() => setViewMode(viewMode === 'edit' ? 'view' : 'edit')}
-            disabled={!selectedFile}
-            title={viewMode === 'edit' ? 'Ver Preview' : 'Voltar ao Editor'}
-          >
-            {viewMode === 'edit' ? (
-              <><Eye size={16} style={{ marginRight: 8 }} /> Preview</>
-            ) : (
-              <><Edit2 size={16} style={{ marginRight: 8 }} /> Editor</>
-            )}
-          </button>
+          {!isVisitor && (
+            <>
+              <button
+                className="btn-secondary"
+                onClick={() => setViewMode(viewMode === 'edit' ? 'view' : 'edit')}
+                disabled={!selectedFile}
+                title={viewMode === 'edit' ? 'Ver Preview' : 'Voltar ao Editor'}
+              >
+                {viewMode === 'edit' ? (
+                  <><Eye size={16} style={{ marginRight: 8 }} /> Preview</>
+                ) : (
+                  <><Edit2 size={16} style={{ marginRight: 8 }} /> Editor</>
+                )}
+              </button>
+              <button 
+                className="btn-secondary" 
+                onClick={() => setShowTemplateSaveModal(true)} 
+                disabled={!selectedFile}
+                title="Salvar como Template"
+                style={{ marginRight: 8 }}
+              >
+                <Bookmark size={16} style={{ marginRight: 8 }} /> Template
+              </button>
+              <button className="btn-primary" onClick={handleSave} disabled={saving || !selectedFile}>
+                <Save size={16} style={{ marginRight: 8 }} /> {saving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </>
+          )}
+
           <button 
             className="btn-secondary" 
-            onClick={() => setShowTemplateSaveModal(true)} 
-            disabled={!selectedFile}
-            title="Salvar como Template"
-            style={{ marginRight: 8 }}
+            onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('view', 'true');
+              navigator.clipboard.writeText(url.toString());
+              addToast('Link de visitante copiado!', 'success');
+            }}
+            title="Compartilhar Link de Visitante"
           >
-            <Bookmark size={16} style={{ marginRight: 8 }} /> Template
-          </button>
-          <button className="btn-primary" onClick={handleSave} disabled={saving || !selectedFile}>
-            <Save size={16} style={{ marginRight: 8 }} /> {saving ? 'Salvando...' : 'Salvar'}
+            <Share2 size={16} style={{ marginRight: 8 }} /> Compartilhar
           </button>
         </div>
       </header>
@@ -1305,26 +1328,28 @@ export default function WorldWorkspace({ params }) {
       <div className="workspace-main">
         {/* Sidebar */}
         <aside className="workspace-sidebar glass-panel" style={sidebarStyle}>
-          <div className="sidebar-tabs">
-            <button 
-              className={`tab-btn ${sidebarTab === 'project' ? 'active' : ''}`}
-              onClick={() => setSidebarTab('project')}
-            >
-              <Package size={14} /> Projeto
-            </button>
-            <button 
-              className={`tab-btn ${sidebarTab === 'assets' ? 'active' : ''}`}
-              onClick={() => setSidebarTab('assets')}
-            >
-              <Layers size={14} /> Assets
-            </button>
-            <button 
-              className={`tab-btn ${sidebarTab === 'templates' ? 'active' : ''}`}
-              onClick={() => setSidebarTab('templates')}
-            >
-              <Layout size={14} /> Templates
-            </button>
-          </div>
+          {!isVisitor && (
+            <div className="sidebar-tabs">
+              <button 
+                className={`tab-btn ${sidebarTab === 'project' ? 'active' : ''}`}
+                onClick={() => setSidebarTab('project')}
+              >
+                <Package size={14} /> Projeto
+              </button>
+              <button 
+                className={`tab-btn ${sidebarTab === 'assets' ? 'active' : ''}`}
+                onClick={() => setSidebarTab('assets')}
+              >
+                <Layers size={14} /> Assets
+              </button>
+              <button 
+                className={`tab-btn ${sidebarTab === 'templates' ? 'active' : ''}`}
+                onClick={() => setSidebarTab('templates')}
+              >
+                <Layout size={14} /> Templates
+              </button>
+            </div>
+          )}
 
           {sidebarTab === 'project' && (
             <>
@@ -1355,15 +1380,18 @@ export default function WorldWorkspace({ params }) {
                     renamingPath={renamingPath}
                     onRename={handleRenameSubmit}
                     isSearching={!!searchQuery}
+                    isVisitor={isVisitor}
                   />
                 )}
               </div>
 
-              <div className="sidebar-footer">
-                <button className="btn-secondary sidebar-action-btn" title="Criar Documento" onClick={() => handleCreate('')}>
-                  <FilePlus size={16} /> <span className="btn-text">Criar</span>
-                </button>
-              </div>
+              {!isVisitor && (
+                <div className="sidebar-footer">
+                  <button className="btn-secondary sidebar-action-btn" title="Criar Documento" onClick={() => handleCreate('')}>
+                    <FilePlus size={16} /> <span className="btn-text">Criar</span>
+                  </button>
+                </div>
+              )}
             </>
           )}
 

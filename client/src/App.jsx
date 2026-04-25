@@ -19,18 +19,26 @@ function App() {
     return <div className="login-container">Carregando...</div>
   }
 
-  return isAuthenticated ? (
+  return (
     <Switch>
-      <Route path="/">
-        <Dashboard onLogout={() => setIsAuthenticated(false)} />
-      </Route>
       <Route path="/world/:id">
-        {params => <WorldWorkspace params={params} />}
+        {(params) => {
+          const isVisitor = new URLSearchParams(window.location.search).get('view') === 'true';
+          if (isAuthenticated || isVisitor) {
+            return <WorldWorkspace params={params} />;
+          }
+          return <Login onLogin={() => setIsAuthenticated(true)} />;
+        }}
+      </Route>
+      <Route path="/">
+        {isAuthenticated ? (
+          <Dashboard onLogout={() => setIsAuthenticated(false)} />
+        ) : (
+          <Login onLogin={() => setIsAuthenticated(true)} />
+        )}
       </Route>
     </Switch>
-  ) : (
-    <Login onLogin={() => setIsAuthenticated(true)} />
-  )
+  );
 }
 
 function Login({ onLogin }) {

@@ -244,8 +244,15 @@ async function router(request, response) {
       return;
     }
 
-    // Protected API Endpoints
-    if (!isAuthenticated(request)) {
+    // Protected API Endpoints - All non-GET requests require authentication.
+    // GET requests for templates also require authentication.
+    const isPublicGet = request.method === "GET" && (
+      pathname.startsWith("/api/worlds") || 
+      pathname.startsWith("/api/pages") || 
+      pathname.startsWith("/api/themes")
+    );
+
+    if (!isPublicGet && !isAuthenticated(request)) {
       sendJson(response, 401, { error: "Unauthorized" });
       return;
     }
