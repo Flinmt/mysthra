@@ -24,7 +24,13 @@ const {
   readDocument,
   updateDocumentMetadata,
   deleteDocument,
-  renameDocument
+  renameDocument,
+  handleMediaUpload,
+  getMediaFile,
+  listMedia,
+  createMediaFolder,
+  moveMedia,
+  deleteMedia
 } = require("../services");
 
 function getRequestUrl(requestUrl) {
@@ -367,6 +373,7 @@ async function router(request, response) {
       }
     }
 
+
     if (request.method === "PUT" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/metadata$/)) {
       try {
         const worldId = getWorldIdFromPath(request.url);
@@ -381,6 +388,91 @@ async function router(request, response) {
         console.error("METADATA UPDATE ERROR:", error);
         const statusCode = getErrorStatusCode(error);
         return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/media$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const result = await handleMediaUpload(worldId, request);
+        return sendJson(response, 201, result);
+      } catch (error) {
+        console.error("MEDIA UPLOAD ERROR:", error);
+        return sendJson(response, 500, { error: error.message });
+      }
+    }
+
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/media$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const media = await listMedia(worldId);
+        return sendJson(response, 200, { items: media });
+      } catch (error) {
+        return sendJson(response, 500, { error: "Failed to list media" });
+      }
+    }
+
+    if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/media\/folder$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.path) return sendJson(response, 400, { error: "Missing folder path" });
+        
+        const result = await createMediaFolder(worldId, body.path);
+        return sendJson(response, 201, result);
+      } catch (error) {
+        return sendJson(response, 500, { error: error.message });
+      }
+    }
+
+    if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^\/]+\/media\/move$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing sourcePath or targetPath" });
+        
+        const result = await moveMedia(worldId, body.sourcePath, body.targetPath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        return sendJson(response, 500, { error: error.message });
+      }
+    }
+
+    if (pathname.includes("/media/")) {
+      const parts = pathname.split('/media/');
+      const worldParts = parts[0].split('/');
+      const worldId = decodeURIComponent(worldParts[worldParts.length - 1]);
+      const mediaPath = decodeURIComponent(parts[1]);
+
+      if (request.method === "GET") {
+        try {
+          const { content, contentType } = await getMediaFile(worldId, mediaPath);
+          response.writeHead(200, { 
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=31536000, immutable" 
+          });
+          response.end(content);
+          return;
+        } catch (error) {
+          return sendJson(response, 404, { error: "File not found" });
+        }
+      }
+
+      if (request.method === "DELETE") {
+        try {
+          const result = await deleteMedia(worldId, mediaPath);
+          return sendJson(response, 200, result);
+        } catch (error) {
+          return sendJson(response, 500, { error: error.message });
+        }
       }
     }
 

@@ -150,7 +150,7 @@ function Dashboard({ onLogout }) {
           <div className="worlds-grid">
             {worlds.map(world => (
               <div key={world.id} className="world-card glass-panel" onClick={() => setLocation(`/world/${world.id}`)} style={{
-                  backgroundImage: world.thumbnailUrl ? `url(${world.thumbnailUrl}?t=${Date.now()})` : 'none',
+                  backgroundImage: world.thumbnailUrl ? `url(${world.thumbnailUrl}?v=${Date.now()})` : 'none',
                   backgroundColor: !world.thumbnailUrl ? '#1e1e2f' : 'transparent'
                 }}>
                 <div className="world-card-overlay">
@@ -324,7 +324,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
   const [thumbnailBase64, setThumbnailBase64] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(world.thumbnailUrl || null)
+  const [previewUrl, setPreviewUrl] = useState(world.thumbnailUrl ? `${world.thumbnailUrl}?v=${Date.now()}` : null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)

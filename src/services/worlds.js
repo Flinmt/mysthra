@@ -167,8 +167,14 @@ async function updateWorld(worldId, data) {
       const buffer = Buffer.from(base64Data, "base64");
       const fileName = `thumbnail.${ext}`;
       const worldPaths = await ensureWorldStructure(safeId);
-      const filePath = path.join(worldPaths.media, fileName);
       
+      // Delete existing thumbnails to avoid conflicts and stale images
+      const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+      for (const oldExt of extensions) {
+        try { await fs.unlink(path.join(worldPaths.media, `thumbnail${oldExt}`)); } catch (e) {}
+      }
+
+      const filePath = path.join(worldPaths.media, fileName);
       await fs.writeFile(filePath, buffer);
       worldData.thumbnailUrl = `/api/worlds/${safeId}/thumbnail`;
     }
