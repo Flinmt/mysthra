@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
+import { LogOut, Plus, Globe, Settings, Trash2, Edit3, Key, ShieldCheck, Sparkles, Search, Home, Layers, Layout as LayoutIcon, User } from 'lucide-react'
 import WorldWorkspace from './WorldWorkspace'
 
 function App() {
@@ -74,26 +75,34 @@ function Login({ onLogin }) {
   return (
     <div className="login-container">
       <div className="login-card glass-panel">
+        <Sparkles size={40} color="var(--accent-color)" style={{ marginBottom: 16 }} />
         <h1>Mythra</h1>
-        <p>Acesso Restrito ao Construtor de Mundos</p>
+        <p>A Forja de Mundos Interativos</p>
         
         <form onSubmit={handleSubmit}>
           <div className="input-group">
-            <label htmlFor="password">Master Password</label>
+            <label htmlFor="password">
+              <Key size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Master Password
+            </label>
             <input 
               id="password"
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Sua senha secreta"
+              placeholder="Digite sua senha de mestre..."
               autoFocus
             />
           </div>
           
           {error && <div className="error-msg">{error}</div>}
           
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Autenticando...' : 'Entrar no Sistema'}
+          <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', marginTop: 8 }}>
+            {loading ? (
+              'Autenticando...'
+            ) : (
+              <><ShieldCheck size={18} style={{ marginRight: 8 }} /> Entrar no Nexus</>
+            )}
           </button>
         </form>
       </div>
@@ -108,6 +117,7 @@ function Dashboard({ onLogout }) {
   const [showModal, setShowModal] = useState(false)
   const [editingWorld, setEditingWorld] = useState(null)
   const [deletingWorld, setDeletingWorld] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadWorlds = async () => {
     try {
@@ -132,48 +142,83 @@ function Dashboard({ onLogout }) {
     onLogout()
   }
 
+  const filteredWorlds = useMemo(() => {
+    return worlds.filter(w => 
+      (w.displayName || w.name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (w.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [worlds, searchQuery])
+
   return (
     <div className="dashboard-container">
-      <header className="dashboard-header">
-        <div className="logo">Mythra</div>
-        <div className="header-actions">
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + Criar Mundo
-          </button>
-          <button className="btn-secondary" onClick={handleLogout}>
-            Sair
-          </button>
-        </div>
-      </header>
-      
-      <main className="dashboard-main">
+      {/* Main Content Nexus */}
+      <main className="nexus-main">
+        <header className="nexus-header">
+          <div className="welcome-msg">
+            <h1 className="nexus-title-mysthra">Mysthra</h1>
+            <p>Seus universos estão prontos para serem forjados.</p>
+          </div>
+
+          <div className="nexus-search-group">
+            <div className="nexus-search-wrapper">
+              <Search size={18} className="search-icon" />
+              <input 
+                type="text" 
+                className="nexus-search-bar"
+                placeholder="Pesquisar universos..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title="Sair do Nexus">
+              <LogOut size={18} />
+            </button>
+          </div>
+        </header>
+
         {loading ? (
-          <p>Carregando mundos...</p>
-        ) : worlds.length === 0 ? (
-          <div className="empty-state">
-            <h2>Nenhum mundo encontrado</h2>
-            <p>Comece sua jornada criando seu primeiro mundo no botão superior direito.</p>
+          <div className="loading-state-dashboard">
+            <div className="spinner"></div>
+            <p>Conectando ao Nexus...</p>
           </div>
         ) : (
-          <div className="worlds-grid">
-            {worlds.map(world => (
-              <div key={world.id} className="world-card glass-panel" onClick={() => setLocation(`/world/${world.id}`)} style={{
-                  backgroundImage: world.thumbnailUrl ? `url(${world.thumbnailUrl}?v=${Date.now()})` : 'none',
-                  backgroundColor: !world.thumbnailUrl ? '#1e1e2f' : 'transparent'
-                }}>
-                <div className="world-card-overlay">
-                  <div className="world-card-actions">
-                    <button className="icon-btn edit-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>Editar</button>
-                    <button className="icon-btn delete-btn" onClick={(e) => { e.stopPropagation(); setDeletingWorld(world); }}>Deletar</button>
-                  </div>
+          <div className="nexus-grid">
+            {filteredWorlds.map(world => (
+              <div key={world.id} className="nexus-card" onClick={() => setLocation(`/world/${world.id}`)}>
+                <div 
+                  className="nexus-card-bg" 
+                  style={{ backgroundImage: world.thumbnailUrl ? `url(${world.thumbnailUrl})` : 'none' }}
+                ></div>
+                <div className="nexus-card-actions">
+                  <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>
+                    <Settings size={14} />
+                  </button>
+                  <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setDeletingWorld(world); }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <div className="nexus-card-content">
                   <h3>{world.displayName || world.name}</h3>
+                  <p>{world.description || 'Um universo em formação.'}</p>
                 </div>
               </div>
             ))}
+            
+            {/* Create Card */}
+            {!searchQuery && (
+              <div className="nexus-card nexus-create-btn" onClick={() => setShowModal(true)}>
+                <div className="plus-circle-nexus">
+                  <Plus size={24} />
+                </div>
+                <div style={{ fontWeight: 600 }}>Criar Novo Mundo</div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
+      {/* Modals remain the same */}
       {showModal && (
         <CreateWorldModal 
           onClose={() => setShowModal(false)} 
@@ -208,6 +253,8 @@ function Dashboard({ onLogout }) {
     </div>
   )
 }
+
+
 
 function CreateWorldModal({ onClose, onCreated }) {
   const [name, setName] = useState('')

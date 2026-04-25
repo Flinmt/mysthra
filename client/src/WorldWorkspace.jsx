@@ -716,7 +716,7 @@ export default function WorldWorkspace({ params }) {
           if (node.type !== 'folder') {
             const code = node.type === 'audio' 
               ? `<audio controls src="${node.url}" style="width:100%; margin: 10px 0;"></audio>` 
-              : `![${node.name}](${node.url})`;
+              : `<img src="${node.url}" alt="${node.name}" style="width: 100%; display: block;">`;
             
             const coords = { x: e.clientX, y: e.clientY };
             const target = editor.getTargetAtClientPoint(coords.x, coords.y);
@@ -855,7 +855,7 @@ export default function WorldWorkspace({ params }) {
   const copyMediaCode = (item) => {
     const code = item.type === 'audio' 
       ? `<audio controls src="${item.url}" style="width:100%; margin: 10px 0;"></audio>` 
-      : `![${item.name}](${item.url})`;
+      : `<img src="${item.url}" alt="${item.name}" style="width: 100%; display: block;">`;
     navigator.clipboard.writeText(code);
     addToast('Código copiado para a área de transferência!', 'success');
   };
@@ -1271,7 +1271,7 @@ export default function WorldWorkspace({ params }) {
             const content = model.getValue();
             const code = data.type === 'audio' 
               ? `<audio controls src="${data.url}" style="width:100%; margin: 10px 0;"></audio>` 
-              : `![${data.filename}](${data.url})`;
+              : `<img src="${data.url}" alt="${data.filename}" style="width: 100%; display: block;">`;
             
             const startIdx = content.indexOf(placeholder);
             if (startIdx !== -1) {
