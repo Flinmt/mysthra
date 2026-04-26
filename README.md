@@ -43,11 +43,22 @@ Your gateway to all your universes. A high-fidelity, horizontal gallery that pre
 
 Mysthra is designed to be **Self-Hosted**. You own your data.
 
-### Prerequisites
-- **Node.js 20.x** or higher
-- **FFmpeg** (for media processing)
+### ⚡ One-Command Install (No Clone Required)
+If you have Docker installed, you can launch Mysthra without even cloning the repository. Just create a `docker-compose.yml` with the following content and run `docker-compose up -d`:
 
-### Installation
+```yaml
+services:
+  mysthra:
+    build: https://github.com/YOUR_GITHUB_USERNAME/mysthra.git
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./mysthra-data:/app/data
+```
+
+---
+
+### 🛠️ Manual Installation
 
 1. **Clone the repository**:
    ```bash
@@ -77,6 +88,22 @@ Mysthra is designed to be **Self-Hosted**. You own your data.
    npm run dev
    ```
    Open `http://localhost:3000` in your browser.
+
+### Running with Docker (Recommended for Self-Hosting)
+
+The easiest way to run Mysthra is using Docker Compose:
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-username/mysthra.git
+   cd mysthra
+   ```
+
+2. **Launch the forge**:
+   ```bash
+   docker-compose up -d
+   ```
+   The app will be available at `http://localhost:3000`. All your worlds and media will be persisted in the `./data` folder.
 
 ---
 
