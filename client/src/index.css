@@ -1614,3 +1614,47 @@ body {
 .accent-text {
   color: var(--accent-color);
 }
+
+
+/* Save Indicator Nexus Style */
+.save-indicator {
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.status-text {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  animation: fadeIn 0.4s ease-out;
+  border: 1px solid transparent;
+}
+
+.status-text.saving {
+  color: var(--accent-color);
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+.status-text.dirty {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.status-text.saved {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.1);
+  opacity: 0.9;
+}
+
+.status-text.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}

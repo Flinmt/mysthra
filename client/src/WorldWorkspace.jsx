@@ -532,6 +532,9 @@ export default function WorldWorkspace({ params }) {
   const [viewMode, setViewMode] = useState('view'); // Inicia sempre em Preview (view)
   const [fileContent, setFileContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [lastSavedContent, setLastSavedContent] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'dirty', 'error'
   const editorRef = useRef(null);
 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, node: null, isAsset: false });
@@ -627,6 +630,11 @@ export default function WorldWorkspace({ params }) {
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+
+    // Register Ctrl + S command in Monaco
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      handleSave();
+    });
 
     const languages = ['markdown', 'html'];
     languages.forEach(langId => {
@@ -1183,10 +1191,43 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  // Track changes to show "isDirty" status
+  useEffect(() => {
+    if (fileContent !== lastSavedContent) {
+      setIsDirty(true);
+      setSaveStatus('dirty');
+    } else {
+      setIsDirty(false);
+      setSaveStatus('saved');
+    }
+  }, [fileContent, lastSavedContent]);
 
-  const handleSave = async () => {
+  // Autosave Logic
+  useEffect(() => {
+    if (!isDirty || saving || isVisitor || !selectedFile) return;
+
+    const timer = setTimeout(() => {
+      handleSave(true); // Silent save
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [fileContent, isDirty, saving, isVisitor, selectedFile]);
+
+  // Ctrl + S Global Listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fileContent, selectedFile]); // Depend on content to ensure current state is used
+  const handleSave = async (isSilent = false) => {
     if (!selectedFile) return;
     setSaving(true);
+    setSaveStatus('saving');
     try {
       const isTemplate = selectedFile.isTemplate;
       const url = isTemplate ? '/api/templates' : `/api/worlds/${encodeURIComponent(worldId)}/documents`;
@@ -1208,15 +1249,23 @@ export default function WorldWorkspace({ params }) {
       });
       
       if (res.ok) {
-        addToast(isTemplate ? 'Template salvo!' : 'Arquivo salvo!', 'success');
+        setLastSavedContent(fileContent);
+        setSaveStatus('saved');
+        addToast(isSilent ? 'Autosave: Progresso salvo' : (isTemplate ? 'Template salvo com sucesso!' : 'Arquivo salvo com sucesso!'), 'success');
       } else {
         const err = await res.json().catch(() => ({}));
-        addToast('Erro ao salvar: ' + (err.error || 'Erro desconhecido'), 'error');
+        if (!isSilent) {
+          addToast('Erro ao salvar: ' + (err.error || 'Erro desconhecido'), 'error');
+        }
+        setSaveStatus('error');
       }
       setSaving(false);
     } catch (e) {
       console.error(e);
-      addToast('Erro de conexão ao salvar', 'error');
+      if (!isSilent) {
+        addToast('Erro de conexão ao salvar', 'error');
+      }
+      setSaveStatus('error');
       setSaving(false);
     }
   };
@@ -1461,6 +1510,15 @@ export default function WorldWorkspace({ params }) {
           <h2>{worldData ? worldData.displayName : 'Carregando...'}</h2>
         </div>
         <div className="header-actions">
+          {selectedFile && !isVisitor && (
+            <div className="save-indicator">
+              {saveStatus === 'saving' && <span className="status-text saving">Salvando...</span>}
+              {saveStatus === 'dirty' && <span className="status-text dirty">Não salvo</span>}
+              {saveStatus === 'saved' && <span className="status-text saved">Salvo</span>}
+              {saveStatus === 'error' && <span className="status-text error">Erro</span>}
+            </div>
+          )}
+          
           {!isVisitor && (
             <>
               <button
@@ -1483,7 +1541,7 @@ export default function WorldWorkspace({ params }) {
               >
                 <Bookmark size={16} style={{ marginRight: 8 }} /> Template
               </button>
-              <button className="btn-primary" onClick={handleSave} disabled={saving || !selectedFile}>
+              <button className="btn-primary" onClick={() => handleSave()} disabled={saving || !selectedFile}>
                 <Save size={16} style={{ marginRight: 8 }} /> {saving ? 'Salvando...' : 'Salvar'}
               </button>
             </>
