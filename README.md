@@ -125,13 +125,6 @@ Mysthra follows the **Nexus Aesthetic**:
 
 ---
 
-## 🤝 Contributing
-
-Mysthra is an **open-source** project and we love contributions! 
-Whether it's a bug fix, a new feature, or CSS themes, feel free to open a Pull Request.
-
----
-
 ## 📜 License
 
 Distributed under the **Polyform Noncommercial License 1.0.0**. This project is free to use and modify for personal and non-commercial purposes. **Commercial use or profiting from the platform is strictly prohibited.** See `LICENSE` for more information.
