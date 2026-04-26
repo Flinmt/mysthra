@@ -3,8 +3,9 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const test = require("node:test");
 
-const { getWorldPaths, resolveWorldRoot } = require("../../src/data");
+const { getTemplatesRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
+const { generateSessionToken } = require("../../src/utils/auth");
 const {
   applyTemplate,
   buildTemplateFileName,
@@ -15,8 +16,26 @@ const {
   templateNameFromFile
 } = require("../../src/services/templates");
 
-async function resetWorld(worldName) {
-  await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
+const createdTemplateFiles = new Set();
+
+function getTestTemplatePath(fileName) {
+  const filePath = path.join(getTemplatesRoot(), fileName);
+  createdTemplateFiles.add(filePath);
+  return filePath;
+}
+
+test.after(async () => {
+  await Promise.all(
+    [...createdTemplateFiles].map((filePath) =>
+      fs.rm(filePath, { force: true })
+    )
+  );
+});
+
+function createAuthenticatedHeaders() {
+  return {
+    cookie: `mysthra_session=${generateSessionToken()}`
+  };
 }
 
 test("templateNameFromFile removes the html extension", () => {
@@ -50,54 +69,47 @@ test("applyTemplate injects content placeholders and preserves sanitization", ()
   );
 });
 
-test("listTemplates returns html templates for a world", async () => {
-  const worldName = "templates-list-world";
-  await resetWorld(worldName);
-  const worldPaths = getWorldPaths(worldName);
-  await fs.mkdir(worldPaths.templates, { recursive: true });
+test("listTemplates returns global html templates", async () => {
+  const templatesRoot = getTemplatesRoot();
+  await fs.mkdir(templatesRoot, { recursive: true });
 
-  await fs.writeFile(path.join(worldPaths.templates, "chronicle.html"), "<main></main>", "utf8");
-  await fs.writeFile(path.join(worldPaths.templates, "codex.html"), "<article></article>", "utf8");
-  await fs.writeFile(path.join(worldPaths.templates, "ignore.txt"), "noop", "utf8");
+  await fs.writeFile(getTestTemplatePath("chronicle-list-test.html"), "<main></main>", "utf8");
+  await fs.writeFile(getTestTemplatePath("codex-list-test.html"), "<article></article>", "utf8");
+  await fs.writeFile(getTestTemplatePath("ignore-list-test.txt"), "noop", "utf8");
 
-  const templates = await listTemplates(worldName);
+  const templates = await listTemplates();
+  const names = templates.map((template) => template.name);
 
-  assert.deepEqual(templates.map((template) => template.name), ["chronicle", "codex"]);
+  assert.equal(names.includes("chronicle-list-test"), true);
+  assert.equal(names.includes("codex-list-test"), true);
 });
 
 test("readTemplate returns html template content", async () => {
-  const worldName = "templates-read-world";
-  await resetWorld(worldName);
-  const worldPaths = getWorldPaths(worldName);
-  await fs.mkdir(worldPaths.templates, { recursive: true });
-  await fs.writeFile(path.join(worldPaths.templates, "chronicle.html"), "<main>{{content}}</main>", "utf8");
+  const templatesRoot = getTemplatesRoot();
+  await fs.mkdir(templatesRoot, { recursive: true });
+  await fs.writeFile(getTestTemplatePath("chronicle-read-test.html"), "<main>{{content}}</main>", "utf8");
 
-  const template = await readTemplate(worldName, "chronicle");
+  const template = await readTemplate("chronicle-read-test");
 
-  assert.equal(template.name, "chronicle");
-  assert.equal(template.fileName, "chronicle.html");
+  assert.equal(template.name, "chronicle-read-test");
+  assert.equal(template.fileName, "chronicle-read-test.html");
   assert.equal(template.content, "<main>{{content}}</main>");
 });
 
 test("loadTemplates returns the available template list", async () => {
-  const worldName = "templates-load-world";
-  await resetWorld(worldName);
-  const worldPaths = getWorldPaths(worldName);
-  await fs.mkdir(worldPaths.templates, { recursive: true });
-  await fs.writeFile(path.join(worldPaths.templates, "chronicle.html"), "<main></main>", "utf8");
+  const templatesRoot = getTemplatesRoot();
+  await fs.mkdir(templatesRoot, { recursive: true });
+  await fs.writeFile(getTestTemplatePath("chronicle-load-test.html"), "<main></main>", "utf8");
 
-  const result = await loadTemplates(worldName);
+  const result = await loadTemplates();
 
-  assert.equal(result.items.length, 1);
-  assert.equal(result.items[0].name, "chronicle");
+  assert.equal(result.items.some((template) => template.name === "chronicle-load-test"), true);
 });
 
-test("GET /templates returns the template list payload", async () => {
-  const worldName = "templates-route-world";
-  await resetWorld(worldName);
-  const worldPaths = getWorldPaths(worldName);
-  await fs.mkdir(worldPaths.templates, { recursive: true });
-  await fs.writeFile(path.join(worldPaths.templates, "chronicle.html"), "<main></main>", "utf8");
+test("GET /api/templates returns the template list payload", async () => {
+  const templatesRoot = getTemplatesRoot();
+  await fs.mkdir(templatesRoot, { recursive: true });
+  await fs.writeFile(getTestTemplatePath("chronicle-route-test.html"), "<main></main>", "utf8");
 
   const result = {
     statusCode: null,
@@ -115,19 +127,20 @@ test("GET /templates returns the template list payload", async () => {
     }
   };
 
-  await router({ method: "GET", url: "/templates?world=templates-route-world" }, response);
+  await router({
+    method: "GET",
+    url: "/api/templates",
+    headers: createAuthenticatedHeaders()
+  }, response);
 
   assert.equal(result.statusCode, 200);
-  assert.equal(result.body.items.length, 1);
-  assert.equal(result.body.items[0].name, "chronicle");
+  assert.equal(result.body.items.some((template) => template.name === "chronicle-route-test"), true);
 });
 
-test("GET /templates/:file returns the template html content", async () => {
-  const worldName = "templates-asset-route-world";
-  await resetWorld(worldName);
-  const worldPaths = getWorldPaths(worldName);
-  await fs.mkdir(worldPaths.templates, { recursive: true });
-  await fs.writeFile(path.join(worldPaths.templates, "chronicle.html"), "<main>Chronicle</main>", "utf8");
+test("GET /api/templates/read returns the template html content", async () => {
+  const templatesRoot = getTemplatesRoot();
+  await fs.mkdir(templatesRoot, { recursive: true });
+  await fs.writeFile(getTestTemplatePath("chronicle-asset-route-test.html"), "<main>Chronicle</main>", "utf8");
 
   const result = {
     statusCode: null,
@@ -145,9 +158,13 @@ test("GET /templates/:file returns the template html content", async () => {
     }
   };
 
-  await router({ method: "GET", url: "/templates/chronicle.html?world=templates-asset-route-world" }, response);
+  await router({
+    method: "GET",
+    url: "/api/templates/read?path=chronicle-asset-route-test.html",
+    headers: createAuthenticatedHeaders()
+  }, response);
 
   assert.equal(result.statusCode, 200);
-  assert.equal(result.headers["Content-Type"], "text/html; charset=utf-8");
+  assert.equal(result.headers["Content-Type"], "text/html");
   assert.equal(result.body, "<main>Chronicle</main>");
 });

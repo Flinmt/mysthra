@@ -24,7 +24,7 @@ function getThemeAssetPath(worldName, themeName) {
 
 function getThemeAssetHref(worldName, themeName) {
   const fileName = buildThemeFileName(themeName);
-  return `/themes/${encodeURIComponent(fileName)}?world=${encodeURIComponent(worldName)}`;
+  return `/api/themes/${encodeURIComponent(fileName)}?world=${encodeURIComponent(worldName)}`;
 }
 
 async function listThemes(worldName) {

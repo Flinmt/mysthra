@@ -1,6 +1,14 @@
 const { sendJson, sendText } = require("../utils/http");
 const { serveStaticFile } = require("../utils/static");
-const { generateSessionToken, clearSession, isAuthenticated } = require("../utils/auth");
+const {
+  createExpiredSessionCookie,
+  createSessionCookie,
+  generateSessionToken,
+  getMasterPassword,
+  clearSession,
+  isAuthenticated,
+  safeCompare
+} = require("../utils/auth");
 const path = require("node:path");
 
 const {
@@ -132,7 +140,7 @@ function getErrorStatusCode(error) {
   if (error.code === "TEMPLATE_NOT_FOUND") {
     return 404;
   }
-  if (error.code === "INVALID_WORLD_INPUT") {
+  if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL") {
     return 400;
   }
   if (error.code === "WORLD_ALREADY_EXISTS") {
@@ -152,6 +160,18 @@ function getErrorMessage(error, statusCode) {
     return error.message;
   }
   return "Internal Server Error";
+}
+
+function isPublicReadEnabled() {
+  return ["1", "true", "yes", "on"].includes(String(process.env.PUBLIC_READ || "").trim().toLowerCase());
+}
+
+function isPublicReadRequest(method, pathname) {
+  return method === "GET" && (
+    pathname.startsWith("/api/worlds") ||
+    pathname.startsWith("/api/pages") ||
+    pathname.startsWith("/api/themes")
+  );
 }
 
 function readRequestBody(request) {
@@ -192,7 +212,7 @@ async function router(request, response) {
     if (request.method === "GET" && pathname === "/api/health") {
       sendJson(response, 200, {
         status: "ok",
-        service: "mythra-backend"
+        service: "mysthra-backend"
       });
       return;
     }
@@ -202,35 +222,38 @@ async function router(request, response) {
         const body = await parseJsonBody(request);
         const { password } = body;
         
-        // Use environment variable or default to "admin" for development
-        const masterPassword = process.env.MASTER_PASSWORD || "admin";
+        const masterPassword = getMasterPassword();
         
-        if (password === masterPassword) {
+        if (typeof password === "string" && safeCompare(password, masterPassword)) {
           const token = generateSessionToken();
-          response.setHeader("Set-Cookie", `mythra_session=${token}; HttpOnly; Path=/; SameSite=Strict`);
+          response.setHeader("Set-Cookie", createSessionCookie(token, request));
           sendJson(response, 200, { success: true });
         } else {
           sendJson(response, 401, { error: "Invalid password" });
         }
       } catch (e) {
-        sendJson(response, 400, { error: "Invalid request" });
+        if (e.code === "AUTH_CONFIGURATION_ERROR") {
+          sendJson(response, 500, { error: "Authentication is not configured" });
+        } else {
+          sendJson(response, 400, { error: "Invalid request" });
+        }
       }
       return;
     }
 
     if (request.method === "POST" && pathname === "/api/auth/logout") {
-      const cookieHeader = request.headers.cookie;
+      const cookieHeader = request.headers?.cookie;
       if (cookieHeader) {
         const cookies = cookieHeader.split(";").reduce((acc, cookie) => {
           const [key, value] = cookie.trim().split("=");
           acc[key] = value;
           return acc;
         }, {});
-        if (cookies.mythra_session) {
-          clearSession(cookies.mythra_session);
+        if (cookies.mysthra_session) {
+          clearSession(cookies.mysthra_session);
         }
       }
-      response.setHeader("Set-Cookie", `mythra_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Strict`);
+      response.setHeader("Set-Cookie", createExpiredSessionCookie(request));
       sendJson(response, 200, { success: true });
       return;
     }
@@ -244,13 +267,9 @@ async function router(request, response) {
       return;
     }
 
-    // Protected API Endpoints - All non-GET requests require authentication.
-    // GET requests for templates also require authentication.
-    const isPublicGet = request.method === "GET" && (
-      pathname.startsWith("/api/worlds") || 
-      pathname.startsWith("/api/pages") || 
-      pathname.startsWith("/api/themes")
-    );
+    // Public read must be explicitly enabled for visitor/share mode.
+    // Templates remain private because they can expose reusable authoring structure.
+    const isPublicGet = isPublicReadEnabled() && isPublicReadRequest(request.method, pathname);
 
     if (!isPublicGet && !isAuthenticated(request)) {
       sendJson(response, 401, { error: "Unauthorized" });
@@ -428,7 +447,8 @@ async function router(request, response) {
         return sendJson(response, 201, result);
       } catch (error) {
         console.error("MEDIA UPLOAD ERROR:", error);
-        return sendJson(response, 500, { error: error.message });
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
       }
     }
 
@@ -455,7 +475,8 @@ async function router(request, response) {
         const result = await createMediaFolder(worldId, body.path);
         return sendJson(response, 201, result);
       } catch (error) {
-        return sendJson(response, 500, { error: error.message });
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
       }
     }
 
@@ -470,7 +491,8 @@ async function router(request, response) {
         const result = await moveMedia(worldId, body.sourcePath, body.targetPath);
         return sendJson(response, 200, result);
       } catch (error) {
-        return sendJson(response, 500, { error: error.message });
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
       }
     }
 
@@ -490,7 +512,8 @@ async function router(request, response) {
           response.end(content);
           return;
         } catch (error) {
-          return sendJson(response, 404, { error: "File not found" });
+          const statusCode = error.code === "INVALID_PATH" ? 400 : 404;
+          return sendJson(response, statusCode, { error: statusCode === 400 ? error.message : "File not found" });
         }
       }
 
@@ -499,7 +522,8 @@ async function router(request, response) {
           const result = await deleteMedia(worldId, mediaPath);
           return sendJson(response, 200, result);
         } catch (error) {
-          return sendJson(response, 500, { error: error.message });
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
         }
       }
     }
@@ -703,11 +727,13 @@ async function router(request, response) {
     // Fallback to index.html for SPA routing
     const fallbackServed = await serveStaticFile(response, clientDistDir, "/index.html");
     if (!fallbackServed) {
-      sendText(response, 404, "Mythra Frontend is not built. Please run 'npm run build' inside the 'client' directory.");
+      sendText(response, 404, "Mysthra Frontend is not built. Please run 'npm run build' inside the 'client' directory.");
     }
   }
 }
 
 module.exports = {
+  isPublicReadEnabled,
+  isPublicReadRequest,
   router
 };

@@ -12,9 +12,20 @@ const {
   updateEntity
 } = require("../../src/services/entities");
 
+const createdWorlds = new Set();
+
 async function resetWorld(worldName) {
+  createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
 }
+
+test.after(async () => {
+  await Promise.all(
+    [...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    )
+  );
+});
 
 test("createEntity writes an entity JSON file", async () => {
   const worldName = "entities-create-world";

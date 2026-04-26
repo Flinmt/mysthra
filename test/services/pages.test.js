@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const { ensureWorldStructure, getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
+const { generateSessionToken } = require("../../src/utils/auth");
 const {
   buildPageFileName,
   createPage,
@@ -18,7 +19,24 @@ const {
 } = require("../../src/services/pages");
 
 async function resetWorld(worldName) {
+  createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
+}
+
+const createdWorlds = new Set();
+
+test.after(async () => {
+  await Promise.all(
+    [...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    )
+  );
+});
+
+function createAuthenticatedHeaders() {
+  return {
+    cookie: `mysthra_session=${generateSessionToken()}`
+  };
 }
 
 test("slugFromFileName removes the markdown extension", () => {
@@ -166,12 +184,82 @@ test("GET /pages/:id returns a single page payload", async () => {
     }
   };
 
-  await router({ method: "GET", url: "/pages/eldoria?world=route-page-reading-world" }, response);
+  await router({
+    method: "GET",
+    url: "/api/pages/eldoria?world=route-page-reading-world",
+    headers: createAuthenticatedHeaders()
+  }, response);
 
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.id, "eldoria");
   assert.equal(result.body.title, "Eldoria");
   assert.equal(result.body.content, "# Eldoria\nLore\n");
+});
+
+test("GET /api/pages/:id requires authentication when public read is disabled", async () => {
+  const originalPublicRead = process.env.PUBLIC_READ;
+  delete process.env.PUBLIC_READ;
+
+  try {
+    const result = {
+      statusCode: null,
+      body: null
+    };
+    const response = {
+      writeHead(statusCode) {
+        result.statusCode = statusCode;
+      },
+      end(body) {
+        result.body = JSON.parse(body);
+      }
+    };
+
+    await router({ method: "GET", url: "/api/pages/eldoria?world=route-page-reading-world" }, response);
+
+    assert.equal(result.statusCode, 401);
+    assert.equal(result.body.error, "Unauthorized");
+  } finally {
+    if (originalPublicRead === undefined) delete process.env.PUBLIC_READ;
+    else process.env.PUBLIC_READ = originalPublicRead;
+  }
+});
+
+test("GET /api/pages/:id allows unauthenticated access when public read is enabled", async () => {
+  const originalPublicRead = process.env.PUBLIC_READ;
+  const worldName = "route-page-public-read-world";
+  await resetWorld(worldName);
+  const worldPaths = await ensureWorldStructure(worldName);
+
+  await fs.writeFile(
+    path.join(worldPaths.pages, "eldoria.md"),
+    "# Eldoria\nPublic lore\n",
+    "utf8"
+  );
+
+  process.env.PUBLIC_READ = "true";
+
+  try {
+    const result = {
+      statusCode: null,
+      body: null
+    };
+    const response = {
+      writeHead(statusCode) {
+        result.statusCode = statusCode;
+      },
+      end(body) {
+        result.body = JSON.parse(body);
+      }
+    };
+
+    await router({ method: "GET", url: "/api/pages/eldoria?world=route-page-public-read-world" }, response);
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.body.title, "Eldoria");
+  } finally {
+    if (originalPublicRead === undefined) delete process.env.PUBLIC_READ;
+    else process.env.PUBLIC_READ = originalPublicRead;
+  }
 });
 
 test("createPage writes a new markdown page using a generated slug", async () => {
@@ -246,7 +334,8 @@ test("GET /pages accepts POST to create a page", async () => {
 
   const request = {
     method: "POST",
-    url: "/pages",
+    url: "/api/pages",
+    headers: createAuthenticatedHeaders(),
     on(event, handler) {
       if (event === "data") {
         handler(body);
@@ -325,7 +414,8 @@ test("PUT /pages/:id updates a page payload", async () => {
 
   const request = {
     method: "PUT",
-    url: "/pages/eldoria?world=route-page-update-world",
+    url: "/api/pages/eldoria?world=route-page-update-world",
+    headers: createAuthenticatedHeaders(),
     on(event, handler) {
       if (event === "data") {
         handler(body);
@@ -406,7 +496,8 @@ test("DELETE /pages/:id deletes a page payload", async () => {
 
   const request = {
     method: "DELETE",
-    url: "/pages/eldoria?world=route-page-delete-world"
+    url: "/api/pages/eldoria?world=route-page-delete-world",
+    headers: createAuthenticatedHeaders()
   };
 
   const response = {

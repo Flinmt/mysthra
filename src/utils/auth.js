@@ -2,7 +2,35 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const SESSION_FILE = path.join(process.cwd(), 'src', 'data', 'sessions.json');
+const SESSION_FILE = process.env.SESSION_FILE || path.join(process.cwd(), "data", "sessions.json");
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+function getMasterPassword() {
+  const configuredPassword = process.env.MASTER_PASSWORD;
+
+  if (configuredPassword) {
+    return configuredPassword;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    const error = new Error("MASTER_PASSWORD must be configured in production");
+    error.code = "AUTH_CONFIGURATION_ERROR";
+    throw error;
+  }
+
+  return "admin";
+}
+
+function safeCompare(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
 
 // Helper to load sessions from disk
 function loadSessions() {
@@ -37,6 +65,20 @@ function generateSessionToken() {
   return token;
 }
 
+function isHttpsRequest(request) {
+  return request?.socket?.encrypted === true || request?.headers?.["x-forwarded-proto"] === "https";
+}
+
+function createSessionCookie(token, request) {
+  const secure = process.env.NODE_ENV === "production" || isHttpsRequest(request) ? "; Secure" : "";
+  return `mysthra_session=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${SESSION_MAX_AGE_SECONDS}${secure}`;
+}
+
+function createExpiredSessionCookie(request) {
+  const secure = process.env.NODE_ENV === "production" || isHttpsRequest(request) ? "; Secure" : "";
+  return `mysthra_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Strict${secure}`;
+}
+
 function isValidSession(token) {
   return activeSessions.has(token);
 }
@@ -48,7 +90,7 @@ function clearSession(token) {
 
 // Helper to extract session cookie
 function getSessionCookie(request) {
-  const cookieHeader = request.headers.cookie;
+  const cookieHeader = request.headers?.cookie;
   if (!cookieHeader) return null;
   
   const cookies = cookieHeader.split(";").reduce((acc, cookie) => {
@@ -57,7 +99,7 @@ function getSessionCookie(request) {
     return acc;
   }, {});
   
-  return cookies.mythra_session || null;
+  return cookies.mysthra_session || null;
 }
 
 function isAuthenticated(request) {
@@ -66,9 +108,13 @@ function isAuthenticated(request) {
 }
 
 module.exports = {
+  createExpiredSessionCookie,
+  createSessionCookie,
   generateSessionToken,
+  getMasterPassword,
   isValidSession,
   clearSession,
   getSessionCookie,
-  isAuthenticated
+  isAuthenticated,
+  safeCompare
 };

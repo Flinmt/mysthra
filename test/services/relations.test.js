@@ -11,9 +11,20 @@ const {
   readRelationsFile
 } = require("../../src/services/relations");
 
+const createdWorlds = new Set();
+
 async function resetWorld(worldName) {
+  createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
 }
+
+test.after(async () => {
+  await Promise.all(
+    [...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    )
+  );
+});
 
 test("buildPageRelations converts wikilinks into relation entries", () => {
   const relations = buildPageRelations(

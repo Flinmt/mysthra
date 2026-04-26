@@ -236,7 +236,6 @@ function TemplateTreeNode({ node, onTemplateSelect, onDelete, onMove, onCreateFo
       const res = await fetch(`/api/templates/read?path=${encodeURIComponent(node.path)}`);
       if (res.ok) {
         const text = await res.text();
-        console.log('Template loaded (raw):', text);
         setPreviewContent(text.slice(0, 500) + (text.length > 500 ? '...' : ''));
       }
     } catch (e) {}
@@ -906,8 +905,6 @@ export default function WorldWorkspace({ params }) {
     const contentStr = String(fileContent || "");
     const parentPathStr = typeof parentPathArg === 'string' ? parentPathArg : "";
     
-    console.log('Safe Save Template:', { nameStr, parentPathStr, contentLen: contentStr.length });
-    
     if (!nameStr) {
       addToast('Por favor, informe o nome do template.', 'warning');
       return;
@@ -949,8 +946,6 @@ export default function WorldWorkspace({ params }) {
       const res = await fetch(`/api/templates/read?path=${encodeURIComponent(template.path)}`);
       if (res.ok) {
         const content = await res.text();
-        console.log('Template Edit Content (raw):', content);
-        console.log('Template loaded:', template.name, 'Length:', content.length);
         setFileContent(content);
         setSelectedFile({ ...template, isTemplate: true });
         setViewMode('edit');
@@ -1997,7 +1992,6 @@ export default function WorldWorkspace({ params }) {
               <button 
                 className="btn-primary" 
                 onClick={() => {
-                  console.log('Botão Salvar clicado! Nome:', newTemplateName);
                   handleSaveTemplate("");
                 }} 
                 disabled={!newTemplateName || savingTemplate}

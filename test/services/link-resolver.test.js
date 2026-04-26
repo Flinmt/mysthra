@@ -11,9 +11,20 @@ const {
   resolvePageLinks
 } = require("../../src/services/link-resolver");
 
+const createdWorlds = new Set();
+
 async function resetWorld(worldName) {
+  createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
 }
+
+test.after(async () => {
+  await Promise.all(
+    [...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    )
+  );
+});
 
 test("listAllEntities returns entities across all supported types", async () => {
   const worldName = "link-resolver-entities-world";

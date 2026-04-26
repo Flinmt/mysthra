@@ -14,6 +14,16 @@ const {
   validateWorldName
 } = require("../../src/data");
 
+const createdWorlds = new Set();
+
+test.after(async () => {
+  await Promise.all(
+    [...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    )
+  );
+});
+
 test("validateWorldName accepts safe world names", () => {
   assert.equal(validateWorldName("eldoria"), "eldoria");
   assert.equal(validateWorldName("kingdom-01"), "kingdom-01");
@@ -59,6 +69,7 @@ test("assertPathInsideRoot rejects paths outside the allowed root", () => {
 
 test("ensureWorldStructure creates all standard world directories", async () => {
   const worldName = "task-1-3-world";
+  createdWorlds.add(worldName);
   const worldPaths = await ensureWorldStructure(worldName);
 
   await Promise.all(

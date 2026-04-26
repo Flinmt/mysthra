@@ -1,11 +1,81 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const sharp = require("sharp");
 const {
   ensureWorldStructure,
   getWorldsRoot,
   resolveWorldRoot,
   validateWorldName
 } = require("../data/filesystem");
+
+const SUPPORTED_THUMBNAIL_TYPES = new Set(["gif", "jpeg", "jpg", "png", "webp"]);
+const THUMBNAIL_FILE_NAME = "thumbnail.webp";
+
+function createThumbnailError(message) {
+  const error = new Error(message);
+  error.code = "INVALID_THUMBNAIL";
+  return error;
+}
+
+function getThumbnailUrl(worldName, thumbnailUpdatedAt) {
+  return `/api/worlds/${encodeURIComponent(worldName)}/thumbnail?v=${encodeURIComponent(thumbnailUpdatedAt)}`;
+}
+
+function getNextThumbnailTimestamp(currentTimestamp) {
+  const current = Number(currentTimestamp) || 0;
+  const now = Date.now();
+  return now > current ? now : current + 1;
+}
+
+function parseThumbnailBase64(thumbnailBase64) {
+  if (typeof thumbnailBase64 !== "string" || thumbnailBase64.trim() === "") {
+    return null;
+  }
+
+  const match = thumbnailBase64.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) {
+    throw createThumbnailError("Thumbnail must be a base64 image data URL");
+  }
+
+  const imageType = match[1].toLowerCase();
+  if (!SUPPORTED_THUMBNAIL_TYPES.has(imageType)) {
+    throw createThumbnailError("Thumbnail image type is not supported");
+  }
+
+  const base64Data = match[2].replace(/\s/g, "");
+  const buffer = Buffer.from(base64Data, "base64");
+  if (buffer.length === 0) {
+    throw createThumbnailError("Thumbnail image is empty");
+  }
+  return buffer;
+}
+
+async function writeThumbnail(worldPaths, thumbnailBase64) {
+  const input = parseThumbnailBase64(thumbnailBase64);
+  if (!input) {
+    return null;
+  }
+
+  const filePath = path.join(worldPaths.media, THUMBNAIL_FILE_NAME);
+  try {
+    await sharp(input, { animated: false, limitInputPixels: 20_000_000 })
+      .webp({ quality: 82 })
+      .toFile(filePath);
+  } catch (error) {
+    throw createThumbnailError("Thumbnail image could not be processed");
+  }
+
+  return filePath;
+}
+
+async function deleteExistingThumbnails(worldPaths) {
+  const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+  await Promise.all(
+    extensions.map((ext) =>
+      fs.unlink(path.join(worldPaths.media, `thumbnail${ext}`)).catch(() => {})
+    )
+  );
+}
 
 async function listWorlds() {
   const worldsRoot = getWorldsRoot();
@@ -77,26 +147,12 @@ async function createWorld(data) {
     throw error;
   }
 
-  // Handle thumbnail image
   let thumbnailUrl = null;
-  if (thumbnailBase64 && typeof thumbnailBase64 === "string") {
-    // Extract base64 content
-    const match = thumbnailBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
-    if (match) {
-      const ext = match[1] === "jpeg" ? "jpg" : match[1];
-      const base64Data = match[2];
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `thumbnail.${ext}`;
-      const filePath = path.join(worldPaths.media, fileName);
-      
-      await fs.writeFile(filePath, buffer);
-      // Construct URL to access this image via a future API endpoint or static serving
-      // For now, we will just store the base64 string in the JSON to keep it extremely simple
-      // and not have to write an image streaming endpoint yet.
-      // Actually, storing a small base64 in JSON is fine for a thumbnail, but saving it as a file is better.
-      // We will save it as a file and set the URL to `/api/worlds/${safeName}/thumbnail`
-      thumbnailUrl = `/api/worlds/${safeName}/thumbnail`;
-    }
+  let thumbnailUpdatedAt = null;
+  if (thumbnailBase64) {
+    await writeThumbnail(worldPaths, thumbnailBase64);
+    thumbnailUpdatedAt = getNextThumbnailTimestamp();
+    thumbnailUrl = getThumbnailUrl(safeName, thumbnailUpdatedAt);
   }
 
   const worldData = {
@@ -104,6 +160,7 @@ async function createWorld(data) {
     displayName: name,
     description: description || "",
     thumbnailUrl,
+    thumbnailUpdatedAt,
     createdAt: Date.now()
   };
 
@@ -115,8 +172,7 @@ async function getWorldThumbnail(worldName) {
   const safeName = validateWorldName(worldName);
   const worldPaths = await ensureWorldStructure(safeName);
   
-  // Try to find thumbnail.png, thumbnail.jpg, etc.
-  const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+  const extensions = [".webp", ".png", ".jpg", ".jpeg", ".gif"];
   for (const ext of extensions) {
     const filePath = path.join(worldPaths.media, `thumbnail${ext}`);
     try {
@@ -159,25 +215,12 @@ async function updateWorld(worldId, data) {
     worldData.description = description;
   }
 
-  if (thumbnailBase64 && typeof thumbnailBase64 === "string") {
-    const match = thumbnailBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
-    if (match) {
-      const ext = match[1] === "jpeg" ? "jpg" : match[1];
-      const base64Data = match[2];
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `thumbnail.${ext}`;
-      const worldPaths = await ensureWorldStructure(safeId);
-      
-      // Delete existing thumbnails to avoid conflicts and stale images
-      const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
-      for (const oldExt of extensions) {
-        try { await fs.unlink(path.join(worldPaths.media, `thumbnail${oldExt}`)); } catch (e) {}
-      }
-
-      const filePath = path.join(worldPaths.media, fileName);
-      await fs.writeFile(filePath, buffer);
-      worldData.thumbnailUrl = `/api/worlds/${safeId}/thumbnail`;
-    }
+  if (thumbnailBase64) {
+    const worldPaths = await ensureWorldStructure(safeId);
+    await deleteExistingThumbnails(worldPaths);
+    await writeThumbnail(worldPaths, thumbnailBase64);
+    worldData.thumbnailUpdatedAt = getNextThumbnailTimestamp(worldData.thumbnailUpdatedAt);
+    worldData.thumbnailUrl = getThumbnailUrl(safeId, worldData.thumbnailUpdatedAt);
   }
 
   await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
@@ -202,7 +245,11 @@ async function deleteWorld(worldId) {
 module.exports = {
   listWorlds,
   createWorld,
+  getNextThumbnailTimestamp,
+  getThumbnailUrl,
+  parseThumbnailBase64,
   updateWorld,
   deleteWorld,
-  getWorldThumbnail
+  getWorldThumbnail,
+  writeThumbnail
 };

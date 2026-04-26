@@ -41,7 +41,7 @@ async function renderPageOutput(worldName, pageIdOrSlug) {
   const renderableContent = stripPageTemplateOverride(stripPageThemeOverride(page.content));
   const html = renderMarkdownToHtml(renderableContent);
   const appliedTheme = await resolveAppliedTheme(worldName, pageThemeOverride);
-  const template = pageTemplateOverride ? await readTemplate(worldName, pageTemplateOverride) : null;
+  const template = pageTemplateOverride ? await readTemplate(pageTemplateOverride) : null;
   const themeReference = appliedTheme.theme
     ? {
         name: appliedTheme.theme.name,

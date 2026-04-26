@@ -76,7 +76,7 @@ function Login({ onLogin }) {
     <div className="login-container">
       <div className="login-card glass-panel">
         <Sparkles size={40} color="var(--accent-color)" style={{ marginBottom: 16 }} />
-        <h1>Mythra</h1>
+        <h1>Mysthra</h1>
         <p>A Forja de Mundos Interativos</p>
         
         <form onSubmit={handleSubmit}>

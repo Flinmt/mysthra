@@ -18,9 +18,15 @@ const MIME_TYPES = {
 
 async function serveStaticFile(response, rootDir, urlPath) {
   try {
-    // Basic security to prevent directory traversal
-    const safeSuffix = path.normalize(urlPath).replace(/^(\.\.[\/\\])+/, "");
-    let filePath = path.join(rootDir, safeSuffix);
+    const rootPath = path.resolve(rootDir);
+    const decodedPath = decodeURIComponent(urlPath);
+    const relativePath = decodedPath.replace(/^[/\\]+/, "");
+    let filePath = path.resolve(rootPath, relativePath);
+
+    const rootRelativePath = path.relative(rootPath, filePath);
+    if (rootRelativePath.startsWith("..") || path.isAbsolute(rootRelativePath)) {
+      return false;
+    }
 
     let stat;
     try {
@@ -32,6 +38,10 @@ async function serveStaticFile(response, rootDir, urlPath) {
 
     if (stat.isDirectory()) {
       filePath = path.join(filePath, "index.html");
+      const directoryRelativePath = path.relative(rootPath, filePath);
+      if (directoryRelativePath.startsWith("..") || path.isAbsolute(directoryRelativePath)) {
+        return false;
+      }
       try {
         stat = await fs.stat(filePath);
       } catch (e) {

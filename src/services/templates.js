@@ -61,31 +61,48 @@ async function listTemplates() {
   return await walk(root);
 }
 
+async function loadTemplates() {
+  return {
+    items: await listTemplates()
+  };
+}
+
 async function readTemplate(relativePath) {
   const root = getTemplatesRoot();
   const safePath = validateRelativePath(relativePath);
-  const filePath = path.join(root, safePath);
+  const ext = path.extname(safePath);
+  const candidatePaths = ext
+    ? [safePath]
+    : [`${safePath}.html`, `${safePath}.md`];
 
-  try {
-    const content = await fs.readFile(filePath, "utf8");
-    console.log('Backend readTemplate:', { filePath, contentLength: content.length });
-    const ext = path.extname(filePath);
-    
-    return {
-      name: path.basename(filePath, ext),
-      path: safePath,
-      content,
-      type: ext === '.md' ? 'content' : 'layout'
-    };
-  } catch (error) {
-    const notFoundError = new Error("Template not found");
-    notFoundError.code = "TEMPLATE_NOT_FOUND";
-    throw notFoundError;
+  for (const candidatePath of candidatePaths) {
+    const filePath = path.join(root, candidatePath);
+
+    try {
+      const content = await fs.readFile(filePath, "utf8");
+      const fileExt = path.extname(filePath);
+      const fileName = path.basename(filePath);
+
+      return {
+        name: path.basename(filePath, fileExt),
+        path: candidatePath,
+        fileName,
+        content,
+        type: fileExt === '.md' ? 'content' : 'layout'
+      };
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    }
   }
+
+  const notFoundError = new Error("Template not found");
+  notFoundError.code = "TEMPLATE_NOT_FOUND";
+  throw notFoundError;
 }
 
 async function saveTemplate(name, content, parentPath = "", type = 'content') {
-  console.log('Service saveTemplate:', { name, parentPath, type, contentLength: content?.length });
   const root = getTemplatesRoot();
   const safeParent = parentPath ? validateRelativePath(parentPath) : "";
   const fileName = buildTemplateFileName(name, type);
@@ -163,6 +180,7 @@ module.exports = {
   buildTemplateFileName,
   injectTemplateContent,
   listTemplates,
+  loadTemplates,
   readTemplate,
   saveTemplate,
   createTemplateFolder,

@@ -8,5 +8,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Mythra backend listening on http://localhost:${PORT}`);
+  console.log(`Mysthra backend listening on http://localhost:${PORT}`);
 });

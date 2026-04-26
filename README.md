@@ -34,7 +34,7 @@ Your gateway to all your universes. A high-fidelity, horizontal gallery that pre
 
 ### 🛠️ Total Customization
 - **HTML & CSS First**: Use standard web technologies to create custom layouts, embedded music players, or interactive lore pieces.
-- **Template System**: Save your best structures (stat blocks, locations, timelines) as templates and reuse them across any file.
+- **Global Template System**: Save your best structures (stat blocks, locations, timelines) as templates and reuse them across any world or file.
 - **Wiki-style Linking**: Connect your ideas with easy internal linking (`[[page-name]]`).
 
 ---
@@ -54,6 +54,8 @@ services:
       - "3000:3000"
     volumes:
       - ./mysthra-data:/app/data
+    environment:
+      - MASTER_PASSWORD=change-this-password
 ```
 
 ---
@@ -80,6 +82,8 @@ services:
    Create a `.env` file in the root directory:
    ```env
    PORT=3000
+   MASTER_PASSWORD=change-this-password
+   PUBLIC_READ=false
    ```
 
 4. **Run the forge**:
@@ -101,9 +105,13 @@ The easiest way to run Mysthra is using Docker Compose:
 
 2. **Launch the forge**:
    ```bash
+   export MASTER_PASSWORD=change-this-password
+   export PUBLIC_READ=false
    docker-compose up -d
    ```
    The app will be available at `http://localhost:3000`. All your worlds and media will be persisted in the `./data` folder.
+
+   Set `PUBLIC_READ=true` only when you want unauthenticated visitor/share access to worlds, pages, themes, documents, and media.
 
 ---
 

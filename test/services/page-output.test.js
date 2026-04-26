@@ -3,8 +3,9 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const test = require("node:test");
 
-const { getWorldPaths, resolveWorldRoot } = require("../../src/data");
+const { getTemplatesRoot, getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
+const { generateSessionToken } = require("../../src/utils/auth");
 const {
   parsePageTemplateOverride,
   parsePageThemeOverride,
@@ -14,8 +15,35 @@ const {
   stripPageThemeOverride
 } = require("../../src/services");
 
+const createdWorlds = new Set();
+const createdTemplateFiles = new Set();
+
 async function resetWorld(worldName) {
+  createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
+}
+
+function getTestTemplatePath(fileName) {
+  const filePath = path.join(getTemplatesRoot(), fileName);
+  createdTemplateFiles.add(filePath);
+  return filePath;
+}
+
+test.after(async () => {
+  await Promise.all([
+    ...[...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    ),
+    ...[...createdTemplateFiles].map((filePath) =>
+      fs.rm(filePath, { force: true })
+    )
+  ]);
+});
+
+function createAuthenticatedHeaders() {
+  return {
+    cookie: `mysthra_session=${generateSessionToken()}`
+  };
 }
 
 test("parsePageThemeOverride reads the top-level theme marker", () => {
@@ -83,7 +111,7 @@ test("renderPageOutput returns the active theme reference separately from html",
   assert.deepEqual(result.theme, {
     name: "eldoria",
     fileName: "eldoria.css",
-    href: "/themes/eldoria.css?world=page-output-theme-world",
+    href: "/api/themes/eldoria.css?world=page-output-theme-world",
     source: "world"
   });
 });
@@ -111,7 +139,7 @@ test("renderPageOutput prefers a page theme override over the active world theme
   assert.deepEqual(result.theme, {
     name: "ashlands",
     fileName: "ashlands.css",
-    href: "/themes/ashlands.css?world=page-output-override-world",
+    href: "/api/themes/ashlands.css?world=page-output-override-world",
     source: "page"
   });
 });
@@ -120,17 +148,18 @@ test("renderPageOutput wraps rendered html with a page template override", async
   const worldName = "page-output-template-world";
   await resetWorld(worldName);
   const worldPaths = getWorldPaths(worldName);
+  const templatesRoot = getTemplatesRoot();
   await fs.mkdir(worldPaths.pages, { recursive: true });
   await fs.mkdir(worldPaths.themes, { recursive: true });
-  await fs.mkdir(worldPaths.templates, { recursive: true });
+  await fs.mkdir(templatesRoot, { recursive: true });
 
   await fs.writeFile(
     path.join(worldPaths.pages, "eldoria.md"),
-    "<!-- template: chronicle -->\n# Eldoria\nNorthern empire.\n",
+    "<!-- template: chronicle-page-output-test -->\n# Eldoria\nNorthern empire.\n",
     "utf8"
   );
   await fs.writeFile(
-    path.join(worldPaths.templates, "chronicle.html"),
+    getTestTemplatePath("chronicle-page-output-test.html"),
     "<html><head><title>{{title}}</title><link rel=\"stylesheet\" href=\"{{themeHref}}\"></head><body><main>{{content}}</main></body></html>",
     "utf8"
   );
@@ -139,18 +168,18 @@ test("renderPageOutput wraps rendered html with a page template override", async
 
   const result = await renderPageOutput(worldName, "eldoria");
 
-  assert.equal(result.page.templateOverride, "chronicle");
+  assert.equal(result.page.templateOverride, "chronicle-page-output-test");
   assert.deepEqual(result.template, {
-    name: "chronicle",
-    fileName: "chronicle.html"
+    name: "chronicle-page-output-test",
+    fileName: "chronicle-page-output-test.html"
   });
   assert.equal(
     result.documentHtml,
-    "<html><head><title>Eldoria</title><link rel=\"stylesheet\" href=\"/themes/eldoria.css?world=page-output-template-world\"></head><body><main><h1>Eldoria</h1>\n<p>Northern empire.</p></main></body></html>"
+    "<html><head><title>Eldoria</title><link rel=\"stylesheet\" href=\"/api/themes/eldoria.css?world=page-output-template-world\"></head><body><main><h1>Eldoria</h1>\n<p>Northern empire.</p></main></body></html>"
   );
 });
 
-test("GET /pages/:id/rendered returns the rendered page output", async () => {
+test("GET /api/pages/:id/rendered returns the rendered page output", async () => {
   const worldName = "page-output-route-world";
   await resetWorld(worldName);
   const worldPaths = getWorldPaths(worldName);
@@ -185,11 +214,15 @@ test("GET /pages/:id/rendered returns the rendered page output", async () => {
     }
   };
 
-  await router({ method: "GET", url: "/pages/eldoria/rendered?world=page-output-route-world" }, response);
+  await router({
+    method: "GET",
+    url: "/api/pages/eldoria/rendered?world=page-output-route-world",
+    headers: createAuthenticatedHeaders()
+  }, response);
 
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.html, "<h1>Eldoria</h1>\n<p>Hello <span>world</span></p>");
   assert.equal(result.body.documentHtml, "<h1>Eldoria</h1>\n<p>Hello <span>world</span></p>");
-  assert.equal(result.body.theme.href, "/themes/northern.css?world=page-output-route-world");
+  assert.equal(result.body.theme.href, "/api/themes/northern.css?world=page-output-route-world");
   assert.equal(result.body.theme.source, "world");
 });

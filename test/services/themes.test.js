@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const { getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
+const { generateSessionToken } = require("../../src/utils/auth");
 const {
   buildThemeFileName,
   getActiveTheme,
@@ -19,8 +20,25 @@ const {
   themeNameFromFile
 } = require("../../src/services/themes");
 
+const createdWorlds = new Set();
+
 async function resetWorld(worldName) {
+  createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
+}
+
+test.after(async () => {
+  await Promise.all(
+    [...createdWorlds].map((worldName) =>
+      fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true })
+    )
+  );
+});
+
+function createAuthenticatedHeaders() {
+  return {
+    cookie: `mysthra_session=${generateSessionToken()}`
+  };
 }
 
 test("themeNameFromFile removes the css extension", () => {
@@ -136,7 +154,7 @@ test("resolveAppliedTheme prefers a page override over the active world theme", 
   assert.equal(result.theme.name, "ashlands");
 });
 
-test("GET /themes returns the theme list payload", async () => {
+test("GET /api/themes returns the theme list payload", async () => {
   const worldName = "themes-route-world";
   await resetWorld(worldName);
   const worldPaths = getWorldPaths(worldName);
@@ -160,14 +178,18 @@ test("GET /themes returns the theme list payload", async () => {
     }
   };
 
-  await router({ method: "GET", url: "/themes?world=themes-route-world" }, response);
+  await router({
+    method: "GET",
+    url: "/api/themes?world=themes-route-world",
+    headers: createAuthenticatedHeaders()
+  }, response);
 
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.activeTheme, "eldoria");
   assert.equal(result.body.items.length, 1);
 });
 
-test("GET /themes/:file returns the css asset content", async () => {
+test("GET /api/themes/:file returns the css asset content", async () => {
   const worldName = "themes-asset-route-world";
   await resetWorld(worldName);
   const worldPaths = getWorldPaths(worldName);
@@ -190,7 +212,11 @@ test("GET /themes/:file returns the css asset content", async () => {
     }
   };
 
-  await router({ method: "GET", url: "/themes/eldoria.css?world=themes-asset-route-world" }, response);
+  await router({
+    method: "GET",
+    url: "/api/themes/eldoria.css?world=themes-asset-route-world",
+    headers: createAuthenticatedHeaders()
+  }, response);
 
   assert.equal(result.statusCode, 200);
   assert.equal(result.headers["Content-Type"], "text/css; charset=utf-8");

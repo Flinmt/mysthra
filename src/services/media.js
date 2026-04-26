@@ -4,15 +4,34 @@ const sharp = require('sharp');
 const formidable = require('formidable');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
-const { getWorldPaths } = require('../data/filesystem');
+const {
+  assertPathInsideRoot,
+  getWorldPaths,
+  validateRelativePath
+} = require('../data/filesystem');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
+function resolveMediaPath(worldId, relativePath, options = {}) {
+  const worldPaths = getWorldPaths(worldId);
+  const mediaRoot = worldPaths.media;
+  const allowEmpty = options.allowEmpty === true;
+  const normalizedPath = typeof relativePath === 'string' ? relativePath.trim() : '';
+  const safePath = allowEmpty && normalizedPath === '' ? '' : validateRelativePath(normalizedPath);
+  const targetPath = path.resolve(mediaRoot, safePath);
+
+  return {
+    mediaRoot,
+    worldPaths,
+    safePath,
+    targetPath: assertPathInsideRoot(mediaRoot, targetPath)
+  };
+}
+
 async function handleMediaUpload(worldId, request) {
   const worldPaths = getWorldPaths(worldId);
-  const rootMediaDir = worldPaths.media;
   const tempDir = path.join(worldPaths.worldRoot, 'temp');
   
   try {
@@ -31,11 +50,17 @@ async function handleMediaUpload(worldId, request) {
       if (err) return reject(err);
 
       const targetSubFolder = fields.folder ? (Array.isArray(fields.folder) ? fields.folder[0] : fields.folder) : "";
-      const finalMediaDir = path.join(rootMediaDir, targetSubFolder);
+      let safeSubFolder;
+      let finalMediaDir;
       
       try {
+        const resolvedMediaPath = resolveMediaPath(worldId, targetSubFolder, { allowEmpty: true });
+        safeSubFolder = resolvedMediaPath.safePath;
+        finalMediaDir = resolvedMediaPath.targetPath;
         await fs.mkdir(finalMediaDir, { recursive: true });
-      } catch (e) {}
+      } catch (e) {
+        return reject(e);
+      }
 
       const file = files.file ? (Array.isArray(files.file) ? files.file[0] : files.file) : null;
       if (!file) {
@@ -88,7 +113,7 @@ async function handleMediaUpload(worldId, request) {
           if (isGif) type = 'image';
         }
 
-        const relativePath = targetSubFolder ? `${targetSubFolder}/${finalFilename}` : finalFilename;
+        const relativePath = safeSubFolder ? `${safeSubFolder}/${finalFilename}` : finalFilename;
 
         resolve({
           url: `/api/worlds/${encodeURIComponent(worldId)}/media/${encodeURIComponent(relativePath)}`,
@@ -103,8 +128,7 @@ async function handleMediaUpload(worldId, request) {
 }
 
 async function getMediaFile(worldId, filename) {
-  const worldPaths = getWorldPaths(worldId);
-  const filePath = path.join(worldPaths.media, filename);
+  const { targetPath: filePath } = resolveMediaPath(worldId, filename);
   try {
     const stats = await fs.stat(filePath);
     if (!stats.isFile()) throw new Error('Not a file');
@@ -188,8 +212,7 @@ async function listMedia(worldId) {
 }
 
 async function createMediaFolder(worldId, folderPath) {
-  const worldPaths = getWorldPaths(worldId);
-  const fullPath = path.join(worldPaths.media, folderPath);
+  const { targetPath: fullPath } = resolveMediaPath(worldId, folderPath);
   try {
     await fs.mkdir(fullPath, { recursive: true });
     return { success: true };
@@ -199,9 +222,8 @@ async function createMediaFolder(worldId, folderPath) {
 }
 
 async function moveMedia(worldId, sourcePath, targetPath) {
-  const worldPaths = getWorldPaths(worldId);
-  const fullSourcePath = path.join(worldPaths.media, sourcePath);
-  const fullTargetPath = path.join(worldPaths.media, targetPath);
+  const { targetPath: fullSourcePath } = resolveMediaPath(worldId, sourcePath);
+  const { targetPath: fullTargetPath } = resolveMediaPath(worldId, targetPath);
   
   try {
     // Ensure target parent directory exists
@@ -214,8 +236,7 @@ async function moveMedia(worldId, sourcePath, targetPath) {
 }
 
 async function deleteMedia(worldId, mediaPath) {
-  const worldPaths = getWorldPaths(worldId);
-  const filePath = path.join(worldPaths.media, mediaPath);
+  const { targetPath: filePath } = resolveMediaPath(worldId, mediaPath);
   try {
     const stats = await fs.stat(filePath);
     if (stats.isDirectory()) {
@@ -235,5 +256,6 @@ module.exports = {
   listMedia,
   createMediaFolder,
   moveMedia,
-  deleteMedia
+  deleteMedia,
+  resolveMediaPath
 };
