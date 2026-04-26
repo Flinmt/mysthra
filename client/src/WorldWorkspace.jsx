@@ -1451,9 +1451,12 @@ export default function WorldWorkspace({ params }) {
       <header className="workspace-header">
         <div className="header-left">
           {!isVisitor && (
-            <button className="icon-btn" onClick={() => setLocation('/')}>
-              <ArrowLeft size={18} />
-            </button>
+            <>
+              <button className="icon-btn" onClick={() => setLocation('/')} title="Voltar ao Nexus">
+                <ArrowLeft size={20} />
+              </button>
+              <div className="workspace-separator" />
+            </>
           )}
           <h2>{worldData ? worldData.displayName : 'Carregando...'}</h2>
         </div>
@@ -1461,7 +1464,7 @@ export default function WorldWorkspace({ params }) {
           {!isVisitor && (
             <>
               <button
-                className="btn-secondary"
+                className={`btn-secondary ${viewMode === 'view' ? 'active-mode' : ''}`}
                 onClick={() => setViewMode(viewMode === 'edit' ? 'view' : 'edit')}
                 disabled={!selectedFile}
                 title={viewMode === 'edit' ? 'Ver Preview' : 'Voltar ao Editor'}
@@ -1477,7 +1480,6 @@ export default function WorldWorkspace({ params }) {
                 onClick={() => setShowTemplateSaveModal(true)} 
                 disabled={!selectedFile}
                 title="Salvar como Template"
-                style={{ marginRight: 8 }}
               >
                 <Bookmark size={16} style={{ marginRight: 8 }} /> Template
               </button>
@@ -1488,7 +1490,7 @@ export default function WorldWorkspace({ params }) {
           )}
 
           <button 
-            className="btn-secondary" 
+            className="btn-secondary share-btn" 
             onClick={() => {
               const url = new URL(window.location.href);
               url.searchParams.set('view', 'true');

@@ -729,22 +729,114 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
-  background: rgba(15, 17, 21, 0.95);
+  padding: 0 24px;
+  height: 64px;
+  background: rgba(11, 13, 17, 0.8);
+  backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-color);
-  z-index: 10;
+  z-index: 100;
 }
 
 .workspace-header .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.workspace-header h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
+.workspace-header .header-left .icon-btn {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%; /* Circular para um look mais orgânico */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.workspace-header .header-left .icon-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: var(--accent-color);
+  color: white;
+  transform: translateX(-3px);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+/* Separador elegante */
+.workspace-separator {
+  height: 20px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+}
+
+.workspace-header .header-left h2 {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   margin: 0;
+  background: linear-gradient(to right, #fff, var(--accent-color));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+}
+
+/* Botões Customizados do Workspace */
+.workspace-header .btn-secondary, 
+.workspace-header .btn-primary {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace-header .btn-secondary {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.workspace-header .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.workspace-header .btn-primary {
+  background: var(--accent-color);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.workspace-header .btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.3);
+}
+
+.workspace-header .btn-primary:active {
+  transform: translateY(0);
+}
+
+.workspace-header .btn-secondary.active-mode {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--accent-color);
+  color: white;
 }
 
 .workspace-main {
