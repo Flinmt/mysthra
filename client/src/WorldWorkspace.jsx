@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, MapPin, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2, Upload, Languages } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -58,11 +58,13 @@ function MapClickHandler({ enabled, onAddPin }) {
 }
 
 function MapTreeNode({ node, selectedMap, onSelect, onDelete, onMove, onCreateFolder, renamingPath, onRename, onContextMenu, isVisitor, isSearching }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
   const isFolder = node.type === 'folder';
   const isRenaming = renamingPath === node.path;
-  const showChildren = isOpen || isSearching;
+  const isChildRenaming = renamingPath && renamingPath.startsWith(node.path + '/');
+  const showChildren = isOpen || isSearching || isChildRenaming;
 
   useEffect(() => {
     if (isRenaming) setEditValue(node.name);
@@ -118,8 +120,8 @@ function MapTreeNode({ node, selectedMap, onSelect, onDelete, onMove, onCreateFo
         <span className="tree-icon" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
           {isFolder ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
         </span>
-        <span className="tree-icon" style={{ color: isFolder ? 'var(--accent-color)' : 'inherit' }}>
-          {isFolder ? (isOpen ? <FolderOpen size={14} /> : <Folder size={14} />) : <Map size={14} />}
+        <span className="tree-icon">
+          {isFolder ? (showChildren ? <FolderOpen size={14} /> : <Folder size={14} />) : <Map size={14} />}
         </span>
         {isRenaming ? (
           <input
@@ -211,6 +213,7 @@ function MapWorkspace({
   onDeletePin,
   onOpenTarget
 }) {
+  const { t } = useTranslation();
   const imageUrl = getMapImageUrl(worldId, mapData.imagePath);
 
   return (
@@ -291,6 +294,7 @@ function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect,
 }
 
 function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showIcons, setShowIcons] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
@@ -346,7 +350,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
         <div onClick={() => !isRenaming && onFileSelect(node)} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
           <span 
             className="tree-icon" 
-            style={{ color: 'var(--text-secondary)', position: 'relative', cursor: 'pointer' }}
+            style={{ position: 'relative', cursor: 'pointer' }}
             onClick={(e) => { e.stopPropagation(); !isRenaming && setShowIcons(!showIcons); }}
             title={t('workspace.change_icon')}
           >
@@ -458,6 +462,7 @@ function TemplateTree({ nodes, onTemplateSelect, onDelete, onMove, onCreateFolde
 }
 
 function TemplateTreeNode({ node, onTemplateSelect, onDelete, onMove, onCreateFolder, onCreateTemplate, renamingPath, onRename, onContextMenu, isSearching, worldId }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
   const [showPreview, setShowPreview] = useState(false);
@@ -543,8 +548,8 @@ function TemplateTreeNode({ node, onTemplateSelect, onDelete, onMove, onCreateFo
           {isFolder ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, gap: 8 }}>
-          <span className="tree-icon" style={{ color: 'var(--text-secondary)' }}>
-            {isFolder ? (isOpen ? <FolderOpen size={14} /> : <Folder size={14} />) : (
+          <span className="tree-icon">
+            {isFolder ? (showChildren ? <FolderOpen size={14} /> : <Folder size={14} />) : (
               node.type === 'content' ? <FileText size={14} /> : <Columns size={14} />
             )}
           </span>
@@ -599,6 +604,7 @@ function TemplateTreeNode({ node, onTemplateSelect, onDelete, onMove, onCreateFo
 }
 
 function TemplatePreviewCard({ content, name, pos }) {
+  const { t } = useTranslation();
   const html = useMemo(() => {
     return DOMPurify.sanitize(marked(content));
   }, [content]);
@@ -628,6 +634,7 @@ function TemplatePreviewCard({ content, name, pos }) {
 
 
 function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreateFolder, renamingPath, onRename, onContextMenu, onExternalUpload, isSearching }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
   const [showPreview, setShowPreview] = useState(false);
@@ -712,8 +719,8 @@ function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreat
           {isFolder ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, gap: 8 }}>
-          <span className="tree-icon" style={{ color: 'var(--text-secondary)' }}>
-            {isFolder ? (isOpen ? <FolderOpen size={14} /> : <Folder size={14} />) : (
+          <span className="tree-icon">
+            {isFolder ? (showChildren ? <FolderOpen size={14} /> : <Folder size={14} />) : (
               node.type === 'image' ? <Image size={14} /> : <Music size={14} />
             )}
           </span>
@@ -1224,9 +1231,8 @@ export default function WorldWorkspace({ params }) {
   };
 
   const handleCreateMapFolder = async (parentPath = '') => {
-    const name = window.prompt(t('workspace.folder_name_prompt'));
-    if (!name) return;
-    const folderPath = parentPath ? `${parentPath}/${name}` : name;
+    const tempName = t('workspace.new_folder');
+    const folderPath = parentPath ? `${parentPath}/${tempName}` : tempName;
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps/folder`, {
         method: 'POST',
@@ -1234,8 +1240,11 @@ export default function WorldWorkspace({ params }) {
         body: JSON.stringify({ path: folderPath })
       });
       if (res.ok) {
+        const newFolder = await res.json();
         await loadMaps();
-        addToast('Pasta criada!', 'success');
+        setTimeout(() => {
+          setRenamingMapPath(newFolder.path || folderPath);
+        }, 100);
       } else {
         const error = await res.json();
         addToast(error.error || 'Erro ao criar pasta', 'error');
@@ -2047,6 +2056,11 @@ export default function WorldWorkspace({ params }) {
     return items;
   }, [selectedFile]);
 
+  const activeEditableFile = selectedFile && !selectedMap ? selectedFile : null;
+  const showFileControls = !!activeEditableFile && !isVisitor;
+  const activeFileKind = activeEditableFile?.isTemplate ? t('workspace.templates') : t('workspace.wiki');
+  const activeFileName = activeEditableFile?.name || activeEditableFile?.path?.split('/').pop() || '';
+
   const handleContextMenu = (e, node, isAsset = false, isTemplate = false, isMap = false) => {
     e.preventDefault();
     e.stopPropagation();
@@ -2087,21 +2101,24 @@ export default function WorldWorkspace({ params }) {
           <h2>{worldData ? worldData.displayName : t('common.loading')}</h2>
         </div>
         <div className="header-actions">
-          {selectedFile && !isVisitor && (
-            <div className="save-indicator">
-              {saveStatus === 'saving' && <span className="status-text saving">{t('common.saving')}</span>}
-              {saveStatus === 'dirty' && <span className="status-text dirty">{t('workspace.nao_salvo')}</span>}
-              {saveStatus === 'saved' && <span className="status-text saved">{t('workspace.salvo')}</span>}
-              {saveStatus === 'error' && <span className="status-text error">{t('workspace.erro')}</span>}
-            </div>
-          )}
-          
-          {!isVisitor && (
-            <>
+          {showFileControls && (
+            <div className="file-action-cluster" aria-label={`${activeFileKind}: ${activeFileName}`}>
+              <div className="active-file-pill" title={`${activeFileKind}: ${activeFileName}`}>
+                {activeEditableFile.isTemplate ? <Layout size={14} /> : <FileText size={14} />}
+                <span className="active-file-kind">{activeFileKind}</span>
+                <span className="active-file-name">{activeFileName}</span>
+              </div>
+
+              <div className="save-indicator">
+                {saveStatus === 'saving' && <span className="status-text saving">{t('common.saving')}</span>}
+                {saveStatus === 'dirty' && <span className="status-text dirty">{t('workspace.nao_salvo')}</span>}
+                {saveStatus === 'saved' && <span className="status-text saved">{t('workspace.salvo')}</span>}
+                {saveStatus === 'error' && <span className="status-text error">{t('workspace.erro')}</span>}
+              </div>
+
               <button
                 className={`btn-secondary ${viewMode === 'view' ? 'active-mode' : ''}`}
                 onClick={() => setViewMode(viewMode === 'edit' ? 'view' : 'edit')}
-                disabled={!selectedFile}
                 title={viewMode === 'edit' ? t('workspace.ver_preview') : t('workspace.voltar_editor')}
               >
                 {viewMode === 'edit' ? (
@@ -2110,18 +2127,19 @@ export default function WorldWorkspace({ params }) {
                   <><Edit2 size={16} style={{ marginRight: 8 }} /> {t('workspace.editor')}</>
                 )}
               </button>
-              <button 
-                className="btn-secondary" 
-                onClick={() => setShowTemplateSaveModal(true)} 
-                disabled={!selectedFile}
-                title={t('workspace.salvar_template_tooltip')}
-              >
-                <Bookmark size={16} style={{ marginRight: 8 }} /> {t('workspace.template')}
-              </button>
+              {!activeEditableFile.isTemplate && (
+                <button 
+                  className="btn-secondary" 
+                  onClick={() => setShowTemplateSaveModal(true)} 
+                  title={t('workspace.salvar_template_tooltip')}
+                >
+                  <Bookmark size={16} style={{ marginRight: 8 }} /> {t('workspace.template')}
+                </button>
+              )}
               <button className="btn-primary" onClick={() => handleSave()} disabled={saving || !selectedFile}>
                 <Save size={16} style={{ marginRight: 8 }} /> {saving ? t('common.saving') : t('common.save')}
               </button>
-            </>
+            </div>
           )}
 
           <button 
@@ -2547,7 +2565,11 @@ export default function WorldWorkspace({ params }) {
           <div className="modal-content glass-panel" style={{ maxWidth: '400px' }}>
             <h2>{t('common.delete')} {deleteModal.isAsset ? (deleteModal.node.type === 'folder' ? t('workspace.folder') : t('workspace.asset')) : t('workspace.document')}</h2>
             <p style={{ marginTop: '16px', lineHeight: '1.5', color: 'var(--text-primary)' }}>
-              {t('workspace.confirm_delete_specific', { name: deleteModal.node.name })}
+              <Trans
+                i18nKey="workspace.confirm_delete_specific"
+                values={{ name: deleteModal.node.name }}
+                components={{ strong: <strong /> }}
+              />
             </p>
             {deleteModal.node.children && deleteModal.node.children.length > 0 && (
               <p style={{ marginTop: '8px', fontSize: '0.875rem', color: '#f87171' }}>
