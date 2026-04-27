@@ -138,5 +138,5 @@ Mysthra follows the **Nexus Aesthetic**:
 Distributed under the **Polyform Noncommercial License 1.0.0**. This project is free to use and modify for personal and non-commercial purposes. **Commercial use or profiting from the platform is strictly prohibited.** See `LICENSE` for more information.
 
 <p align="center">
-  <em>Forged with ❤️ by the little old me.</em>
+  <em>Forged with ❤️ by little old me.</em>
 </p>
