@@ -106,6 +106,13 @@ body {
   overflow: hidden;
 }
 
+.login-language-wrapper {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+}
+
 .login-container::before {
   content: '';
   position: absolute;

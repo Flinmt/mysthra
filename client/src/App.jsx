@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
-import { LogOut, Plus, Globe, Settings, Trash2, Edit3, Key, ShieldCheck, Sparkles, Search, Home, Layers, Layout as LayoutIcon, User } from 'lucide-react'
+import { LogOut, Plus, Globe, Settings, Trash2, Edit3, Key, ShieldCheck, Sparkles, Search, Home, Layers, Layout as LayoutIcon, User, Languages } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  const { t } = useTranslation()
 
   useEffect(() => {
     fetch('/api/auth/verify')
@@ -17,7 +20,7 @@ function App() {
   }, [])
 
   if (isLoading) {
-    return <div className="login-container">Carregando...</div>
+    return <div className="login-container">{t('common.loading')}</div>
   }
 
   return (
@@ -43,6 +46,7 @@ function App() {
 }
 
 function Login({ onLogin }) {
+  const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -63,10 +67,10 @@ function Login({ onLogin }) {
         onLogin()
       } else {
         const data = await res.json()
-        setError(data.error || 'Falha no login')
+        setError(data.error || t('login.failed'))
       }
     } catch (err) {
-      setError('Erro de conexão')
+      setError(t('common.error_connection'))
     } finally {
       setLoading(false)
     }
@@ -74,23 +78,26 @@ function Login({ onLogin }) {
 
   return (
     <div className="login-container">
+      <div className="login-language-wrapper">
+        <LanguageSwitcher />
+      </div>
       <div className="login-card glass-panel">
         <Sparkles size={40} color="var(--accent-color)" style={{ marginBottom: 16 }} />
         <h1>Mysthra</h1>
-        <p>A Forja de Mundos Interativos</p>
+        <p>{t('login.subtitle')}</p>
         
         <form onSubmit={handleSubmit}>
           <div className="input-group">
             <label htmlFor="password">
               <Key size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-              Master Password
+              {t('login.master_password')}
             </label>
             <input 
               id="password"
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Digite sua senha de mestre..."
+              placeholder={t('login.password_placeholder')}
               autoFocus
             />
           </div>
@@ -99,9 +106,9 @@ function Login({ onLogin }) {
           
           <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', marginTop: 8 }}>
             {loading ? (
-              'Autenticando...'
+              t('login.authenticating')
             ) : (
-              <><ShieldCheck size={18} style={{ marginRight: 8 }} /> Entrar no Nexus</>
+              <><ShieldCheck size={18} style={{ marginRight: 8 }} /> {t('login.enter_nexus')}</>
             )}
           </button>
         </form>
@@ -111,6 +118,7 @@ function Login({ onLogin }) {
 }
 
 function Dashboard({ onLogout }) {
+  const { t } = useTranslation()
   const [, setLocation] = useLocation()
   const [worlds, setWorlds] = useState([])
   const [loading, setLoading] = useState(true)
@@ -156,7 +164,7 @@ function Dashboard({ onLogout }) {
         <header className="nexus-header">
           <div className="welcome-msg">
             <h1 className="nexus-title-mysthra">Mysthra</h1>
-            <p>Seus universos estão prontos para serem forjados.</p>
+            <p>{t('dashboard.subtitle')}</p>
           </div>
 
           <div className="nexus-search-group">
@@ -165,13 +173,15 @@ function Dashboard({ onLogout }) {
               <input 
                 type="text" 
                 className="nexus-search-bar"
-                placeholder="Pesquisar universos..." 
+                placeholder={t('dashboard.search_universes')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             
-            <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title="Sair do Nexus">
+            <LanguageSwitcher />
+
+            <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title={t('dashboard.logout_tooltip')}>
               <LogOut size={18} />
             </button>
           </div>
@@ -180,7 +190,7 @@ function Dashboard({ onLogout }) {
         {loading ? (
           <div className="loading-state-dashboard">
             <div className="spinner"></div>
-            <p>Conectando ao Nexus...</p>
+            <p>{t('dashboard.connecting_to_nexus')}</p>
           </div>
         ) : (
           <div className="nexus-grid">
@@ -200,7 +210,7 @@ function Dashboard({ onLogout }) {
                 </div>
                 <div className="nexus-card-content">
                   <h3>{world.displayName || world.name}</h3>
-                  <p>{world.description || 'Um universo em formação.'}</p>
+                  <p>{world.description || t('dashboard.default_world_description')}</p>
                 </div>
               </div>
             ))}
@@ -211,7 +221,7 @@ function Dashboard({ onLogout }) {
                 <div className="plus-circle-nexus">
                   <Plus size={24} />
                 </div>
-                <div style={{ fontWeight: 600 }}>Criar Novo Mundo</div>
+                <div style={{ fontWeight: 600 }}>{t('dashboard.create_new_world')}</div>
               </div>
             )}
           </div>
@@ -257,6 +267,7 @@ function Dashboard({ onLogout }) {
 
 
 function CreateWorldModal({ onClose, onCreated }) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [thumbnailBase64, setThumbnailBase64] = useState(null)
@@ -270,7 +281,7 @@ function CreateWorldModal({ onClose, onCreated }) {
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      setError('Por favor, selecione uma imagem válida.')
+      setError(t('dashboard.invalid_image_error'))
       return
     }
 
@@ -302,10 +313,10 @@ function CreateWorldModal({ onClose, onCreated }) {
         onCreated()
       } else {
         const data = await res.json()
-        setError(data.error || 'Erro ao criar mundo')
+        setError(data.error || t('dashboard.create_world_error'))
       }
     } catch (err) {
-      setError('Erro de conexão')
+      setError(t('common.error_connection'))
     } finally {
       setSaving(false)
     }
@@ -314,32 +325,32 @@ function CreateWorldModal({ onClose, onCreated }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-content glass-panel">
-        <h2>Criar Novo Mundo</h2>
+        <h2>{t('dashboard.create_new_world')}</h2>
         <form onSubmit={handleSubmit}>
           <div className="input-group">
-            <label>Nome do Mundo</label>
+            <label>{t('dashboard.world_name')}</label>
             <input 
               type="text" 
               value={name} 
               onChange={e => setName(e.target.value)} 
-              placeholder="Ex: Faerûn, Arrakis..." 
+              placeholder={t('dashboard.world_name_placeholder')}
               required
               autoFocus
             />
           </div>
           
           <div className="input-group">
-            <label>Descrição Curta</label>
+            <label>{t('dashboard.short_description')}</label>
             <input 
               type="text" 
               value={description} 
               onChange={e => setDescription(e.target.value)} 
-              placeholder="Um universo de fantasia..." 
+              placeholder={t('dashboard.short_description_placeholder')}
             />
           </div>
 
           <div className="input-group">
-            <label>Thumbnail (Imagem de Capa)</label>
+            <label>{t('dashboard.thumbnail_label')}</label>
             <div 
               className="thumbnail-upload-area" 
               onClick={() => fileInputRef.current?.click()}
@@ -347,7 +358,7 @@ function CreateWorldModal({ onClose, onCreated }) {
               {previewUrl ? (
                 <img src={previewUrl} alt="Preview" />
               ) : (
-                <span>Clique para selecionar uma imagem</span>
+                <span>{t('dashboard.click_to_select_image')}</span>
               )}
             </div>
             <input 
@@ -363,10 +374,10 @@ function CreateWorldModal({ onClose, onCreated }) {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Criando...' : 'Criar Mundo'}
+              {saving ? t('common.creating') : t('dashboard.create_world_button')}
             </button>
           </div>
         </form>
@@ -376,6 +387,7 @@ function CreateWorldModal({ onClose, onCreated }) {
 }
 
 function EditWorldModal({ world, onClose, onUpdated }) {
+  const { t } = useTranslation()
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
   const [thumbnailBase64, setThumbnailBase64] = useState(null)
@@ -389,7 +401,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      setError('Por favor, selecione uma imagem válida.')
+      setError(t('dashboard.invalid_image_error'))
       return
     }
 
@@ -421,10 +433,10 @@ function EditWorldModal({ world, onClose, onUpdated }) {
         onUpdated()
       } else {
         const data = await res.json()
-        setError(data.error || 'Erro ao editar mundo')
+        setError(data.error || t('dashboard.create_world_error'))
       }
     } catch (err) {
-      setError('Erro de conexão')
+      setError(t('common.error_connection'))
     } finally {
       setSaving(false)
     }
@@ -433,10 +445,10 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-content glass-panel">
-        <h2>Editar Mundo</h2>
+        <h2>{t('dashboard.edit_world')}</h2>
         <form onSubmit={handleSubmit}>
           <div className="input-group">
-            <label>Nome do Mundo</label>
+            <label>{t('dashboard.world_name')}</label>
             <input 
               type="text" 
               value={name} 
@@ -446,7 +458,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
           </div>
           
           <div className="input-group">
-            <label>Descrição Curta</label>
+            <label>{t('dashboard.short_description')}</label>
             <input 
               type="text" 
               value={description} 
@@ -455,7 +467,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
           </div>
 
           <div className="input-group">
-            <label>Nova Thumbnail (Opcional)</label>
+            <label>{t('dashboard.new_thumbnail_optional')}</label>
             <div 
               className="thumbnail-upload-area" 
               onClick={() => fileInputRef.current?.click()}
@@ -463,7 +475,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
               {previewUrl ? (
                 <img src={previewUrl} alt="Preview" />
               ) : (
-                <span>Clique para selecionar uma imagem</span>
+                <span>{t('dashboard.click_to_select_image')}</span>
               )}
             </div>
             <input 
@@ -479,10 +491,10 @@ function EditWorldModal({ world, onClose, onUpdated }) {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar Alterações'}
+              {saving ? t('common.saving') : t('dashboard.save_changes')}
             </button>
           </div>
         </form>
@@ -492,6 +504,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
 }
 
 function DeleteWorldModal({ world, onClose, onDeleted }) {
+  const { t } = useTranslation()
   const [confirmName, setConfirmName] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
@@ -501,7 +514,7 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
     
     const targetName = world.displayName || world.name
     if (confirmName !== targetName) {
-      setError('O nome digitado não confere.')
+      setError(t('dashboard.name_mismatch_error'))
       return
     }
 
@@ -517,10 +530,10 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
         onDeleted()
       } else {
         const data = await res.json()
-        setError(data.error || 'Erro ao deletar mundo')
+        setError(data.error || t('common.delete_error'))
       }
     } catch (err) {
-      setError('Erro de conexão')
+      setError(t('common.error_connection'))
     } finally {
       setDeleting(false)
     }
@@ -529,13 +542,13 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
   return (
     <div className="modal-backdrop">
       <div className="modal-content glass-panel" style={{ borderColor: 'var(--error-color)' }}>
-        <h2 style={{ color: 'var(--error-color)' }}>Deletar Mundo</h2>
+        <h2 style={{ color: 'var(--error-color)' }}>{t('dashboard.delete_world_title')}</h2>
         <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-          Tem certeza de que deseja deletar o mundo <strong>{world.displayName || world.name}</strong>? Esta ação é irreversível e apagará todas as páginas e imagens permanentemente.
+          {t('dashboard.delete_confirm_msg', { name: world.displayName || world.name })}
         </p>
         <form onSubmit={handleDelete}>
           <div className="input-group">
-            <label>Para confirmar, digite o nome do mundo:</label>
+            <label>{t('dashboard.confirm_name_label')}</label>
             <input 
               type="text" 
               value={confirmName} 
@@ -550,16 +563,39 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={deleting}>
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" style={{ backgroundColor: 'var(--error-color)' }} disabled={deleting || confirmName !== (world.displayName || world.name)}>
-              {deleting ? 'Deletando...' : 'Sim, Deletar Mundo'}
+              {deleting ? t('common.deleting') : t('dashboard.confirm_delete_world')}
             </button>
           </div>
         </form>
       </div>
     </div>
   )
+}
+
+function LanguageSwitcher() {
+  const { i18n } = useTranslation();
+
+  const toggleLanguage = () => {
+    const nextLng = i18n.language === 'pt' ? 'en' : 'pt';
+    i18n.changeLanguage(nextLng);
+  };
+
+  return (
+    <button 
+      className="nexus-icon-btn language-switcher" 
+      onClick={toggleLanguage} 
+      title={i18n.language === 'pt' ? 'Switch to English' : 'Mudar para Português'}
+      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px', minWidth: '60px' }}
+    >
+      <Languages size={18} />
+      <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' }}>
+        {i18n.language}
+      </span>
+    </button>
+  );
 }
 
 export default App

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, MapPin, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2, Upload } from 'lucide-react';
+import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, MapPin, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2, Upload, Languages } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -140,7 +141,7 @@ function MapTreeNode({ node, selectedMap, onSelect, onDelete, onMove, onCreateFo
         {!isVisitor && !isRenaming && (
           <button
             className="node-action-btn"
-            title={isFolder ? "Excluir pasta" : "Excluir mapa"}
+            title={isFolder ? t('workspace.delete_folder') : t('workspace.delete_map')}
             onClick={(event) => {
               event.stopPropagation();
               onDelete(node);
@@ -219,7 +220,7 @@ function MapWorkspace({
           <Map size={18} />
           <div>
             <h2>{mapData.name}</h2>
-            <span>{mapData.pins?.length || 0} pins</span>
+            <span>{mapData.pins?.length || 0} {t('workspace.pins')}</span>
           </div>
         </div>
         {!isVisitor && (
@@ -228,7 +229,7 @@ function MapWorkspace({
             onClick={onTogglePinMode}
             disabled={mapSaving}
           >
-            <MapPin size={16} /> Pin
+            <MapPin size={16} /> {t('workspace.pin_mode')}
           </button>
         )}
       </div>
@@ -253,17 +254,17 @@ function MapWorkspace({
                   {pin.target && <span>{pin.target}</span>}
                   <div className="map-popup-actions">
                     {pin.target && (
-                      <button type="button" onClick={() => onOpenTarget(pin.target)}>
-                        Abrir
-                      </button>
+                        <button type="button" onClick={() => onOpenTarget(pin.target)}>
+                          {t('common.open')}
+                        </button>
                     )}
                     {!isVisitor && (
                       <>
                         <button type="button" onClick={() => onEditPin(pin)}>
-                          Editar
+                          {t('common.edit')}
                         </button>
                         <button type="button" className="danger" onClick={() => onDeletePin(pin.id)}>
-                          Excluir
+                          {t('common.delete')}
                         </button>
                       </>
                     )}
@@ -347,7 +348,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
             className="tree-icon" 
             style={{ color: 'var(--text-secondary)', position: 'relative', cursor: 'pointer' }}
             onClick={(e) => { e.stopPropagation(); !isRenaming && setShowIcons(!showIcons); }}
-            title="Mudar Ícone"
+            title={t('workspace.change_icon')}
           >
             {React.createElement(ICON_MAP[node.icon] || FileText, { size: 14 })}
             
@@ -396,7 +397,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, openPrompt, onIconSele
             <button
               className="node-action-btn"
               onClick={(e) => { e.stopPropagation(); openPrompt(node.path); setIsOpen(true); }}
-              title="Criar"
+              title={t('common.create')}
             >
               <Plus size={14} />
             </button>
@@ -570,7 +571,7 @@ function TemplateTreeNode({ node, onTemplateSelect, onDelete, onMove, onCreateFo
             <button
               className="node-action-btn"
               onClick={(e) => { e.stopPropagation(); onCreateTemplate(node.path); setIsOpen(true); }}
-              title="Criar Template"
+              title={t('workspace.create_template')}
             >
               <Plus size={14} />
             </button>
@@ -618,7 +619,7 @@ function TemplatePreviewCard({ content, name, pos }) {
     >
       <div className="preview-header" style={{ padding: '8px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.2)' }}>
         <FileText size={14} />
-        <span style={{ fontSize: '11px', fontWeight: 'bold' }}>Preview: {name}</span>
+        <span style={{ fontSize: '11px', fontWeight: 'bold' }}>{t('workspace.preview')}: {name}</span>
       </div>
       <div className="preview-body markdown-preview" dangerouslySetInnerHTML={{ __html: html }} style={{ fontSize: '12px', padding: '12px', overflowY: 'auto' }} />
     </div>
@@ -739,7 +740,7 @@ function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreat
             <button
               className="node-action-btn"
               onClick={(e) => { e.stopPropagation(); onCreateFolder(node.path); setIsOpen(true); }}
-              title="Criar"
+              title={t('common.create')}
             >
               <Plus size={14} />
             </button>
@@ -790,6 +791,7 @@ function AssetTreeNode({ node, onAssetSelect, worldId, onDelete, onMove, onCreat
 }
 
 export default function WorldWorkspace({ params }) {
+  const { t, i18n } = useTranslation();
   const worldId = params.id;
   const [, setLocation] = useLocation();
   const isVisitor = useMemo(() => new URLSearchParams(window.location.search).get('view') === 'true', []);
@@ -887,11 +889,11 @@ export default function WorldWorkspace({ params }) {
     const match = findInTree(tree, target, isUid);
 
     if (match) {
-      addToast(`Abrindo: ${match.name}`, 'success');
+      addToast(t('workspace.opening_doc', { name: match.name }), 'success');
       setViewMode('view');
       selectFile(match);
     } else {
-      addToast(`Documento não encontrado para "${target}".`, 'warning');
+      addToast(t('workspace.doc_not_found', { target }), 'warning');
     }
   };
 
@@ -1068,7 +1070,7 @@ export default function WorldWorkspace({ params }) {
 
   const handleCreate = async (parentPath = '') => {
     try {
-      const tempName = `Novo Documento`;
+      const tempName = t('workspace.new_document');
       const path = parentPath ? `${parentPath}/${tempName}` : tempName;
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
         method: 'POST',
@@ -1076,7 +1078,7 @@ export default function WorldWorkspace({ params }) {
         body: JSON.stringify({ path, content: '' })
       });
       
-      if (!res.ok) throw new Error('Erro ao criar');
+      if (!res.ok) throw new Error(t('workspace.error_creating'));
       
       const newDoc = await res.json();
       await loadTree();
@@ -1148,7 +1150,7 @@ export default function WorldWorkspace({ params }) {
       }
     } catch (e) {
       console.error(e);
-      addToast('Erro ao carregar mapas', 'error');
+      addToast(t('workspace.error_loading_maps'), 'error');
     } finally {
       setMapsLoading(false);
     }
@@ -1168,7 +1170,7 @@ export default function WorldWorkspace({ params }) {
     setPinMode(false);
   };
 
-  const saveMap = async (mapData, successMessage = 'Mapa salvo') => {
+  const saveMap = async (mapData, successMessage = t('workspace.map_saved')) => {
     setMapSaving(true);
     try {
       const path = mapData.path.replace(/\.json$/, '');
@@ -1215,14 +1217,14 @@ export default function WorldWorkspace({ params }) {
       addToast('Mapa criado!', 'success');
     } catch (e) {
       console.error(e);
-      addToast(e.message || 'Erro ao criar mapa', 'error');
+      addToast(e.message || t('workspace.error_creating_map'), 'error');
     } finally {
       setMapSaving(false);
     }
   };
 
   const handleCreateMapFolder = async (parentPath = '') => {
-    const name = window.prompt('Nome da pasta:');
+    const name = window.prompt(t('workspace.folder_name_prompt'));
     if (!name) return;
     const folderPath = parentPath ? `${parentPath}/${name}` : name;
     try {
@@ -1264,7 +1266,7 @@ export default function WorldWorkspace({ params }) {
       
       if (res.ok) {
         await loadMaps();
-        addToast('Renomeado!', 'success');
+        addToast(t('workspace.renamed_success'), 'success');
       } else {
         const err = await res.json();
         addToast('Erro ao renomear: ' + (err.error || ''), 'error');
@@ -1285,7 +1287,7 @@ export default function WorldWorkspace({ params }) {
       });
       if (res.ok) {
         await loadMaps();
-        addToast('Movido com sucesso!', 'success');
+        addToast(t('workspace.moved_success'), 'success');
       } else {
         const error = await res.json();
         addToast(error.error || 'Erro ao mover', 'error');
@@ -1299,7 +1301,7 @@ export default function WorldWorkspace({ params }) {
     if (!file) return;
     const isImageFile = file.type.startsWith('image/') || /\.(gif|jpe?g|png|webp)$/i.test(file.name);
     if (!isImageFile) {
-      addToast('Use uma imagem para criar o mapa.', 'warning');
+      addToast(t('workspace.use_image_for_map'), 'warning');
       return;
     }
 
@@ -1314,7 +1316,7 @@ export default function WorldWorkspace({ params }) {
         setNewMapName(file.name.replace(/\.[^/.]+$/, ''));
       }
       await loadMedia();
-      addToast('Imagem do mapa enviada!', 'success');
+      addToast(t('workspace.map_image_uploaded'), 'success');
     } catch (e) {
       console.error(e);
       addToast('Erro ao enviar imagem do mapa', 'error');
@@ -1349,7 +1351,7 @@ export default function WorldWorkspace({ params }) {
 
   const handleSavePin = async () => {
     if (!selectedMap || !pinDraft?.label.trim()) {
-      addToast('Informe um nome para o pin.', 'warning');
+      addToast(t('workspace.pin_name_required'), 'warning');
       return;
     }
 
@@ -1364,7 +1366,7 @@ export default function WorldWorkspace({ params }) {
     const pins = pinDraft.mode === 'edit'
       ? (selectedMap.pins || []).map(item => item.id === pin.id ? pin : item)
       : [...(selectedMap.pins || []), pin];
-    const saved = await saveMap({ ...selectedMap, pins }, 'Pin salvo');
+    const saved = await saveMap({ ...selectedMap, pins }, t('workspace.pin_saved'));
     if (saved) {
       setPinDraft(null);
       setPinMode(false);
@@ -1374,7 +1376,7 @@ export default function WorldWorkspace({ params }) {
   const handleDeletePin = async (pinId) => {
     if (!selectedMap) return;
     const pins = (selectedMap.pins || []).filter(pin => pin.id !== pinId);
-    await saveMap({ ...selectedMap, pins }, 'Pin removido');
+    await saveMap({ ...selectedMap, pins }, t('workspace.pin_removed'));
   };
 
   const handleOpenMapTarget = (targetPath) => {
@@ -1388,7 +1390,7 @@ export default function WorldWorkspace({ params }) {
   };
 
   const handleDeleteMedia = async (filename) => {
-    if (!confirm(`Deseja excluir permanentemente o arquivo ${filename}?`)) return;
+    if (!confirm(t('workspace.confirm_delete_media', { filename }))) return;
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/media/${encodeURIComponent(filename)}`, {
         method: 'DELETE'
@@ -1406,12 +1408,12 @@ export default function WorldWorkspace({ params }) {
       ? `<audio controls src="${item.url}" style="width:100%; margin: 10px 0;"></audio>` 
       : `<img src="${item.url}" alt="${item.name}" style="width: 100%; display: block;">`;
     navigator.clipboard.writeText(code);
-    addToast('Código copiado para a área de transferência!', 'success');
+    addToast(t('workspace.code_copied'), 'success');
   };
 
   const handleCreateMediaFolder = async (parentPath = '') => {
     try {
-      const tempName = 'Nova Pasta';
+      const tempName = t('workspace.new_folder');
       const path = parentPath ? `${parentPath}/${tempName}` : tempName;
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/media/folder`, {
         method: 'POST',
@@ -1459,7 +1461,7 @@ export default function WorldWorkspace({ params }) {
     const parentPathStr = typeof parentPathArg === 'string' ? parentPathArg : "";
     
     if (!nameStr) {
-      addToast('Por favor, informe o nome do template.', 'warning');
+      addToast(t('workspace.template_name_required'), 'warning');
       return;
     }
     
@@ -1480,7 +1482,7 @@ export default function WorldWorkspace({ params }) {
         setShowTemplateSaveModal(false);
         setNewTemplateName('');
         loadTemplates();
-        addToast('Template salvo com sucesso!', 'success');
+        addToast(t('workspace.template_saved'), 'success');
       } else {
         const errorData = await res.json().catch(() => ({}));
         addToast('Erro ao salvar template: ' + (errorData.error || 'Erro no servidor'), 'error');
@@ -1507,7 +1509,7 @@ export default function WorldWorkspace({ params }) {
           editorRef.current.setValue(content);
         }
       } else {
-        addToast('Erro ao carregar template', 'error');
+        addToast(t('workspace.error_loading_template'), 'error');
       }
     } catch (e) {
       console.error(e);
@@ -1518,7 +1520,7 @@ export default function WorldWorkspace({ params }) {
   const handleCreateBlankTemplate = async (parentPathArg = '') => {
     const parentPath = typeof parentPathArg === 'string' ? parentPathArg : "";
     try {
-      const tempName = 'Novo Template';
+      const tempName = t('workspace.new_template');
       const res = await fetch(`/api/templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1528,7 +1530,7 @@ export default function WorldWorkspace({ params }) {
         const newTemplate = await res.json();
         loadTemplates();
         setTimeout(() => setRenamingTemplatePath(newTemplate.path), 100);
-        addToast('Template criado!', 'success');
+        addToast(t('workspace.template_created'), 'success');
       } else {
         const err = await res.json();
         addToast('Erro ao criar template: ' + (err.error || ''), 'error');
@@ -1542,7 +1544,7 @@ export default function WorldWorkspace({ params }) {
   const handleCreateTemplateFolder = async (parentPathArg = '') => {
     const parentPath = typeof parentPathArg === 'string' ? parentPathArg : "";
     try {
-      const tempName = 'Nova Pasta';
+      const tempName = t('workspace.new_folder');
       const path = parentPath ? `${parentPath}/${tempName}` : tempName;
       const res = await fetch(`/api/templates/folder`, {
         method: 'POST',
@@ -1813,7 +1815,7 @@ export default function WorldWorkspace({ params }) {
       if (res.ok) {
         setLastSavedContent(fileContent);
         setSaveStatus('saved');
-        addToast(isSilent ? 'Autosave: Progresso salvo' : (isTemplate ? 'Template salvo com sucesso!' : 'Arquivo salvo com sucesso!'), 'success');
+        addToast(isSilent ? t('workspace.autosave_success') : (isTemplate ? t('workspace.template_saved') : t('workspace.file_saved')), 'success');
       } else {
         const err = await res.json().catch(() => ({}));
         if (!isSilent) {
@@ -2076,21 +2078,21 @@ export default function WorldWorkspace({ params }) {
         <div className="header-left">
           {!isVisitor && (
             <>
-              <button className="icon-btn" onClick={() => setLocation('/')} title="Voltar ao Nexus">
+              <button className="icon-btn" onClick={() => setLocation('/')} title={t('workspace.voltar_dashboard')}>
                 <ArrowLeft size={20} />
               </button>
               <div className="workspace-separator" />
             </>
           )}
-          <h2>{worldData ? worldData.displayName : 'Carregando...'}</h2>
+          <h2>{worldData ? worldData.displayName : t('common.loading')}</h2>
         </div>
         <div className="header-actions">
           {selectedFile && !isVisitor && (
             <div className="save-indicator">
-              {saveStatus === 'saving' && <span className="status-text saving">Salvando...</span>}
-              {saveStatus === 'dirty' && <span className="status-text dirty">Não salvo</span>}
-              {saveStatus === 'saved' && <span className="status-text saved">Salvo</span>}
-              {saveStatus === 'error' && <span className="status-text error">Erro</span>}
+              {saveStatus === 'saving' && <span className="status-text saving">{t('common.saving')}</span>}
+              {saveStatus === 'dirty' && <span className="status-text dirty">{t('workspace.nao_salvo')}</span>}
+              {saveStatus === 'saved' && <span className="status-text saved">{t('workspace.salvo')}</span>}
+              {saveStatus === 'error' && <span className="status-text error">{t('workspace.erro')}</span>}
             </div>
           )}
           
@@ -2100,24 +2102,24 @@ export default function WorldWorkspace({ params }) {
                 className={`btn-secondary ${viewMode === 'view' ? 'active-mode' : ''}`}
                 onClick={() => setViewMode(viewMode === 'edit' ? 'view' : 'edit')}
                 disabled={!selectedFile}
-                title={viewMode === 'edit' ? 'Ver Preview' : 'Voltar ao Editor'}
+                title={viewMode === 'edit' ? t('workspace.ver_preview') : t('workspace.voltar_editor')}
               >
                 {viewMode === 'edit' ? (
-                  <><Eye size={16} style={{ marginRight: 8 }} /> Preview</>
+                  <><Eye size={16} style={{ marginRight: 8 }} /> {t('workspace.preview')}</>
                 ) : (
-                  <><Edit2 size={16} style={{ marginRight: 8 }} /> Editor</>
+                  <><Edit2 size={16} style={{ marginRight: 8 }} /> {t('workspace.editor')}</>
                 )}
               </button>
               <button 
                 className="btn-secondary" 
                 onClick={() => setShowTemplateSaveModal(true)} 
                 disabled={!selectedFile}
-                title="Salvar como Template"
+                title={t('workspace.salvar_template_tooltip')}
               >
-                <Bookmark size={16} style={{ marginRight: 8 }} /> Template
+                <Bookmark size={16} style={{ marginRight: 8 }} /> {t('workspace.template')}
               </button>
               <button className="btn-primary" onClick={() => handleSave()} disabled={saving || !selectedFile}>
-                <Save size={16} style={{ marginRight: 8 }} /> {saving ? 'Salvando...' : 'Salvar'}
+                <Save size={16} style={{ marginRight: 8 }} /> {saving ? t('common.saving') : t('common.save')}
               </button>
             </>
           )}
@@ -2128,11 +2130,25 @@ export default function WorldWorkspace({ params }) {
               const url = new URL(window.location.href);
               url.searchParams.set('view', 'true');
               navigator.clipboard.writeText(url.toString());
-              addToast('Link de visitante copiado!', 'success');
+              addToast(t('workspace.link_visitante_copiado'), 'success');
             }}
-            title="Compartilhar Link de Visitante"
+            title={t('workspace.compartilhar_tooltip')}
           >
-            <Share2 size={16} style={{ marginRight: 8 }} /> Compartilhar
+            <Share2 size={16} style={{ marginRight: 8 }} /> {t('workspace.compartilhar')}
+          </button>
+          
+          <div className="workspace-separator" />
+          
+          <button 
+            className="nexus-icon-btn language-switcher" 
+            onClick={() => i18n.changeLanguage(i18n.language === 'pt' ? 'en' : 'pt')} 
+            title={i18n.language === 'pt' ? 'Switch to English' : 'Mudar para Português'}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', width: 'auto' }}
+          >
+            <Languages size={18} />
+            <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' }}>
+              {i18n.language}
+            </span>
           </button>
         </div>
       </header>
@@ -2145,13 +2161,13 @@ export default function WorldWorkspace({ params }) {
               className={`tab-btn ${sidebarTab === 'project' ? 'active' : ''}`}
               onClick={() => setSidebarTab('project')}
             >
-              <Package size={14} /> Projeto
+              <Package size={14} /> {t('workspace.wiki')}
             </button>
             <button 
               className={`tab-btn ${sidebarTab === 'maps' ? 'active' : ''}`}
               onClick={() => setSidebarTab('maps')}
             >
-              <Map size={14} /> Mapas
+              <Map size={14} /> {t('workspace.maps')}
             </button>
             {!isVisitor && (
               <>
@@ -2159,13 +2175,13 @@ export default function WorldWorkspace({ params }) {
                   className={`tab-btn ${sidebarTab === 'assets' ? 'active' : ''}`}
                   onClick={() => setSidebarTab('assets')}
                 >
-                  <Layers size={14} /> Assets
+                  <Layers size={14} /> {t('workspace.assets')}
                 </button>
                 <button 
                   className={`tab-btn ${sidebarTab === 'templates' ? 'active' : ''}`}
                   onClick={() => setSidebarTab('templates')}
                 >
-                  <Layout size={14} /> Templates
+                  <Layout size={14} /> {t('workspace.templates')}
                 </button>
               </>
             )}
@@ -2178,7 +2194,7 @@ export default function WorldWorkspace({ params }) {
                 <input 
                   type="text" 
                   className="search-input" 
-                  placeholder="Pesquisar..." 
+                  placeholder={t('workspace.search_nodes')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -2187,7 +2203,7 @@ export default function WorldWorkspace({ params }) {
               <div className="sidebar-tree">
                 {filteredTree.length === 0 ? (
                   <div className="empty-state-sidebar">
-                    <p>Nenhum arquivo encontrado.</p>
+                    <p>{t('workspace.no_files_found')}</p>
                   </div>
                 ) : (
                   <FileTree 
@@ -2207,8 +2223,8 @@ export default function WorldWorkspace({ params }) {
 
               {!isVisitor && (
                 <div className="sidebar-footer">
-                  <button className="btn-secondary sidebar-action-btn" title="Criar Documento" onClick={() => handleCreate('')}>
-                    <FilePlus size={16} /> <span className="btn-text">Criar</span>
+                  <button className="btn-secondary sidebar-action-btn" title={t('workspace.create_document')} onClick={() => handleCreate('')}>
+                    <FilePlus size={16} /> <span className="btn-text">{t('common.create')}</span>
                   </button>
                 </div>
               )}
@@ -2222,7 +2238,7 @@ export default function WorldWorkspace({ params }) {
                 <input 
                   type="text" 
                   className="search-input" 
-                  placeholder="Pesquisar..." 
+                  placeholder={t('workspace.search_nodes')}
                   value={mapSearchQuery}
                   onChange={(e) => setMapSearchQuery(e.target.value)}
                 />
@@ -2230,10 +2246,10 @@ export default function WorldWorkspace({ params }) {
 
               <div className="sidebar-tree">
                 {mapsLoading ? (
-                  <div className="loading-state">Carregando mapas...</div>
+                  <div className="loading-state">{t('workspace.loading_maps')}</div>
                 ) : filteredMaps.length === 0 ? (
                   <div className="empty-state-sidebar">
-                    <p>Nenhum mapa encontrado.</p>
+                    <p>{t('workspace.no_maps_found')}</p>
                   </div>
                 ) : (
                   <MapTree
@@ -2255,20 +2271,20 @@ export default function WorldWorkspace({ params }) {
                 <div className="sidebar-footer">
                   <button
                     className="btn-secondary sidebar-action-btn"
-                    title="Criar mapa"
+                    title={t('workspace.create_map')}
                     onClick={() => {
                       loadMedia();
                       setShowMapCreateModal(true);
                     }}
                   >
-                    <Map size={16} /> <span className="btn-text">Mapa</span>
+                    <Map size={16} /> <span className="btn-text">{t('workspace.create_map')}</span>
                   </button>
                   <button 
                     className="btn-secondary sidebar-action-btn"
-                    title="Nova pasta"
+                    title={t('workspace.create_folder')}
                     onClick={() => handleCreateMapFolder()}
                   >
-                    <FolderPlus size={16} /> <span className="btn-text">Pasta</span>
+                    <FolderPlus size={16} /> <span className="btn-text">{t('workspace.folder')}</span>
                   </button>
                 </div>
               )}
@@ -2282,7 +2298,7 @@ export default function WorldWorkspace({ params }) {
                 <input 
                   type="text" 
                   className="search-input" 
-                  placeholder="Pesquisar..." 
+                  placeholder={t('workspace.search_nodes')}
                   value={assetSearchQuery}
                   onChange={(e) => setAssetSearchQuery(e.target.value)}
                 />
@@ -2291,7 +2307,7 @@ export default function WorldWorkspace({ params }) {
               {uploadingProgress !== null && (
                 <div className="upload-progress-container">
                   <div className="upload-progress-bar" style={{ width: `${uploadingProgress}%` }}></div>
-                  <span className="upload-progress-text">Enviando... {uploadingProgress}%</span>
+                  <span className="upload-progress-text">{t('common.uploading')}... {uploadingProgress}%</span>
                 </div>
               )}
 
@@ -2322,10 +2338,10 @@ export default function WorldWorkspace({ params }) {
                 }}
               >
                 {mediaLoading ? (
-                  <div className="loading-state">Carregando assets...</div>
+                  <div className="loading-state">{t('workspace.loading_assets')}</div>
                 ) : filteredAssets.length === 0 ? (
                   <div className="empty-state-sidebar">
-                    <p>Nenhum asset encontrado.</p>
+                    <p>{t('workspace.no_assets_found')}</p>
                   </div>
                 ) : (
                   <AssetTree 
@@ -2349,10 +2365,10 @@ export default function WorldWorkspace({ params }) {
                   title="Upload de Arquivos" 
                   onClick={() => setShowAssetUploadModal(true)}
                 >
-                  <Upload size={16} /> <span className="btn-text">Upload</span>
+                  <Upload size={16} /> <span className="btn-text">{t('workspace.upload_asset')}</span>
                 </button>
-                <button className="btn-secondary sidebar-action-btn" title="Nova Pasta" onClick={() => handleCreateMediaFolder('')}>
-                  <FolderPlus size={16} /> <span className="btn-text">Pasta</span>
+                <button className="btn-secondary sidebar-action-btn" title={t('workspace.create_folder')} onClick={() => handleCreateMediaFolder('')}>
+                  <FolderPlus size={16} /> <span className="btn-text">{t('workspace.folder')}</span>
                 </button>
               </div>
             </>
@@ -2363,7 +2379,7 @@ export default function WorldWorkspace({ params }) {
                   <input 
                     type="text" 
                     className="search-input" 
-                    placeholder="Pesquisar..." 
+                    placeholder={t('workspace.search_nodes')}
                     value={assetSearchQuery}
                     onChange={(e) => setAssetSearchQuery(e.target.value)}
                   />
@@ -2388,10 +2404,10 @@ export default function WorldWorkspace({ params }) {
                   }}
                 >
                   {templatesLoading ? (
-                    <div className="loading-state">Carregando templates...</div>
+                    <div className="loading-state">{t('workspace.loading_templates')}</div>
                   ) : templates.length === 0 ? (
                     <div className="empty-state-sidebar">
-                      <p>Nenhum template encontrado.</p>
+                      <p>{t('workspace.no_templates_found')}</p>
                     </div>
                   ) : (
                     <TemplateTree 
@@ -2410,11 +2426,11 @@ export default function WorldWorkspace({ params }) {
                   )}
                 </div>
                 <div className="sidebar-footer">
-                  <button className="btn-secondary sidebar-action-btn" title="Novo Template" onClick={() => handleCreateBlankTemplate('')}>
-                    <FilePlus size={16} /> <span className="btn-text">Template</span>
+                  <button className="btn-secondary sidebar-action-btn" title={t('workspace.create_template')} onClick={() => handleCreateBlankTemplate('')}>
+                    <FilePlus size={16} /> <span className="btn-text">{t('workspace.create_template')}</span>
                   </button>
-                  <button className="btn-secondary sidebar-action-btn" title="Nova Pasta" onClick={() => handleCreateTemplateFolder('')}>
-                    <FolderPlus size={16} /> <span className="btn-text">Pasta</span>
+                  <button className="btn-secondary sidebar-action-btn" title={t('workspace.create_folder')} onClick={() => handleCreateTemplateFolder('')}>
+                    <FolderPlus size={16} /> <span className="btn-text">{t('workspace.folder')}</span>
                   </button>
                 </div>
               </>
@@ -2439,8 +2455,8 @@ export default function WorldWorkspace({ params }) {
           ) : !selectedFile ? (
             <div className="empty-editor">
               <FolderOpen size={64} style={{ color: 'var(--border-color)', marginBottom: 16 }} />
-              <h2>Selecione um arquivo ou mapa</h2>
-              <p>Crie ou abra um item na barra lateral para começar.</p>
+              <h2>{t('workspace.select_file_or_map')}</h2>
+              <p>{t('workspace.select_file_or_map_hint')}</p>
             </div>
           ) : (
             <>
@@ -2477,10 +2493,10 @@ export default function WorldWorkspace({ params }) {
                         if (res.ok) {
                           const content = await res.text();
                           setFileContent(content);
-                          addToast('Template aplicado!', 'success');
+                          addToast(t('workspace.template_applied'), 'success');
                         }
                       } catch (err) {
-                        addToast('Erro ao aplicar template', 'error');
+                        addToast(t('workspace.error_applying_template'), 'error');
                       }
                     }
                   }}
@@ -2529,19 +2545,19 @@ export default function WorldWorkspace({ params }) {
       {deleteModal.isOpen && deleteModal.node && (
         <div className="modal-backdrop">
           <div className="modal-content glass-panel" style={{ maxWidth: '400px' }}>
-            <h2>Deletar {deleteModal.isAsset ? (deleteModal.node.type === 'folder' ? 'Pasta' : 'Asset') : 'Documento'}</h2>
+            <h2>{t('common.delete')} {deleteModal.isAsset ? (deleteModal.node.type === 'folder' ? t('workspace.folder') : t('workspace.asset')) : t('workspace.document')}</h2>
             <p style={{ marginTop: '16px', lineHeight: '1.5', color: 'var(--text-primary)' }}>
-              Tem certeza que deseja deletar <strong>{deleteModal.node.name}</strong>?
+              {t('workspace.confirm_delete_specific', { name: deleteModal.node.name })}
             </p>
             {deleteModal.node.children && deleteModal.node.children.length > 0 && (
               <p style={{ marginTop: '8px', fontSize: '0.875rem', color: '#f87171' }}>
-                Aviso: Tudo o que estiver dentro desta pasta será apagado permanentemente!
+                {t('workspace.delete_folder_warning')}
               </p>
             )}
             
             <div className="modal-actions" style={{ marginTop: '24px' }}>
-              <button className="btn-secondary" onClick={() => setDeleteModal({ isOpen: false, node: null, isAsset: false, isTemplate: false })}>Cancelar</button>
-              <button className="btn-primary btn-danger" onClick={handleDeleteSubmit}>Deletar</button>
+              <button className="btn-secondary" onClick={() => setDeleteModal({ isOpen: false, node: null, isAsset: false, isTemplate: false })}>{t('common.cancel')}</button>
+              <button className="btn-primary btn-danger" onClick={handleDeleteSubmit}>{t('common.delete')}</button>
             </div>
           </div>
         </div>
@@ -2559,19 +2575,19 @@ export default function WorldWorkspace({ params }) {
                 copyMediaCode(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Copy size={14} /> Copiar Código
+                <Copy size={14} /> {t('workspace.copy_code')}
               </div>
               <div className="context-menu-item" onClick={() => {
                 setRenamingMediaPath(contextMenu.node.path);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Edit2 size={14} /> Renomear
+                <Edit2 size={14} /> {t('common.rename')}
               </div>
               <div className="context-menu-item delete" onClick={() => {
                 handleDeleteMediaNode(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Trash2 size={14} /> Excluir
+                <Trash2 size={14} /> {t('common.delete')}
               </div>
             </>
           ) : contextMenu.isTemplate ? (
@@ -2580,27 +2596,27 @@ export default function WorldWorkspace({ params }) {
                 handleEditTemplate(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Eye size={14} /> Abrir
+                <Eye size={14} /> {t('common.open')}
               </div>
               <div className="context-menu-item" onClick={() => {
                 setRenamingTemplatePath(contextMenu.node.path);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Edit2 size={14} /> Renomear
+                <Edit2 size={14} /> {t('common.rename')}
               </div>
               {contextMenu.node.type === 'folder' && (
                 <div className="context-menu-item" onClick={() => {
                   handleCreateTemplateFolder(contextMenu.node.path);
                   setContextMenu({ visible: false, x: 0, y: 0, node: null });
                 }}>
-                  <FolderPlus size={14} /> Nova Pasta
+                  <FolderPlus size={14} /> {t('workspace.new_folder')}
                 </div>
               )}
               <div className="context-menu-item delete" onClick={() => {
                 handleDeleteTemplate(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Trash2 size={14} /> Excluir
+                <Trash2 size={14} /> {t('common.delete')}
               </div>
             </>
           ) : contextMenu.isMap ? (
@@ -2609,27 +2625,27 @@ export default function WorldWorkspace({ params }) {
                 if (contextMenu.node.type !== 'folder') selectMap(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Eye size={14} /> Abrir
+                <Eye size={14} /> {t('common.open')}
               </div>
               <div className="context-menu-item" onClick={() => {
                 setRenamingMapPath(contextMenu.node.path);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Edit2 size={14} /> Renomear
+                <Edit2 size={14} /> {t('common.rename')}
               </div>
               {contextMenu.node.type === 'folder' && (
                 <div className="context-menu-item" onClick={() => {
                   handleCreateMapFolder(contextMenu.node.path);
                   setContextMenu({ visible: false, x: 0, y: 0, node: null });
                 }}>
-                  <FolderPlus size={14} /> Nova Pasta
+                  <FolderPlus size={14} /> {t('workspace.new_folder')}
                 </div>
               )}
               <div className="context-menu-item delete" onClick={() => {
                 handleDeleteMap(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Trash2 size={14} /> Excluir
+                <Trash2 size={14} /> {t('common.delete')}
               </div>
             </>
           ) : (
@@ -2638,13 +2654,13 @@ export default function WorldWorkspace({ params }) {
                 selectFile(contextMenu.node);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Eye size={14} /> Abrir
+                <Eye size={14} /> {t('common.open')}
               </div>
               <div className="context-menu-item" onClick={() => {
                 setRenamingPath(contextMenu.node.path);
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Edit2 size={14} /> Renomear
+                <Edit2 size={14} /> {t('common.rename')}
               </div>
               {contextMenu.node.type === 'folder' && (
                 <>
@@ -2652,13 +2668,13 @@ export default function WorldWorkspace({ params }) {
                     handleCreate(contextMenu.node.path);
                     setContextMenu({ visible: false, x: 0, y: 0, node: null });
                   }}>
-                    <Plus size={14} /> Novo Documento
+                    <Plus size={14} /> {t('workspace.new_document')}
                   </div>
                   <div className="context-menu-item" onClick={() => {
                     handleCreateFolder(contextMenu.node.path);
                     setContextMenu({ visible: false, x: 0, y: 0, node: null });
                   }}>
-                    <FolderPlus size={14} /> Nova Pasta
+                    <FolderPlus size={14} /> {t('workspace.new_folder')}
                   </div>
                 </>
               )}
@@ -2666,7 +2682,7 @@ export default function WorldWorkspace({ params }) {
                 setDeleteModal({ isOpen: true, node: contextMenu.node, isAsset: false, isTemplate: false });
                 setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Trash2 size={14} /> Excluir
+                <Trash2 size={14} /> {t('common.delete')}
               </div>
             </>
           )}
@@ -2676,20 +2692,20 @@ export default function WorldWorkspace({ params }) {
       {showTemplateSaveModal && (
         <div className="modal-backdrop">
           <div className="modal-content glass-panel">
-            <h2>Salvar como Template</h2>
-            <p>Crie um template a partir do conteúdo atual do editor.</p>
+            <h2>{t('workspace.salvar_como_template')}</h2>
+            <p>{t('workspace.salvar_como_template_hint')}</p>
             <div className="input-group">
-              <label>Nome do Template</label>
+              <label>{t('workspace.template_name')}</label>
               <input 
                 type="text" 
                 value={newTemplateName}
                 onChange={e => setNewTemplateName(e.target.value)}
-                placeholder="Ex: Personagem, Local, etc."
+                placeholder={t('workspace.template_name_placeholder')}
                 autoFocus
               />
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowTemplateSaveModal(false)}>Cancelar</button>
+              <button className="btn-secondary" onClick={() => setShowTemplateSaveModal(false)}>{t('common.cancel')}</button>
               <button 
                 className="btn-primary" 
                 onClick={() => {
@@ -2697,7 +2713,7 @@ export default function WorldWorkspace({ params }) {
                 }} 
                 disabled={!newTemplateName || savingTemplate}
               >
-                {savingTemplate ? 'Salvando...' : 'Salvar Template'}
+                {savingTemplate ? t('common.saving') : t('workspace.save_template')}
               </button>
             </div>
           </div>
@@ -2708,20 +2724,20 @@ export default function WorldWorkspace({ params }) {
       {showMapCreateModal && (
         <div className="modal-backdrop">
           <div className="modal-content glass-panel" style={{ maxWidth: '520px' }}>
-            <h2>Novo Mapa</h2>
-            <p>Envie uma imagem nova ou escolha uma que já esteja nos assets.</p>
+            <h2>{t('workspace.new_map')}</h2>
+            <p>{t('workspace.new_map_hint')}</p>
             <div className="input-group">
-              <label>Nome</label>
+              <label>{t('workspace.name')}</label>
               <input
                 type="text"
                 value={newMapName}
                 onChange={(event) => setNewMapName(event.target.value)}
-                placeholder="Ex: Continente Norte"
+                placeholder={t('workspace.map_name_placeholder')}
                 autoFocus
               />
             </div>
             <div className="input-group">
-              <label>Imagem</label>
+              <label>{t('workspace.image')}</label>
               <div
                 className={`map-upload-dropzone ${newMapImagePath ? 'has-image' : ''}`}
                 onClick={() => mapFileInputRef.current?.click()}
@@ -2753,7 +2769,7 @@ export default function WorldWorkspace({ params }) {
                 ) : (
                   <>
                     <Image size={24} />
-                    <span>Clique ou solte uma imagem aqui</span>
+                    <span>{t('workspace.click_or_drop_image')}</span>
                   </>
                 )}
               </div>
@@ -2762,21 +2778,21 @@ export default function WorldWorkspace({ params }) {
                 value={newMapImagePath}
                 onChange={(event) => setNewMapImagePath(event.target.value)}
               >
-                <option value="">Selecione uma imagem</option>
+                <option value="">{t('workspace.select_image')}</option>
                 {imageAssets.map(asset => (
                   <option key={asset.path} value={asset.path}>{asset.path}</option>
                 ))}
               </select>
-              <p className="field-hint">Uploads feitos aqui são salvos em Assets/maps para poderem ser reutilizados.</p>
+              <p className="field-hint">{t('workspace.map_upload_hint')}</p>
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowMapCreateModal(false)}>Cancelar</button>
+              <button className="btn-secondary" onClick={() => setShowMapCreateModal(false)}>{t('common.cancel')}</button>
               <button
                 className="btn-primary"
                 onClick={handleCreateMap}
                 disabled={mapSaving || !newMapName.trim() || !newMapImagePath}
               >
-                {mapSaving ? 'Criando...' : 'Criar Mapa'}
+                {mapSaving ? t('common.creating') : t('workspace.create_map')}
               </button>
             </div>
           </div>
@@ -2786,8 +2802,8 @@ export default function WorldWorkspace({ params }) {
       {showAssetUploadModal && (
         <div className="modal-backdrop">
           <div className="modal-content glass-panel" style={{ maxWidth: '520px' }}>
-            <h2>Upload de Assets</h2>
-            <p>Selecione arquivos para enviar para o diretório raiz de assets.</p>
+            <h2>{t('workspace.upload_assets')}</h2>
+            <p>{t('workspace.upload_assets_hint')}</p>
             <div 
               className="map-upload-dropzone"
               onClick={() => assetFileInputRef.current?.click()}
@@ -2815,10 +2831,10 @@ export default function WorldWorkspace({ params }) {
                 hidden 
               />
               <Upload size={24} />
-              <span>Clique ou arraste arquivos aqui</span>
+              <span>{t('workspace.click_or_drag_files')}</span>
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowAssetUploadModal(false)}>Fechar</button>
+              <button className="btn-secondary" onClick={() => setShowAssetUploadModal(false)}>{t('common.close')}</button>
             </div>
           </div>
         </div>
@@ -2827,25 +2843,25 @@ export default function WorldWorkspace({ params }) {
       {pinDraft && (
         <div className="modal-backdrop">
           <div className="modal-content glass-panel" style={{ maxWidth: '520px' }}>
-            <h2>{pinDraft.mode === 'edit' ? 'Editar Pin' : 'Novo Pin'}</h2>
+            <h2>{pinDraft.mode === 'edit' ? t('workspace.edit_pin') : t('workspace.new_pin')}</h2>
             <div className="input-group">
-              <label>Nome</label>
+              <label>{t('workspace.name')}</label>
               <input
                 type="text"
                 value={pinDraft.label}
                 onChange={(event) => setPinDraft(prev => ({ ...prev, label: event.target.value }))}
-                placeholder="Ex: Torre de Marfim"
+                placeholder={t('workspace.pin_name_placeholder')}
                 autoFocus
               />
             </div>
             <div className="input-group">
-              <label>Destino</label>
+              <label>{t('workspace.destination')}</label>
               <div className="linked-input-row">
                 <input
                   type="text"
                   value={pinDraft.target}
                   onChange={(event) => setPinDraft(prev => ({ ...prev, target: event.target.value }))}
-                  placeholder="Caminho do documento"
+                  placeholder={t('workspace.doc_path_placeholder')}
                 />
                 <button
                   className="btn-secondary"
@@ -2864,12 +2880,12 @@ export default function WorldWorkspace({ params }) {
                   <Search size={16} />
                 </button>
               </div>
-              <p className="field-hint">Opcional. Use um caminho de documento para o pin abrir a página.</p>
+              <p className="field-hint">{t('workspace.pin_target_hint')}</p>
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setPinDraft(null)}>Cancelar</button>
+              <button className="btn-secondary" onClick={() => setPinDraft(null)}>{t('common.cancel')}</button>
               <button className="btn-primary" onClick={handleSavePin} disabled={mapSaving || !pinDraft.label.trim()}>
-                {mapSaving ? 'Salvando...' : 'Salvar Pin'}
+                {mapSaving ? t('common.saving') : t('workspace.save_pin')}
               </button>
             </div>
           </div>
@@ -2881,14 +2897,14 @@ export default function WorldWorkspace({ params }) {
           <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <Search size={20} className="accent-text" />
-              <h2 style={{ margin: 0 }}>Inserir Wiki-link</h2>
+              <h2 style={{ margin: 0 }}>{t('workspace.insert_wiki_link')}</h2>
             </div>
             
             <div className="search-input-wrapper" style={{ marginBottom: 20 }}>
               <input 
                 type="text" 
                 className="modal-search-input"
-                placeholder="Pesquisar documento..."
+                placeholder={t('workspace.search_doc_placeholder')}
                 value={wikiResolver.query}
                 onChange={e => setWikiResolver(prev => ({ ...prev, query: e.target.value }))}
                 autoFocus
@@ -2912,7 +2928,7 @@ export default function WorldWorkspace({ params }) {
                 if (results.length === 0) {
                   return (
                     <div style={{ padding: '20px', textAlign: 'center', opacity: 0.5 }}>
-                      Nenhum documento encontrado para "{wikiResolver.query}"
+                      {t('workspace.no_doc_found_for', { query: wikiResolver.query })}
                     </div>
                   );
                 }
@@ -2944,11 +2960,11 @@ export default function WorldWorkspace({ params }) {
             </div>
 
             <div className="modal-actions" style={{ marginTop: '20px' }}>
-              <button 
+                <button 
                 className="btn-secondary" 
                 onClick={() => setWikiResolver({ isOpen: false, query: '', name: '', onSelect: null })}
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
             </div>
           </div>
