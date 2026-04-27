@@ -96,6 +96,8 @@ function normalizeMapDefinition(input, current = null, options = {}) {
   return {
     id,
     name,
+    contentType: "map",
+    relationToParent: input?.relationToParent || current?.relationToParent || "tree",
     imagePath,
     pins: normalizePins(input?.pins !== undefined ? input.pins : current?.pins || []),
     createdAt: current?.createdAt || input?.createdAt || now,
@@ -194,7 +196,11 @@ async function readMap(worldName, mapId) {
 async function createMap(worldName, input) {
   await ensureMapsDirectory(worldName);
   const map = normalizeMapDefinition(input);
-  const filePath = getMapFilePath(worldName, map.id);
+  const parentPath = typeof input?.parentPath === "string" && input.parentPath.trim()
+    ? validateRelativePath(input.parentPath)
+    : "";
+  const mapPath = parentPath ? `${parentPath}/${map.id}` : map.id;
+  const filePath = getMapFilePath(worldName, mapPath);
 
   try {
     await fs.access(filePath);
@@ -205,8 +211,13 @@ async function createMap(worldName, input) {
     }
   }
 
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(map, null, 2), "utf8");
-  return map;
+  return {
+    ...map,
+    path: `${mapPath}.json`,
+    type: "map"
+  };
 }
 
 async function updateMap(worldName, mapId, input) {

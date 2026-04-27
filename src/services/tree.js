@@ -25,33 +25,31 @@ async function getFileTree(worldName) {
       if (entry.isDirectory()) {
         const currentRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
         
+        let metadata = {};
         let icon = null;
         let uid = null;
         try {
           const metaPath = path.join(dirPath, entry.name, "metadata.json");
-          let meta = {};
-          let metaExists = false;
           try {
             const metaStr = await fs.readFile(metaPath, "utf-8");
-            meta = JSON.parse(metaStr);
-            metaExists = true;
+            metadata = JSON.parse(metaStr);
           } catch (e) {
             // Meta doesn't exist or is invalid
           }
 
           let changed = false;
-          if (meta.icon) icon = meta.icon;
+          if (metadata.icon) icon = metadata.icon;
           
-          if (meta.uid) {
-            uid = meta.uid;
+          if (metadata.uid) {
+            uid = metadata.uid;
           } else {
             uid = crypto.randomUUID();
-            meta.uid = uid;
+            metadata.uid = uid;
             changed = true;
           }
 
           if (changed) {
-            await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
+            await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
           }
         } catch (e) {
           // ignore error in individual meta reading
@@ -65,6 +63,9 @@ async function getFileTree(worldName) {
           type: "document",
           icon,
           uid,
+          contentType: metadata.contentType || "wiki",
+          relationToParent: metadata.relationToParent || "tree",
+          metadata,
           children
         });
       }
@@ -78,7 +79,23 @@ async function getFileTree(worldName) {
   return walk(pagesDir);
 }
 
-async function createDocument(worldName, docPath, content) {
+async function readDocumentMetadata(pagesDir, safePath) {
+  const metaPath = path.join(pagesDir, safePath, "metadata.json");
+  try {
+    const metaStr = await fs.readFile(metaPath, "utf-8");
+    return JSON.parse(metaStr);
+  } catch (e) {
+    return {};
+  }
+}
+
+async function writeDocumentMetadata(pagesDir, safePath, metadata) {
+  const metaPath = path.join(pagesDir, safePath, "metadata.json");
+  await fs.mkdir(path.dirname(metaPath), { recursive: true });
+  await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
+}
+
+async function createDocument(worldName, docPath, content, metadata = {}) {
   const safeName = validateWorldName(worldName);
   const safePath = validateRelativePath(docPath);
   await ensureWorldStructure(safeName);
@@ -91,12 +108,38 @@ async function createDocument(worldName, docPath, content) {
   const indexPath = path.join(fullDirPath, "index.md");
   await fs.writeFile(indexPath, content || "", "utf-8");
 
-  // Create metadata with a new UID
-  const uid = crypto.randomUUID();
-  const metaPath = path.join(fullDirPath, "metadata.json");
-  await fs.writeFile(metaPath, JSON.stringify({ uid }, null, 2), "utf-8");
+  const currentMeta = await readDocumentMetadata(pagesDir, safePath);
+  const uid = currentMeta.uid || crypto.randomUUID();
+  const nextMeta = {
+    ...currentMeta,
+    ...metadata,
+    uid,
+    contentType: metadata.contentType || currentMeta.contentType || "wiki"
+  };
+  await writeDocumentMetadata(pagesDir, safePath, nextMeta);
   
   return { success: true, path: safePath, uid };
+}
+
+async function createDocumentPlaceholder(worldName, docPath, metadata = {}) {
+  const safeName = validateWorldName(worldName);
+  const safePath = validateRelativePath(docPath);
+  await ensureWorldStructure(safeName);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  const fullDirPath = path.join(pagesDir, safePath);
+  await fs.mkdir(fullDirPath, { recursive: true });
+
+  const currentMeta = await readDocumentMetadata(pagesDir, safePath);
+  const uid = currentMeta.uid || crypto.randomUUID();
+  const nextMeta = {
+    ...currentMeta,
+    ...metadata,
+    uid,
+    contentType: metadata.contentType || currentMeta.contentType || "unset"
+  };
+  await writeDocumentMetadata(pagesDir, safePath, nextMeta);
+
+  return { success: true, path: safePath, uid, metadata: nextMeta };
 }
 
 async function readDocument(worldName, docPath) {
@@ -139,12 +182,18 @@ async function updateDocumentMetadata(worldName, docPath, metadata) {
 async function deleteDocument(worldName, docPath) {
   const safeName = validateWorldName(worldName);
   const safePath = validateRelativePath(docPath);
-  const { pages: pagesDir } = getWorldPaths(safeName);
+  const { pages: pagesDir, maps: mapsDir } = getWorldPaths(safeName);
   
   const fullDirPath = path.join(pagesDir, safePath);
+  console.log(`[Backend] deleteDocument: world=${worldName}, path=${docPath}, fullPath=${fullDirPath}`);
   
   try {
     await fs.rm(fullDirPath, { recursive: true, force: true });
+
+    // Also remove the corresponding maps directory so map tabs don't leave ghosts
+    const mapsPath = path.join(mapsDir, safePath);
+    await fs.rm(mapsPath, { recursive: true, force: true }).catch(() => {});
+
     return { success: true };
   } catch (e) {
     const error = new Error("Failed to delete document");
@@ -156,7 +205,7 @@ async function deleteDocument(worldName, docPath) {
 async function renameDocument(worldName, oldPath, newName) {
   const safeName = validateWorldName(worldName);
   const safeOldPath = validateRelativePath(oldPath);
-  const { pages: pagesDir } = getWorldPaths(safeName);
+  const { pages: pagesDir, maps: mapsDir } = getWorldPaths(safeName);
   
   const parentDir = path.dirname(safeOldPath);
   const newPath = path.join(parentDir, newName);
@@ -166,6 +215,17 @@ async function renameDocument(worldName, oldPath, newName) {
   
   try {
     await fs.rename(fullOldPath, fullNewPath);
+
+    // Also rename the corresponding maps directory so map tabs stay in sync
+    const mapsOldPath = path.join(mapsDir, safeOldPath);
+    const mapsNewPath = path.join(mapsDir, newPath);
+    try {
+      await fs.access(mapsOldPath);
+      await fs.rename(mapsOldPath, mapsNewPath);
+    } catch (_) {
+      // Maps directory doesn't exist for this document — that's fine
+    }
+
     return { success: true, newPath };
   } catch (e) {
     const error = new Error("Failed to rename document");
@@ -195,6 +255,7 @@ async function moveDocument(worldName, sourcePath, targetPath) {
 module.exports = {
   getFileTree,
   createDocument,
+  createDocumentPlaceholder,
   readDocument,
   updateDocumentMetadata,
   deleteDocument,

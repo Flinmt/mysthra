@@ -13,6 +13,7 @@ const media = require("./media");
 const {
   getFileTree,
   createDocument,
+  createDocumentPlaceholder,
   readDocument,
   updateDocumentMetadata,
   deleteDocument,
@@ -34,6 +35,7 @@ module.exports = {
   ...worlds,
   getFileTree,
   createDocument,
+  createDocumentPlaceholder,
   readDocument,
   updateDocumentMetadata,
   deleteDocument,

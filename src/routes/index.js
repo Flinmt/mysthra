@@ -40,6 +40,7 @@ const {
   moveMap,
   getFileTree,
   createDocument,
+  createDocumentPlaceholder,
   readDocument,
   updateDocumentMetadata,
   deleteDocument,
@@ -158,7 +159,7 @@ function getErrorStatusCode(error) {
   if (error.code === "TEMPLATE_NOT_FOUND") {
     return 404;
   }
-  if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL") {
+  if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL" || error.code === "INVALID_PATH") {
     return 400;
   }
   if (error.code === "WORLD_ALREADY_EXISTS") {
@@ -373,7 +374,23 @@ async function router(request, response) {
         const body = await parseJsonBody(request);
         if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
         
-        const result = await createDocument(worldId, body.path, body.content || "");
+        const result = await createDocument(worldId, body.path, body.content || "", body.metadata || {});
+        return sendJson(response, 201, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/placeholder$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
+        
+        const result = await createDocumentPlaceholder(worldId, body.path, body.metadata || {});
         return sendJson(response, 201, result);
       } catch (error) {
         const statusCode = getErrorStatusCode(error);
