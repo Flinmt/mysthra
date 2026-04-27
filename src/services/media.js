@@ -12,7 +12,7 @@ const {
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = Number.MAX_SAFE_INTEGER;
 
 function resolveMediaPath(worldId, relativePath, options = {}) {
   const worldPaths = getWorldPaths(worldId);
@@ -118,6 +118,7 @@ async function handleMediaUpload(worldId, request) {
         resolve({
           url: `/api/worlds/${encodeURIComponent(worldId)}/media/${encodeURIComponent(relativePath)}`,
           filename: finalFilename,
+          path: relativePath,
           type
         });
       } catch (error) {

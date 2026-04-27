@@ -31,6 +31,13 @@ const {
   updateWorld,
   deleteWorld,
   getWorldThumbnail,
+  listMaps,
+  createMap,
+  createMapFolder,
+  readMap,
+  updateMap,
+  deleteMap,
+  moveMap,
   getFileTree,
   createDocument,
   readDocument,
@@ -110,6 +117,17 @@ function getWorldIdFromPath(requestUrl) {
   return null;
 }
 
+function getMapIdFromPath(requestUrl) {
+  const url = getRequestUrl(requestUrl);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length === 5 && pathSegments[0] === "api" && pathSegments[1] === "worlds" && pathSegments[3] === "maps") {
+    return decodeURIComponent(pathSegments[4]);
+  }
+
+  return null;
+}
+
 function getTemplateNameFromPath(requestUrl) {
   const url = getRequestUrl(requestUrl);
   const pathSegments = url.pathname.split("/").filter(Boolean);
@@ -147,6 +165,15 @@ function getErrorStatusCode(error) {
     return 409;
   }
   if (error.code === "WORLD_NOT_FOUND") {
+    return 404;
+  }
+  if (error.code === "INVALID_MAP_INPUT") {
+    return 400;
+  }
+  if (error.code === "MAP_ALREADY_EXISTS") {
+    return 409;
+  }
+  if (error.code === "MAP_NOT_FOUND") {
     return 404;
   }
   if (error.code === "THUMBNAIL_NOT_FOUND") {
@@ -413,6 +440,127 @@ async function router(request, response) {
         if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing sourcePath or targetPath" });
         
         const result = await moveDocument(worldId, body.sourcePath, body.targetPath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+
+        const maps = await listMaps(worldId);
+        return sendJson(response, 200, { items: maps });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+
+        const body = await parseJsonBody(request);
+        const map = await createMap(worldId, body);
+        return sendJson(response, 201, map);
+      } catch (error) {
+        const statusCode = error.code === "INVALID_JSON" ? 400 : getErrorStatusCode(error);
+        const message = error.code === "INVALID_JSON" ? error.message : getErrorMessage(error, statusCode);
+        return sendJson(response, statusCode, { error: message });
+      }
+    }
+
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps\/[^\/]+$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        const mapId = getMapIdFromPath(request.url);
+        if (!worldId || !mapId) return sendJson(response, 400, { error: "Missing world or map id" });
+
+        const map = await readMap(worldId, mapId);
+        return sendJson(response, 200, map);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "PUT" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps\/[^\/]+$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        const mapId = getMapIdFromPath(request.url);
+        if (!worldId || !mapId) return sendJson(response, 400, { error: "Missing world or map id" });
+
+        const body = await parseJsonBody(request);
+        const map = await updateMap(worldId, mapId, body);
+        return sendJson(response, 200, map);
+      } catch (error) {
+        const statusCode = error.code === "INVALID_JSON" ? 400 : getErrorStatusCode(error);
+        const message = error.code === "INVALID_JSON" ? error.message : getErrorMessage(error, statusCode);
+        return sendJson(response, statusCode, { error: message });
+      }
+    }
+
+    if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+
+        const body = await parseJsonBody(request);
+        const { path: mapPath } = body;
+        if (!mapPath) return sendJson(response, 400, { error: "Missing map path" });
+
+        const result = await deleteMap(worldId, mapPath);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps\/[^\/]+$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        const mapId = getMapIdFromPath(request.url);
+        if (!worldId || !mapId) return sendJson(response, 400, { error: "Missing world or map id" });
+
+        const result = await deleteMap(worldId, mapId);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps\/folder$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.path) return sendJson(response, 400, { error: "Missing folder path" });
+        
+        const result = await createMapFolder(worldId, body.path);
+        return sendJson(response, 201, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^\/]+\/maps\/move$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        
+        const body = await parseJsonBody(request);
+        if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing sourcePath or targetPath" });
+        
+        const result = await moveMap(worldId, body.sourcePath, body.targetPath);
         return sendJson(response, 200, result);
       } catch (error) {
         const statusCode = getErrorStatusCode(error);

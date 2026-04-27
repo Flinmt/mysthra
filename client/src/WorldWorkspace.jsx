@@ -1,13 +1,282 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2 } from 'lucide-react';
+import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, MapPin, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2, Upload } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import L from 'leaflet';
+import { ImageOverlay, MapContainer, Marker, Popup, useMapEvents } from 'react-leaflet';
 
 const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
 };
+
+const MAP_BOUNDS = [[0, 0], [100, 100]];
+const leafletPinIcon = L.divIcon({
+  className: 'mysthra-map-pin',
+  html: '<span></span>',
+  iconSize: [26, 32],
+  iconAnchor: [13, 32],
+  popupAnchor: [0, -30]
+});
+
+const isImageAsset = (node) => node?.type === 'image';
+
+function flattenNodes(nodes = [], predicate = () => true) {
+  return nodes.flatMap((node) => {
+    const children = node.children ? flattenNodes(node.children, predicate) : [];
+    return predicate(node) ? [node, ...children] : children;
+  });
+}
+
+function findNodeByPath(nodes = [], targetPath = '') {
+  for (const node of nodes) {
+    if (node.path === targetPath) return node;
+    if (node.children) {
+      const match = findNodeByPath(node.children, targetPath);
+      if (match) return match;
+    }
+  }
+  return null;
+}
+
+function getMapImageUrl(worldId, imagePath) {
+  return `/api/worlds/${encodeURIComponent(worldId)}/media/${encodeURIComponent(imagePath)}`;
+}
+
+function MapClickHandler({ enabled, onAddPin }) {
+  useMapEvents({
+    click(event) {
+      if (!enabled) return;
+      const x = Math.max(0, Math.min(1, event.latlng.lng / 100));
+      const y = Math.max(0, Math.min(1, event.latlng.lat / 100));
+      onAddPin({ x, y });
+    }
+  });
+  return null;
+}
+
+function MapTreeNode({ node, selectedMap, onSelect, onDelete, onMove, onCreateFolder, renamingPath, onRename, onContextMenu, isVisitor, isSearching }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [editValue, setEditValue] = useState(node.name);
+  const isFolder = node.type === 'folder';
+  const isRenaming = renamingPath === node.path;
+  const showChildren = isOpen || isSearching;
+
+  useEffect(() => {
+    if (isRenaming) setEditValue(node.name);
+  }, [isRenaming, node.name]);
+
+  const handleDragStart = (e) => {
+    if (isVisitor) return;
+    e.dataTransfer.setData('mapPath', node.path);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    if (!isVisitor && isFolder) {
+      e.preventDefault();
+      e.currentTarget.classList.add('drag-over');
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.currentTarget.classList.remove('drag-over');
+  };
+
+  const handleDrop = (e) => {
+    if (isVisitor || !isFolder) return;
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const mapPath = e.dataTransfer.getData('mapPath');
+    if (mapPath && mapPath !== node.path) {
+      onMove(mapPath, node.path + '/' + mapPath.split('/').pop());
+    }
+  };
+
+  return (
+    <li className="tree-document">
+      <div 
+        className={`tree-node ${selectedMap?.path === node.path ? 'selected' : ''}`}
+        draggable={!isVisitor && !isRenaming}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onContextMenu={(e) => {
+          if (isVisitor || isRenaming) return;
+          e.preventDefault();
+          onContextMenu(e, node);
+        }}
+        onClick={() => {
+          if (isRenaming) return;
+          if (isFolder) setIsOpen(!isOpen);
+          else onSelect(node);
+        }}
+      >
+        <span className="tree-icon" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
+          {isFolder ? (showChildren ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
+        </span>
+        <span className="tree-icon" style={{ color: isFolder ? 'var(--accent-color)' : 'inherit' }}>
+          {isFolder ? (isOpen ? <FolderOpen size={14} /> : <Folder size={14} />) : <Map size={14} />}
+        </span>
+        {isRenaming ? (
+          <input
+            className="tree-rename-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => onRename(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onRename(node, editValue);
+              else if (e.key === 'Escape') onRename(null);
+            }}
+            autoFocus
+            onFocus={(e) => e.target.select()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="asset-name-tree" style={{ flex: 1 }}>{node.name}</span>
+        )}
+        {!isVisitor && !isRenaming && (
+          <button
+            className="node-action-btn"
+            title={isFolder ? "Excluir pasta" : "Excluir mapa"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(node);
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+      {isFolder && showChildren && node.children && (
+        <ul className="file-tree">
+          {node.children.map(child => (
+            <MapTreeNode 
+              key={child.path} 
+              node={child} 
+              selectedMap={selectedMap} 
+              onSelect={onSelect} 
+              onDelete={onDelete}
+              onMove={onMove}
+              onCreateFolder={onCreateFolder}
+              renamingPath={renamingPath}
+              onRename={onRename}
+              onContextMenu={onContextMenu}
+              isVisitor={isVisitor}
+              isSearching={isSearching}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function MapTree({ maps, selectedMap, onSelect, onDelete, onMove, onCreateFolder, renamingPath, onRename, onContextMenu, isVisitor, isSearching }) {
+  if (!maps || maps.length === 0) return null;
+  return (
+    <ul className="file-tree">
+      {maps.map(node => (
+        <MapTreeNode 
+          key={node.path} 
+          node={node} 
+          selectedMap={selectedMap} 
+          onSelect={onSelect} 
+          onDelete={onDelete}
+          onMove={onMove}
+          onCreateFolder={onCreateFolder}
+          renamingPath={renamingPath}
+          onRename={onRename}
+          onContextMenu={onContextMenu}
+          isVisitor={isVisitor}
+          isSearching={isSearching}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function MapWorkspace({
+  mapData,
+  worldId,
+  isVisitor,
+  pinMode,
+  mapSaving,
+  onTogglePinMode,
+  onAddPin,
+  onEditPin,
+  onDeletePin,
+  onOpenTarget
+}) {
+  const imageUrl = getMapImageUrl(worldId, mapData.imagePath);
+
+  return (
+    <div className="map-workspace">
+      <div className="map-toolbar">
+        <div className="map-title-block">
+          <Map size={18} />
+          <div>
+            <h2>{mapData.name}</h2>
+            <span>{mapData.pins?.length || 0} pins</span>
+          </div>
+        </div>
+        {!isVisitor && (
+          <button
+            className={`btn-secondary ${pinMode ? 'active-mode' : ''}`}
+            onClick={onTogglePinMode}
+            disabled={mapSaving}
+          >
+            <MapPin size={16} /> Pin
+          </button>
+        )}
+      </div>
+
+      <div className={`map-canvas ${pinMode ? 'pin-mode-cursor' : ''}`}>
+        <MapContainer
+          key={`${mapData.id}:${mapData.imagePath}`}
+          crs={L.CRS.Simple}
+          bounds={MAP_BOUNDS}
+          minZoom={-2}
+          maxZoom={4}
+          zoomSnap={0.25}
+          className="leaflet-map"
+        >
+          <ImageOverlay url={imageUrl} bounds={MAP_BOUNDS} />
+          <MapClickHandler enabled={!isVisitor && pinMode} onAddPin={onAddPin} />
+          {(mapData.pins || []).map(pin => (
+            <Marker key={pin.id} position={[pin.y * 100, pin.x * 100]} icon={leafletPinIcon}>
+              <Popup>
+                <div className="map-popup">
+                  <strong>{pin.label}</strong>
+                  {pin.target && <span>{pin.target}</span>}
+                  <div className="map-popup-actions">
+                    {pin.target && (
+                      <button type="button" onClick={() => onOpenTarget(pin.target)}>
+                        Abrir
+                      </button>
+                    )}
+                    {!isVisitor && (
+                      <>
+                        <button type="button" onClick={() => onEditPin(pin)}>
+                          Editar
+                        </button>
+                        <button type="button" className="danger" onClick={() => onDeletePin(pin.id)}>
+                          Excluir
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+      </div>
+    </div>
+  );
+}
 
 function FileTree({ nodes, onFileSelect, selectedFile, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor }) {
   if (!nodes || nodes.length === 0) return null;
@@ -539,7 +808,8 @@ export default function WorldWorkspace({ params }) {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, node: null, isAsset: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
-  const [sidebarTab, setSidebarTab] = useState('project'); // 'project', 'assets', or 'templates'
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [sidebarTab, setSidebarTab] = useState('project'); // 'project', 'assets', 'maps', or 'templates'
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
@@ -548,13 +818,40 @@ export default function WorldWorkspace({ params }) {
   const [uploadingProgress, setUploadingProgress] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [maps, setMaps] = useState([]);
+  const [mapsLoading, setMapsLoading] = useState(false);
+  const [selectedMap, setSelectedMap] = useState(null);
+  const [showMapCreateModal, setShowMapCreateModal] = useState(false);
+  const [newMapName, setNewMapName] = useState('');
+  const [newMapImagePath, setNewMapImagePath] = useState('');
+  const [pinMode, setPinMode] = useState(false);
+  const [pinDraft, setPinDraft] = useState(null);
+  const [mapSaving, setMapSaving] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [wikiResolver, setWikiResolver] = useState({ isOpen: false, query: '', name: '', onSelect: null });
+  const [showAssetUploadModal, setShowAssetUploadModal] = useState(false);
+  const [renamingMapPath, setRenamingMapPath] = useState(null);
   const treeRef = useRef(tree);
+  const mapFileInputRef = useRef(null);
+  const assetFileInputRef = useRef(null);
 
   useEffect(() => {
     treeRef.current = tree;
   }, [tree]);
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (contextMenu.visible) {
+        setContextMenu({ ...contextMenu, visible: false });
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('contextmenu', handleGlobalClick);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('contextmenu', handleGlobalClick);
+    };
+  }, [contextMenu]);
 
   const processWikiLinks = (content) => {
     if (!content) return '';
@@ -592,7 +889,7 @@ export default function WorldWorkspace({ params }) {
     if (match) {
       addToast(`Abrindo: ${match.name}`, 'success');
       setViewMode('view');
-      setSelectedFile(match);
+      selectFile(match);
     } else {
       addToast(`Documento não encontrado para "${target}".`, 'warning');
     }
@@ -822,14 +1119,6 @@ export default function WorldWorkspace({ params }) {
     loadTree();
   }, [worldId]);
 
-  useEffect(() => {
-    if (sidebarTab === 'assets') {
-      loadMedia();
-    } else if (sidebarTab === 'templates') {
-      loadTemplates();
-    }
-  }, [sidebarTab, worldId]);
-
   const loadMedia = async () => {
     setMediaLoading(true);
     try {
@@ -843,6 +1132,259 @@ export default function WorldWorkspace({ params }) {
     } finally {
       setMediaLoading(false);
     }
+  };
+
+  const loadMaps = async () => {
+    setMapsLoading(true);
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps`);
+      if (res.ok) {
+        const data = await res.json();
+        setMaps(data.items || []);
+        setSelectedMap(current => {
+          if (!current) return current;
+          return (data.items || []).find(mapItem => mapItem.id === current.id) || null;
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      addToast('Erro ao carregar mapas', 'error');
+    } finally {
+      setMapsLoading(false);
+    }
+  };
+
+  const selectFile = (node) => {
+    setSelectedMap(null);
+    setPinMode(false);
+    setSelectedFile(node);
+  };
+
+  const selectMap = (mapItem) => {
+    if (!mapItem || mapItem.type === 'folder') return;
+    setSelectedFile(null);
+    setViewMode('view');
+    setSelectedMap(mapItem);
+    setPinMode(false);
+  };
+
+  const saveMap = async (mapData, successMessage = 'Mapa salvo') => {
+    setMapSaving(true);
+    try {
+      const path = mapData.path.replace(/\.json$/, '');
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps/${encodeURIComponent(path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mapData)
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro ao salvar mapa');
+      }
+      const savedMap = await res.json();
+      await loadMaps();
+      setSelectedMap(savedMap);
+      addToast(successMessage, 'success');
+      return savedMap;
+    } catch (e) {
+      console.error(e);
+      addToast(e.message || 'Erro ao salvar mapa', 'error');
+      return null;
+    } finally {
+      setMapSaving(false);
+    }
+  };
+
+  const handleCreateMap = async () => {
+    if (!newMapName.trim() || !newMapImagePath) return;
+    setMapSaving(true);
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newMapName.trim(), imagePath: newMapImagePath })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro ao criar mapa');
+      }
+      await loadMaps();
+      setShowMapCreateModal(false);
+      setNewMapName('');
+      setNewMapImagePath('');
+      addToast('Mapa criado!', 'success');
+    } catch (e) {
+      console.error(e);
+      addToast(e.message || 'Erro ao criar mapa', 'error');
+    } finally {
+      setMapSaving(false);
+    }
+  };
+
+  const handleCreateMapFolder = async (parentPath = '') => {
+    const name = window.prompt('Nome da pasta:');
+    if (!name) return;
+    const folderPath = parentPath ? `${parentPath}/${name}` : name;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps/folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: folderPath })
+      });
+      if (res.ok) {
+        await loadMaps();
+        addToast('Pasta criada!', 'success');
+      } else {
+        const error = await res.json();
+        addToast(error.error || 'Erro ao criar pasta', 'error');
+      }
+    } catch (e) {
+      addToast('Erro ao criar pasta', 'error');
+    }
+  };
+
+  const handleRenameMapSubmit = async (node, newName) => {
+    if (!node || !newName || newName === node.name) {
+      setRenamingMapPath(null);
+      return;
+    }
+    
+    try {
+      const isFolder = node.type === 'folder';
+      const extension = isFolder ? "" : ".json";
+      const oldPath = node.path;
+      const parentPath = oldPath.includes('/') ? oldPath.slice(0, oldPath.lastIndexOf('/')) : '';
+      const newPath = parentPath ? `${parentPath}/${newName}${extension}` : `${newName}${extension}`;
+      
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath: oldPath, targetPath: newPath })
+      });
+      
+      if (res.ok) {
+        await loadMaps();
+        addToast('Renomeado!', 'success');
+      } else {
+        const err = await res.json();
+        addToast('Erro ao renomear: ' + (err.error || ''), 'error');
+      }
+    } catch (e) {
+      addToast('Erro de conexão ao renomear', 'error');
+    } finally {
+      setRenamingMapPath(null);
+    }
+  };
+
+  const handleMoveMap = async (sourcePath, targetPath) => {
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePath, targetPath })
+      });
+      if (res.ok) {
+        await loadMaps();
+        addToast('Movido com sucesso!', 'success');
+      } else {
+        const error = await res.json();
+        addToast(error.error || 'Erro ao mover', 'error');
+      }
+    } catch (e) {
+      addToast('Erro ao mover', 'error');
+    }
+  };
+
+  const handleMapImageUpload = async (file) => {
+    if (!file) return;
+    const isImageFile = file.type.startsWith('image/') || /\.(gif|jpe?g|png|webp)$/i.test(file.name);
+    if (!isImageFile) {
+      addToast('Use uma imagem para criar o mapa.', 'warning');
+      return;
+    }
+
+    try {
+      const uploaded = await handleUpload(file, 'maps', false);
+      const uploadedPath = uploaded?.path || (uploaded?.filename ? `maps/${uploaded.filename}` : '');
+      if (!uploadedPath) {
+        throw new Error('Upload sem caminho retornado');
+      }
+      setNewMapImagePath(uploadedPath);
+      if (!newMapName.trim()) {
+        setNewMapName(file.name.replace(/\.[^/.]+$/, ''));
+      }
+      await loadMedia();
+      addToast('Imagem do mapa enviada!', 'success');
+    } catch (e) {
+      console.error(e);
+      addToast('Erro ao enviar imagem do mapa', 'error');
+    } finally {
+      if (mapFileInputRef.current) {
+        mapFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteMap = (mapItem) => {
+    setDeleteModal({ isOpen: true, node: mapItem, isAsset: false, isTemplate: false, isMap: true });
+  };
+
+  const handleMapPointClick = ({ x, y }) => {
+    setPinDraft({
+      mode: 'create',
+      id: null,
+      label: '',
+      target: '',
+      x,
+      y
+    });
+  };
+
+  const handleEditPin = (pin) => {
+    setPinDraft({
+      mode: 'edit',
+      ...pin
+    });
+  };
+
+  const handleSavePin = async () => {
+    if (!selectedMap || !pinDraft?.label.trim()) {
+      addToast('Informe um nome para o pin.', 'warning');
+      return;
+    }
+
+    const pin = {
+      id: pinDraft.id || crypto.randomUUID(),
+      label: pinDraft.label.trim(),
+      x: pinDraft.x,
+      y: pinDraft.y,
+      target: pinDraft.target.trim(),
+      icon: pinDraft.icon || 'MapPin'
+    };
+    const pins = pinDraft.mode === 'edit'
+      ? (selectedMap.pins || []).map(item => item.id === pin.id ? pin : item)
+      : [...(selectedMap.pins || []), pin];
+    const saved = await saveMap({ ...selectedMap, pins }, 'Pin salvo');
+    if (saved) {
+      setPinDraft(null);
+      setPinMode(false);
+    }
+  };
+
+  const handleDeletePin = async (pinId) => {
+    if (!selectedMap) return;
+    const pins = (selectedMap.pins || []).filter(pin => pin.id !== pinId);
+    await saveMap({ ...selectedMap, pins }, 'Pin removido');
+  };
+
+  const handleOpenMapTarget = (targetPath) => {
+    const match = findNodeByPath(tree, targetPath);
+    if (match) {
+      selectFile(match);
+      setSidebarTab('project');
+      return;
+    }
+    handleWikiLinkNavigation(targetPath, false);
   };
 
   const handleDeleteMedia = async (filename) => {
@@ -900,6 +1442,17 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  useEffect(() => {
+    if (sidebarTab === 'assets') {
+      loadMedia();
+    } else if (sidebarTab === 'maps') {
+      loadMaps();
+      loadMedia();
+    } else if (sidebarTab === 'templates') {
+      loadTemplates();
+    }
+  }, [sidebarTab, worldId]);
+
   const handleSaveTemplate = async (parentPathArg = "") => {
     const nameStr = String(newTemplateName || "");
     const contentStr = String(fileContent || "");
@@ -947,6 +1500,7 @@ export default function WorldWorkspace({ params }) {
       if (res.ok) {
         const content = await res.text();
         setFileContent(content);
+        setSelectedMap(null);
         setSelectedFile({ ...template, isTemplate: true });
         setViewMode('edit');
         if (editorRef.current) {
@@ -1140,6 +1694,17 @@ export default function WorldWorkspace({ params }) {
           method: 'DELETE'
         });
         if (res.ok) loadTemplates();
+      } else if (deleteModal.isMap) {
+        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: deleteModal.node.path })
+        });
+        if (res.ok) {
+          if (selectedMap?.path === deleteModal.node.path) setSelectedMap(null);
+          await loadMaps();
+          addToast(deleteModal.node.type === 'folder' ? 'Pasta excluída' : 'Mapa excluído', 'success');
+        }
       } else {
         const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(deleteModal.node.path)}`, {
           method: 'DELETE'
@@ -1152,11 +1717,13 @@ export default function WorldWorkspace({ params }) {
           setViewMode('edit');
         }
         loadTree();
+        addToast(deleteModal.node.type === 'folder' ? 'Pasta excluída' : 'Documento excluído', 'success');
       }
       
-      setDeleteModal({ isOpen: false, node: null, isAsset: false, isTemplate: false });
+      setDeleteModal({ isOpen: false, node: null, isAsset: false, isTemplate: false, isMap: false });
     } catch (e) {
       console.error(e);
+      addToast('Erro ao excluir', 'error');
     }
   };
 
@@ -1267,11 +1834,6 @@ export default function WorldWorkspace({ params }) {
 
   const handleUpload = async (file, targetFolder = '', insertInEditor = true) => {
     if (!file) return;
-    
-    if (file.size > 20 * 1024 * 1024) {
-      addToast('O arquivo é muito grande. Limite: 20MB', 'warning');
-      return;
-    }
 
     const formData = new FormData();
     formData.append('file', file);
@@ -1438,6 +2000,8 @@ export default function WorldWorkspace({ params }) {
     return filter(mediaFiles);
   }, [mediaFiles, assetSearchQuery]);
 
+  const imageAssets = useMemo(() => flattenNodes(mediaFiles, isImageAsset), [mediaFiles]);
+
   const filteredTemplates = useMemo(() => {
     if (!assetSearchQuery) return templates;
     const filter = (items) => {
@@ -1453,6 +2017,21 @@ export default function WorldWorkspace({ params }) {
     return filter(templates);
   }, [templates, assetSearchQuery]);
 
+  const filteredMaps = useMemo(() => {
+    if (!mapSearchQuery) return maps;
+    const filter = (items) => {
+      return items.reduce((acc, item) => {
+        const matches = item.type === 'map' && item.name.toLowerCase().includes(mapSearchQuery.toLowerCase());
+        const filteredChildren = item.children ? filter(item.children) : null;
+        if (matches || (filteredChildren && filteredChildren.length > 0)) {
+          acc.push({ ...item, children: filteredChildren });
+        }
+        return acc;
+      }, []);
+    };
+    return filter(maps);
+  }, [maps, mapSearchQuery]);
+
   const breadcrumbs = useMemo(() => {
     if (!selectedFile) return [];
     const segments = selectedFile.path.split('/');
@@ -1466,16 +2045,17 @@ export default function WorldWorkspace({ params }) {
     return items;
   }, [selectedFile]);
 
-  const handleContextMenu = (e, node, isAsset = false, isTemplate = false) => {
+  const handleContextMenu = (e, node, isAsset = false, isTemplate = false, isMap = false) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
-      isOpen: true,
+      visible: true,
       x: e.clientX,
       y: e.clientY,
       node,
       isAsset,
-      isTemplate
+      isTemplate,
+      isMap
     });
   };
 
@@ -1560,28 +2140,36 @@ export default function WorldWorkspace({ params }) {
       <div className="workspace-main">
         {/* Sidebar */}
         <aside className="workspace-sidebar glass-panel" style={sidebarStyle}>
-          {!isVisitor && (
-            <div className="sidebar-tabs">
-              <button 
-                className={`tab-btn ${sidebarTab === 'project' ? 'active' : ''}`}
-                onClick={() => setSidebarTab('project')}
-              >
-                <Package size={14} /> Projeto
-              </button>
-              <button 
-                className={`tab-btn ${sidebarTab === 'assets' ? 'active' : ''}`}
-                onClick={() => setSidebarTab('assets')}
-              >
-                <Layers size={14} /> Assets
-              </button>
-              <button 
-                className={`tab-btn ${sidebarTab === 'templates' ? 'active' : ''}`}
-                onClick={() => setSidebarTab('templates')}
-              >
-                <Layout size={14} /> Templates
-              </button>
-            </div>
-          )}
+          <div className="sidebar-tabs">
+            <button 
+              className={`tab-btn ${sidebarTab === 'project' ? 'active' : ''}`}
+              onClick={() => setSidebarTab('project')}
+            >
+              <Package size={14} /> Projeto
+            </button>
+            <button 
+              className={`tab-btn ${sidebarTab === 'maps' ? 'active' : ''}`}
+              onClick={() => setSidebarTab('maps')}
+            >
+              <Map size={14} /> Mapas
+            </button>
+            {!isVisitor && (
+              <>
+                <button 
+                  className={`tab-btn ${sidebarTab === 'assets' ? 'active' : ''}`}
+                  onClick={() => setSidebarTab('assets')}
+                >
+                  <Layers size={14} /> Assets
+                </button>
+                <button 
+                  className={`tab-btn ${sidebarTab === 'templates' ? 'active' : ''}`}
+                  onClick={() => setSidebarTab('templates')}
+                >
+                  <Layout size={14} /> Templates
+                </button>
+              </>
+            )}
+          </div>
 
           {sidebarTab === 'project' && (
             <>
@@ -1604,7 +2192,7 @@ export default function WorldWorkspace({ params }) {
                 ) : (
                   <FileTree 
                     nodes={filteredTree} 
-                    onFileSelect={setSelectedFile} 
+                    onFileSelect={selectFile} 
                     selectedFile={selectedFile} 
                     openPrompt={handleCreate} 
                     onIconSelect={handleIconSelect} 
@@ -1627,7 +2215,67 @@ export default function WorldWorkspace({ params }) {
             </>
           )}
 
-          {sidebarTab === 'assets' && (
+          {sidebarTab === 'maps' && (
+            <>
+              <div className="search-container">
+                <Search size={16} className="search-icon" />
+                <input 
+                  type="text" 
+                  className="search-input" 
+                  placeholder="Pesquisar..." 
+                  value={mapSearchQuery}
+                  onChange={(e) => setMapSearchQuery(e.target.value)}
+                />
+              </div>
+
+              <div className="sidebar-tree">
+                {mapsLoading ? (
+                  <div className="loading-state">Carregando mapas...</div>
+                ) : filteredMaps.length === 0 ? (
+                  <div className="empty-state-sidebar">
+                    <p>Nenhum mapa encontrado.</p>
+                  </div>
+                ) : (
+                  <MapTree
+                    maps={filteredMaps}
+                    selectedMap={selectedMap}
+                    onSelect={selectMap}
+                    onDelete={handleDeleteMap}
+                    onMove={handleMoveMap}
+                    onCreateFolder={handleCreateMapFolder}
+                    renamingPath={renamingMapPath}
+                    onRename={handleRenameMapSubmit}
+                    onContextMenu={(e, node) => handleContextMenu(e, node, false, false, true)}
+                    isVisitor={isVisitor}
+                    isSearching={!!mapSearchQuery}
+                  />
+                )}
+              </div>
+              {!isVisitor && (
+                <div className="sidebar-footer">
+                  <button
+                    className="btn-secondary sidebar-action-btn"
+                    title="Criar mapa"
+                    onClick={() => {
+                      loadMedia();
+                      setShowMapCreateModal(true);
+                    }}
+                  >
+                    <Map size={16} /> <span className="btn-text">Mapa</span>
+                  </button>
+                  <button 
+                    className="btn-secondary sidebar-action-btn"
+                    title="Nova pasta"
+                    onClick={() => handleCreateMapFolder()}
+                  >
+                    <FolderPlus size={16} /> <span className="btn-text">Pasta</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {sidebarTab === 'assets' && !isVisitor && (
             <>
               <div className="search-container">
                 <Search size={16} className="search-icon" />
@@ -1696,12 +2344,19 @@ export default function WorldWorkspace({ params }) {
                 )}
               </div>
               <div className="sidebar-footer">
+                <button 
+                  className="btn-secondary sidebar-action-btn" 
+                  title="Upload de Arquivos" 
+                  onClick={() => setShowAssetUploadModal(true)}
+                >
+                  <Upload size={16} /> <span className="btn-text">Upload</span>
+                </button>
                 <button className="btn-secondary sidebar-action-btn" title="Nova Pasta" onClick={() => handleCreateMediaFolder('')}>
                   <FolderPlus size={16} /> <span className="btn-text">Pasta</span>
                 </button>
               </div>
             </>
-          )}            {sidebarTab === 'templates' && (
+          )}            {sidebarTab === 'templates' && !isVisitor && (
               <>
                 <div className="search-container">
                   <Search size={16} className="search-icon" />
@@ -1768,11 +2423,24 @@ export default function WorldWorkspace({ params }) {
 
         {/* Editor Area */}
         <section className="workspace-editor">
-          {!selectedFile ? (
+          {selectedMap ? (
+            <MapWorkspace
+              mapData={selectedMap}
+              worldId={worldId}
+              isVisitor={isVisitor}
+              pinMode={pinMode}
+              mapSaving={mapSaving}
+              onTogglePinMode={() => setPinMode(prev => !prev)}
+              onAddPin={handleMapPointClick}
+              onEditPin={handleEditPin}
+              onDeletePin={handleDeletePin}
+              onOpenTarget={handleOpenMapTarget}
+            />
+          ) : !selectedFile ? (
             <div className="empty-editor">
               <FolderOpen size={64} style={{ color: 'var(--border-color)', marginBottom: 16 }} />
-              <h2>Selecione um arquivo</h2>
-              <p>Crie ou abra um arquivo na barra lateral para começar a editar.</p>
+              <h2>Selecione um arquivo ou mapa</h2>
+              <p>Crie ou abra um item na barra lateral para começar.</p>
             </div>
           ) : (
             <>
@@ -1782,7 +2450,7 @@ export default function WorldWorkspace({ params }) {
                   <React.Fragment key={bc.path}>
                     <button 
                       className={`breadcrumb-item ${i === breadcrumbs.length - 1 ? 'active' : ''}`}
-                      onClick={() => setSelectedFile({ path: bc.path, name: bc.name })}
+                      onClick={() => selectFile({ path: bc.path, name: bc.name })}
                     >
                       {bc.name}
                     </button>
@@ -1879,99 +2547,132 @@ export default function WorldWorkspace({ params }) {
         </div>
       )}
 
-      {contextMenu.isOpen && (
+      {contextMenu.visible && (
         <div 
-          className="context-menu glass-panel" 
+          className="context-menu glass-panel"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.isAsset ? (
             <>
-              {contextMenu.node.type === 'folder' && (
-                <button className="context-menu-item" onClick={() => {
-                  setContextMenu({ ...contextMenu, isOpen: false });
-                  handleCreateMediaFolder(contextMenu.node.path);
-                }}>
-                  <FolderPlus size={14} /> Nova Pasta
-                </button>
-              )}
-              {contextMenu.node.type !== 'folder' && (
-                <button className="context-menu-item" onClick={() => {
-                  setContextMenu({ ...contextMenu, isOpen: false });
-                  copyMediaCode(contextMenu.node);
-                }}>
-                  <Copy size={14} /> Copiar Código
-                </button>
-              )}
-              <button className="context-menu-item" onClick={() => {
-                const node = contextMenu.node;
-                setContextMenu({ ...contextMenu, isOpen: false });
-                setRenamingMediaPath(node.path);
+              <div className="context-menu-item" onClick={() => {
+                copyMediaCode(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
+              }}>
+                <Copy size={14} /> Copiar Código
+              </div>
+              <div className="context-menu-item" onClick={() => {
+                setRenamingMediaPath(contextMenu.node.path);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
                 <Edit2 size={14} /> Renomear
-              </button>
-              <div className="context-menu-divider" />
-              <button className="context-menu-item danger" onClick={() => {
-                const node = contextMenu.node;
-                setContextMenu({ ...contextMenu, isOpen: false });
-                handleDeleteMediaNode(node);
+              </div>
+              <div className="context-menu-item delete" onClick={() => {
+                handleDeleteMediaNode(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
                 <Trash2 size={14} /> Excluir
-              </button>
+              </div>
             </>
           ) : contextMenu.isTemplate ? (
             <>
-              {contextMenu.node.type === 'folder' && (
-                <button className="context-menu-item" onClick={() => {
-                  setContextMenu({ ...contextMenu, isOpen: false });
-                  handleCreateTemplateFolder(contextMenu.node.path);
-                }}>
-                  <FolderPlus size={14} /> Nova Pasta
-                </button>
-              )}
-              <button className="context-menu-item" onClick={() => {
-                const node = contextMenu.node;
-                setContextMenu({ ...contextMenu, isOpen: false });
-                setRenamingTemplatePath(node.path);
+              <div className="context-menu-item" onClick={() => {
+                handleEditTemplate(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
+              }}>
+                <Eye size={14} /> Abrir
+              </div>
+              <div className="context-menu-item" onClick={() => {
+                setRenamingTemplatePath(contextMenu.node.path);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
                 <Edit2 size={14} /> Renomear
-              </button>
-              <div className="context-menu-divider" />
-              <button className="context-menu-item danger" onClick={() => {
-                const node = contextMenu.node;
-                setContextMenu({ ...contextMenu, isOpen: false });
-                handleDeleteTemplate(node);
+              </div>
+              {contextMenu.node.type === 'folder' && (
+                <div className="context-menu-item" onClick={() => {
+                  handleCreateTemplateFolder(contextMenu.node.path);
+                  setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                }}>
+                  <FolderPlus size={14} /> Nova Pasta
+                </div>
+              )}
+              <div className="context-menu-item delete" onClick={() => {
+                handleDeleteTemplate(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
                 <Trash2 size={14} /> Excluir
-              </button>
+              </div>
+            </>
+          ) : contextMenu.isMap ? (
+            <>
+              <div className="context-menu-item" onClick={() => {
+                if (contextMenu.node.type !== 'folder') selectMap(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
+              }}>
+                <Eye size={14} /> Abrir
+              </div>
+              <div className="context-menu-item" onClick={() => {
+                setRenamingMapPath(contextMenu.node.path);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
+              }}>
+                <Edit2 size={14} /> Renomear
+              </div>
+              {contextMenu.node.type === 'folder' && (
+                <div className="context-menu-item" onClick={() => {
+                  handleCreateMapFolder(contextMenu.node.path);
+                  setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                }}>
+                  <FolderPlus size={14} /> Nova Pasta
+                </div>
+              )}
+              <div className="context-menu-item delete" onClick={() => {
+                handleDeleteMap(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
+              }}>
+                <Trash2 size={14} /> Excluir
+              </div>
             </>
           ) : (
             <>
-              <button className="context-menu-item" onClick={() => {
-                setContextMenu({ ...contextMenu, isOpen: false });
-                handleCreate(contextMenu.node.path);
+              <div className="context-menu-item" onClick={() => {
+                selectFile(contextMenu.node);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
-                <Plus size={14} /> Criar
-              </button>
-              <button className="context-menu-item" onClick={() => {
-                const node = contextMenu.node;
-                setContextMenu({ ...contextMenu, isOpen: false });
-                setRenamingPath(node.path);
+                <Eye size={14} /> Abrir
+              </div>
+              <div className="context-menu-item" onClick={() => {
+                setRenamingPath(contextMenu.node.path);
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
                 <Edit2 size={14} /> Renomear
-              </button>
-              <div className="context-menu-divider" />
-              <button className="context-menu-item danger" onClick={() => {
-                const node = contextMenu.node;
-                setContextMenu({ ...contextMenu, isOpen: false });
-                setDeleteModal({ isOpen: true, node, isAsset: false, isTemplate: false });
+              </div>
+              {contextMenu.node.type === 'folder' && (
+                <>
+                  <div className="context-menu-item" onClick={() => {
+                    handleCreate(contextMenu.node.path);
+                    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                  }}>
+                    <Plus size={14} /> Novo Documento
+                  </div>
+                  <div className="context-menu-item" onClick={() => {
+                    handleCreateFolder(contextMenu.node.path);
+                    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                  }}>
+                    <FolderPlus size={14} /> Nova Pasta
+                  </div>
+                </>
+              )}
+              <div className="context-menu-item delete" onClick={() => {
+                setDeleteModal({ isOpen: true, node: contextMenu.node, isAsset: false, isTemplate: false });
+                setContextMenu({ visible: false, x: 0, y: 0, node: null });
               }}>
                 <Trash2 size={14} /> Excluir
-              </button>
+              </div>
             </>
           )}
         </div>
       )}
+
       {showTemplateSaveModal && (
         <div className="modal-backdrop">
           <div className="modal-content glass-panel">
@@ -1997,6 +2698,178 @@ export default function WorldWorkspace({ params }) {
                 disabled={!newTemplateName || savingTemplate}
               >
                 {savingTemplate ? 'Salvando...' : 'Salvar Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {showMapCreateModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content glass-panel" style={{ maxWidth: '520px' }}>
+            <h2>Novo Mapa</h2>
+            <p>Envie uma imagem nova ou escolha uma que já esteja nos assets.</p>
+            <div className="input-group">
+              <label>Nome</label>
+              <input
+                type="text"
+                value={newMapName}
+                onChange={(event) => setNewMapName(event.target.value)}
+                placeholder="Ex: Continente Norte"
+                autoFocus
+              />
+            </div>
+            <div className="input-group">
+              <label>Imagem</label>
+              <div
+                className={`map-upload-dropzone ${newMapImagePath ? 'has-image' : ''}`}
+                onClick={() => mapFileInputRef.current?.click()}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.currentTarget.classList.add('drag-over');
+                }}
+                onDragLeave={(event) => {
+                  event.currentTarget.classList.remove('drag-over');
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.currentTarget.classList.remove('drag-over');
+                  handleMapImageUpload(event.dataTransfer.files?.[0]);
+                }}
+              >
+                <input
+                  ref={mapFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleMapImageUpload(event.target.files?.[0])}
+                  hidden
+                />
+                {newMapImagePath ? (
+                  <>
+                    <img src={getMapImageUrl(worldId, newMapImagePath)} alt="Preview do mapa" />
+                    <span>{newMapImagePath}</span>
+                  </>
+                ) : (
+                  <>
+                    <Image size={24} />
+                    <span>Clique ou solte uma imagem aqui</span>
+                  </>
+                )}
+              </div>
+              <select
+                className="modal-select"
+                value={newMapImagePath}
+                onChange={(event) => setNewMapImagePath(event.target.value)}
+              >
+                <option value="">Selecione uma imagem</option>
+                {imageAssets.map(asset => (
+                  <option key={asset.path} value={asset.path}>{asset.path}</option>
+                ))}
+              </select>
+              <p className="field-hint">Uploads feitos aqui são salvos em Assets/maps para poderem ser reutilizados.</p>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowMapCreateModal(false)}>Cancelar</button>
+              <button
+                className="btn-primary"
+                onClick={handleCreateMap}
+                disabled={mapSaving || !newMapName.trim() || !newMapImagePath}
+              >
+                {mapSaving ? 'Criando...' : 'Criar Mapa'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAssetUploadModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content glass-panel" style={{ maxWidth: '520px' }}>
+            <h2>Upload de Assets</h2>
+            <p>Selecione arquivos para enviar para o diretório raiz de assets.</p>
+            <div 
+              className="map-upload-dropzone"
+              onClick={() => assetFileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+              onDragLeave={(e) => { e.currentTarget.classList.remove('drag-over'); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                if (e.dataTransfer.files) {
+                  Array.from(e.dataTransfer.files).forEach(file => handleUpload(file, '', false));
+                  setShowAssetUploadModal(false);
+                }
+              }}
+            >
+              <input 
+                ref={assetFileInputRef}
+                type="file" 
+                multiple 
+                onChange={(e) => {
+                  if (e.target.files) {
+                    Array.from(e.target.files).forEach(file => handleUpload(file, '', false));
+                    setShowAssetUploadModal(false);
+                  }
+                }} 
+                hidden 
+              />
+              <Upload size={24} />
+              <span>Clique ou arraste arquivos aqui</span>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowAssetUploadModal(false)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pinDraft && (
+        <div className="modal-backdrop">
+          <div className="modal-content glass-panel" style={{ maxWidth: '520px' }}>
+            <h2>{pinDraft.mode === 'edit' ? 'Editar Pin' : 'Novo Pin'}</h2>
+            <div className="input-group">
+              <label>Nome</label>
+              <input
+                type="text"
+                value={pinDraft.label}
+                onChange={(event) => setPinDraft(prev => ({ ...prev, label: event.target.value }))}
+                placeholder="Ex: Torre de Marfim"
+                autoFocus
+              />
+            </div>
+            <div className="input-group">
+              <label>Destino</label>
+              <div className="linked-input-row">
+                <input
+                  type="text"
+                  value={pinDraft.target}
+                  onChange={(event) => setPinDraft(prev => ({ ...prev, target: event.target.value }))}
+                  placeholder="Caminho do documento"
+                />
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    setWikiResolver({
+                      isOpen: true,
+                      query: pinDraft.target || '',
+                      name: pinDraft.label || '',
+                      onSelect: (selected) => {
+                        setPinDraft(prev => ({ ...prev, target: selected.path }));
+                      }
+                    });
+                  }}
+                >
+                  <Search size={16} />
+                </button>
+              </div>
+              <p className="field-hint">Opcional. Use um caminho de documento para o pin abrir a página.</p>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setPinDraft(null)}>Cancelar</button>
+              <button className="btn-primary" onClick={handleSavePin} disabled={mapSaving || !pinDraft.label.trim()}>
+                {mapSaving ? 'Salvando...' : 'Salvar Pin'}
               </button>
             </div>
           </div>
@@ -2052,7 +2925,7 @@ export default function WorldWorkspace({ params }) {
                       if (wikiResolver.onSelect) {
                         wikiResolver.onSelect(match);
                       } else {
-                        setSelectedFile(match);
+                        selectFile(match);
                         setViewMode('view');
                       }
                       setWikiResolver({ isOpen: false, query: '', name: '', onSelect: null });

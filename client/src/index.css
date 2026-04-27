@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import 'leaflet/dist/leaflet.css';
 
 :root {
   --bg-color: #0b0d11;
@@ -846,7 +847,7 @@ body {
 }
 
 .workspace-sidebar {
-  width: 280px;
+  width: 350px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-color);
@@ -1132,7 +1133,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 2000;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -1609,6 +1610,257 @@ body {
   background: rgba(255, 255, 255, 0.07);
   border-color: var(--accent-color);
   box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
+}
+
+.modal-select {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.modal-select option {
+  color: #0f172a;
+}
+
+.field-hint {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.map-upload-dropzone {
+  width: 100%;
+  min-height: 150px;
+  margin-bottom: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.map-upload-dropzone:hover,
+.map-upload-dropzone.drag-over {
+  border-color: var(--accent-color);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.map-upload-dropzone.has-image {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.map-upload-dropzone img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.map-upload-dropzone span {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linked-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.linked-input-row input {
+  flex: 1;
+}
+
+.linked-input-row .btn-secondary {
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.map-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #121417;
+}
+
+.map-toolbar {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(15, 17, 21, 0.82);
+  backdrop-filter: blur(12px);
+  z-index: 2;
+}
+
+.map-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.map-title-block svg {
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.map-title-block h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-title-block span {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.map-toolbar .btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+}
+
+.map-toolbar .btn-secondary.active-mode {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: var(--accent-color);
+  color: white;
+}
+
+.map-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.leaflet-map {
+  width: 100%;
+  height: 100%;
+  background: #0b0d11;
+}
+
+.pin-mode-cursor, 
+.pin-mode-cursor * {
+  cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z'%3E%3C/path%3E%3Ccircle cx='12' cy='10' r='3'%3E%3C/circle%3E%3C/svg%3E") 16 30, crosshair !important;
+}
+
+.leaflet-container {
+  font-family: 'Inter', sans-serif;
+}
+
+.leaflet-control-attribution {
+  display: none;
+}
+
+.mysthra-map-pin {
+  background: transparent;
+  border: none;
+}
+
+.mysthra-map-pin span {
+  position: relative;
+  display: block;
+  width: 26px;
+  height: 26px;
+  background: var(--accent-color);
+  border: 2px solid white;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45), 0 0 0 4px rgba(139, 92, 246, 0.24);
+}
+
+.mysthra-map-pin span::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: white;
+  top: 7px;
+  left: 7px;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: rgba(18, 20, 24, 0.96);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.leaflet-popup-content {
+  margin: 12px;
+}
+
+.map-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.map-popup strong {
+  font-size: 0.92rem;
+}
+
+.map-popup span {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
+.map-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.map-popup-actions button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 5px 8px;
+}
+
+.map-popup-actions button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.map-popup-actions button.danger {
+  color: #fca5a5;
 }
 
 .accent-text {

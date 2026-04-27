@@ -6,6 +6,7 @@ const WORLD_DIRECTORY_NAMES = Object.freeze({
   entities: "entities",
   relations: "relations",
   themes: "themes",
+  maps: "maps",
   media: "media"
 });
 
@@ -124,6 +125,7 @@ function getWorldPaths(worldName) {
     entities: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.entities),
     relations: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.relations),
     themes: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.themes),
+    maps: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.maps),
     media: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.media)
   };
 }

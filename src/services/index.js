@@ -1,5 +1,6 @@
 const entities = require("./entities");
 const linkResolver = require("./link-resolver");
+const maps = require("./maps");
 const pages = require("./pages");
 const pageOutput = require("./page-output");
 const relations = require("./relations");
@@ -22,6 +23,7 @@ const {
 module.exports = {
   ...entities,
   ...linkResolver,
+  ...maps,
   ...pages,
   ...pageOutput,
   ...relations,
