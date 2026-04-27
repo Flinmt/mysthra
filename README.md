@@ -49,7 +49,7 @@ If you have Docker installed, you can launch Mysthra without even cloning the re
 ```yaml
 services:
   mysthra:
-    build: https://github.com/YOUR_GITHUB_USERNAME/mysthra.git
+    build: https://github.com/Flinmt/mysthra.git
     ports:
       - "3000:3000"
     volumes:
