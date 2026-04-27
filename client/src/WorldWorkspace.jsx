@@ -195,7 +195,7 @@ function MapWorkspace({
           crs={L.CRS.Simple}
           bounds={MAP_BOUNDS}
           minZoom={-2}
-          maxZoom={4}
+          maxZoom={10}
           zoomSnap={0.25}
           className="leaflet-map"
         >
@@ -315,23 +315,35 @@ function ContextTabs({ tabs, onSelect, onAdd, onContextMenu, renamingPath, onRen
 
 function UninitializedFileChooser({ node, onChooseWiki, onChooseMap }) {
   const { t } = useTranslation();
+  const [name, setName] = useState(node?.name || 'Untitled');
 
   return (
     <div className="type-choice-panel">
       <div className="type-choice-header">
         <span className="type-choice-eyebrow">{t('workspace.new_tab')}</span>
-        <h2>{node?.name || 'Untitled'}</h2>
+        <input 
+          className="type-choice-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+          onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onChooseWiki(node, name);
+          }}
+        />
       </div>
       <div className="type-choice-grid">
-        <button className="type-choice-card" onClick={() => onChooseWiki(node)}>
-          <FileText size={28} />
+        <button className="type-choice-card" onClick={() => onChooseWiki(node, name)}>
+          <FileText size={28} className="card-main-icon" />
+          <FileText size={140} className="card-bg-icon" />
           <div>
             <strong>{t('workspace.wiki_page')}</strong>
             <span>{t('workspace.wiki_page_hint')}</span>
           </div>
         </button>
-        <button className="type-choice-card" onClick={() => onChooseMap(node)}>
-          <Map size={28} />
+        <button className="type-choice-card" onClick={() => onChooseMap(node, name)}>
+          <Map size={28} className="card-main-icon" />
+          <Map size={140} className="card-bg-icon" />
           <div>
             <strong>{t('workspace.map')}</strong>
             <span>{t('workspace.map_tab_hint')}</span>
@@ -1151,25 +1163,40 @@ export default function WorldWorkspace({ params }) {
     }, 4000);
   };
 
-  const handleCreate = async (parentPath = '') => {
+  const handleCreate = async (parentPath = '', relationToParent = 'tree') => {
     try {
       const tempName = t('workspace.new_document');
       const path = parentPath ? `${parentPath}/${tempName}` : tempName;
+      
+      // Calcular posição se for aba
+      let position = 0;
+      if (relationToParent === 'tab') {
+        const parentNode = findNodeByPath(unifiedProjectTree, parentPath);
+        if (parentNode && parentNode.children) {
+          const existingTabs = parentNode.children.filter(c => c.metadata?.relationToParent === 'tab');
+          if (existingTabs.length > 0) {
+            position = Math.max(...existingTabs.map(t => t.metadata?.position || 0)) + 1;
+          }
+        }
+      }
+
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, content: '', metadata: { contentType: 'unset' } })
+        body: JSON.stringify({ 
+          path, 
+          content: '', 
+          metadata: { 
+            contentType: 'unset',
+            relationToParent,
+            position
+          } 
+        })
       });
       
       if (!res.ok) throw new Error(t('workspace.error_creating'));
       
-      const newDoc = await res.json();
       await loadTree();
-      
-      // Trigger renaming for the new document
-      setTimeout(() => {
-        setRenamingPath(newDoc.path);
-      }, 100);
     } catch (e) {
       console.error(e);
     }
@@ -1192,11 +1219,14 @@ export default function WorldWorkspace({ params }) {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/tree?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
-        setTree(data.items || []);
+        const items = data.items || [];
+        setTree(items);
+        return items;
       }
     } catch (e) {
       console.error(e);
     }
+    return [];
   };
 
   useEffect(() => {
@@ -1226,12 +1256,14 @@ export default function WorldWorkspace({ params }) {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/maps`);
       if (res.ok) {
         const data = await res.json();
-        setMaps(data.items || []);
+        const items = data.items || [];
+        setMaps(items);
         setSelectedMap(current => {
           if (!current) return current;
-          return flattenNodes(data.items || [], item => item.type === 'map')
+          return flattenNodes(items, item => item.type === 'map')
             .find(mapItem => mapItem.path === current.path || mapItem.id === current.id) || null;
         });
+        return items;
       }
     } catch (e) {
       console.error(e);
@@ -1239,6 +1271,7 @@ export default function WorldWorkspace({ params }) {
     } finally {
       setMapsLoading(false);
     }
+    return [];
   };
 
   const selectFile = (node) => {
@@ -1249,7 +1282,11 @@ export default function WorldWorkspace({ params }) {
       const unifiedNode = findNodeByPath(unifiedProjectTree, node.path);
       const tabChildren = unifiedNode ? getTabChildren(unifiedNode) : [];
       if (tabChildren.length > 0) {
-        const firstTab = tabChildren[0];
+        // Ordenar as abas pela posição antes de selecionar a primeira
+        const sortedTabs = [...tabChildren].sort((a, b) => 
+          (a.metadata?.position || 0) - (b.metadata?.position || 0)
+        );
+        const firstTab = sortedTabs[0];
         if (firstTab.type === 'map') {
           selectMap(firstTab);
           return;
@@ -1291,6 +1328,15 @@ export default function WorldWorkspace({ params }) {
     const tabName = getUniqueChildName(parentNode, t('workspace.new_document'));
     const tabPath = `${parentPath}/${tabName}`;
     
+    // Calcular posição
+    let position = 0;
+    if (parentNode && parentNode.children) {
+      const existingTabs = parentNode.children.filter(c => c.metadata?.relationToParent === 'tab');
+      if (existingTabs.length > 0) {
+        position = Math.max(...existingTabs.map(t => t.metadata?.position || 0)) + 1;
+      }
+    }
+
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/placeholder`, {
         method: 'POST',
@@ -1299,7 +1345,8 @@ export default function WorldWorkspace({ params }) {
           path: tabPath,
           metadata: {
             relationToParent: 'tab',
-            contentType: 'unset'
+            contentType: 'unset',
+            position
           }
         })
       });
@@ -1321,36 +1368,74 @@ export default function WorldWorkspace({ params }) {
         relationToParent: 'tab',
         contentType: 'unset'
       });
-      
-      setTimeout(() => setRenamingPath(finalPath), 100);
     } catch (e) {
       console.error('Error creating tab:', e);
       addToast(e.message || t('workspace.error_creating'), 'error');
     }
   };
 
-  const handleChooseWikiType = async (node) => {
+  const handleChooseWikiType = async (node, customName) => {
     if (!node) return;
+    const finalName = customName || node.name;
+    let currentPath = node.path;
+
     try {
-      // Em vez de transformar o pai, criamos uma aba filha com o mesmo nome
+      // Se o nome foi alterado no painel, renomeamos o placeholder antes de inicializar
+      if (customName && customName !== node.name) {
+        const renameRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/rename`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: node.path, newName: customName })
+        });
+        if (renameRes.ok) {
+          const renameData = await renameRes.json();
+          currentPath = renameData.newPath;
+        }
+      }
+
+      // Se já for uma aba (criada pelo botão +), transformamos ela mesma em Wiki
+      if (node.relationToParent === 'tab') {
+        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            path: currentPath, 
+            metadata: { contentType: 'wiki' } 
+          })
+        });
+        
+        if (!res.ok) throw new Error('Failed to convert tab to wiki');
+        
+        await loadTree();
+        setSelectedFile({ 
+          path: currentPath, 
+          name: finalName, 
+          contentType: 'wiki', 
+          relationToParent: 'tab' 
+        });
+        setViewMode('preview');
+        return;
+      }
+
+      // Se for um documento primário, criamos uma aba filha para desacoplar a pasta
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          path: node.path + '/' + node.name,
+          path: currentPath + '/' + finalName,
           metadata: { relationToParent: 'tab', contentType: 'wiki' }
         })
       });
       
       if (!res.ok) throw new Error('Failed to create initial wiki tab');
       
-      const newTabPath = node.path + '/' + node.name;
+      const newTabPath = currentPath + '/' + finalName;
       await loadTree();
       
       // Selecionamos diretamente a nova aba criada
       setSelectedFile({ 
         path: newTabPath, 
-        name: node.name, 
+        name: finalName, 
         contentType: 'wiki', 
         relationToParent: 'tab' 
       });
@@ -1385,11 +1470,31 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
-  const handleChooseMapType = (node) => {
+  const handleChooseMapType = async (node, customName) => {
     if (!node) return;
-    setPendingMapPlaceholder(node);
-    setNewMapName(node.name || node.path.split('/').pop());
-    openMapCreateModal(getParentPath(node.path));
+    const finalName = customName || node.name;
+    let currentPath = node.path;
+
+    // Se o nome foi alterado, renomeamos antes de abrir o modal de criação
+    if (customName && customName !== node.name) {
+      try {
+        const renameRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/rename`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: node.path, newName: customName })
+        });
+        if (renameRes.ok) {
+          const renameData = await renameRes.json();
+          currentPath = renameData.newPath;
+        }
+      } catch (e) {
+        console.error('Rename failed before map choice:', e);
+      }
+    }
+
+    setPendingMapPlaceholder({ ...node, path: currentPath, name: finalName });
+    setNewMapName(finalName);
+    openMapCreateModal(getParentPath(currentPath));
   };
 
   const saveMap = async (mapData, successMessage = t('workspace.map_saved')) => {
@@ -2018,15 +2123,27 @@ export default function WorldWorkspace({ params }) {
         const isTab = nodeToDelete.relationToParent === 'tab';
         const wasSelected = selectedFile && (selectedFile.path === nodeToDelete.path || selectedFile.path.startsWith(nodeToDelete.path + '/'));
         
-        await loadTree();
-        await loadMaps();
+        const newTree = await loadTree();
+        const newMaps = await loadMaps();
 
         if (wasSelected) {
           if (isTab) {
             const parentPath = getParentPath(nodeToDelete.path);
-            const parentNode = findNodeByPath(unifiedProjectTree, parentPath);
-            if (parentNode) selectFile(parentNode);
-            else setSelectedFile(null);
+            const freshTree = buildUnifiedProjectTree(newTree, newMaps);
+            const parentNode = findNodeByPath(freshTree, parentPath);
+            
+            if (parentNode) {
+              const remainingTabs = getTabChildren(parentNode);
+              if (remainingTabs.length > 0) {
+                // Se ainda houver abas, seleciona a primeira (ou mantém o pai se preferir)
+                selectFile(remainingTabs[0]);
+              } else {
+                // Se era a última aba, volta para a seleção
+                setSelectedFile({ path: parentPath, contentType: 'unset' });
+              }
+            } else {
+              setSelectedFile(null);
+            }
           } else {
             setSelectedFile(null);
             setViewMode('edit');
@@ -2403,7 +2520,9 @@ export default function WorldWorkspace({ params }) {
       }
 
       tabs.push(
-        ...tabChildren.map(child => ({
+        ...tabChildren
+          .sort((a, b) => (a.metadata?.position || 0) - (b.metadata?.position || 0))
+          .map(child => ({
           type: child.type === 'map' ? 'map' : child.contentType === 'unset' ? 'unset' : 'document',
           label: child.type === 'map' ? getMapNodeName(child) : child.name,
           node: child,
@@ -2452,6 +2571,7 @@ export default function WorldWorkspace({ params }) {
   const handleContextMenu = (e, node, isAsset = false, isTemplate = false, isMap = false, isOverview = false) => {
     e.preventDefault();
     e.stopPropagation();
+    const isTab = node.relationToParent === 'tab';
     setContextMenu({
       visible: true,
       x: e.clientX,
@@ -2460,7 +2580,8 @@ export default function WorldWorkspace({ params }) {
       isAsset,
       isTemplate,
       isMap,
-      isOverview
+      isOverview,
+      isTab
     });
   };
 
@@ -2627,7 +2748,7 @@ export default function WorldWorkspace({ params }) {
 
               {!isVisitor && (
                 <div className="sidebar-footer">
-                  <button className="btn-secondary sidebar-action-btn" title={t('workspace.create_document')} onClick={() => handleCreate('')}>
+                  <button className="btn-secondary sidebar-action-btn" title={t('workspace.create_document')} onClick={() => handleCreate('', 'tree')}>
                     <FilePlus size={16} /> <span className="btn-text">{t('common.create')}</span>
                   </button>
                 </div>
@@ -3060,18 +3181,22 @@ export default function WorldWorkspace({ params }) {
                 </div>
               )}
 
-              <div className="context-menu-item" onClick={() => {
-                handleCreate(contextMenu.node.path);
-                setContextMenu({ visible: false, x: 0, y: 0, node: null });
-              }}>
-                <Plus size={14} /> {t('workspace.new_document')}
-              </div>
-              <div className="context-menu-item" onClick={() => {
-                openMapCreateModal(contextMenu.node.path);
-                setContextMenu({ visible: false, x: 0, y: 0, node: null });
-              }}>
-                <Map size={14} /> {t('workspace.create_map')}
-              </div>
+              {!contextMenu.isTab && (
+                <>
+                  <div className="context-menu-item" onClick={() => {
+                    handleCreate(contextMenu.node.path, 'tree');
+                    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                  }}>
+                    <Plus size={14} /> {t('workspace.create_document')}
+                  </div>
+                  <div className="context-menu-item" onClick={() => {
+                    openMapCreateModal(contextMenu.node.path);
+                    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                  }}>
+                    <Map size={14} /> {t('workspace.create_map')}
+                  </div>
+                </>
+              )}
               <div className="context-menu-item delete" onClick={() => {
                 setDeleteModal({ 
                   isOpen: true, 
