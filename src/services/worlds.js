@@ -242,6 +242,41 @@ async function deleteWorld(worldId) {
   }
 }
 
+async function getWorldConfig(worldId) {
+  const safeId = validateWorldName(worldId);
+  const worldRoot = resolveWorldRoot(safeId);
+  const configPath = path.join(worldRoot, "world.json");
+  
+  try {
+    const configContent = await fs.readFile(configPath, "utf-8");
+    return JSON.parse(configContent);
+  } catch (e) {
+    const error = new Error("World config not found");
+    error.code = "CONFIG_NOT_FOUND";
+    throw error;
+  }
+}
+
+async function setHomePage(worldId, homePagePath) {
+  const safeId = validateWorldName(worldId);
+  const worldRoot = resolveWorldRoot(safeId);
+  const configPath = path.join(worldRoot, "world.json");
+  
+  let worldData;
+  try {
+    const configContent = await fs.readFile(configPath, "utf-8");
+    worldData = JSON.parse(configContent);
+  } catch (e) {
+    const error = new Error("World not found");
+    error.code = "WORLD_NOT_FOUND";
+    throw error;
+  }
+
+  worldData.homePage = homePagePath;
+  await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
+  return worldData;
+}
+
 module.exports = {
   listWorlds,
   createWorld,
@@ -251,5 +286,7 @@ module.exports = {
   updateWorld,
   deleteWorld,
   getWorldThumbnail,
-  writeThumbnail
+  writeThumbnail,
+  getWorldConfig,
+  setHomePage
 };

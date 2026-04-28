@@ -51,7 +51,9 @@ const {
   listMedia,
   createMediaFolder,
   moveMedia,
-  deleteMedia
+  deleteMedia,
+  getWorldConfig,
+  setHomePage
 } = require("../services");
 
 function getRequestUrl(requestUrl) {
@@ -690,6 +692,35 @@ async function router(request, response) {
           const statusCode = getErrorStatusCode(error);
           return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
         }
+      }
+    }
+
+    if (pathname.startsWith("/api/worlds/") && request.method === "PUT" && pathname.endsWith("/homepage")) {
+      if (!isAuthenticated(request)) return sendJson(response, 401, { error: "Unauthorized" });
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        const body = await parseJsonBody(request);
+        const data = await setHomePage(worldId, body.homePage);
+        return sendJson(response, 200, data);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (pathname.startsWith("/api/worlds/") && request.method === "GET" && pathname.endsWith("/config")) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        const data = await getWorldConfig(worldId);
+        return sendJson(response, 200, data);
+      } catch (error) {
+        if (error.code === "CONFIG_NOT_FOUND") {
+          return sendJson(response, 200, {});
+        }
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
       }
     }
 

@@ -160,6 +160,11 @@
     "search_doc_placeholder": "Search document...",
     "no_doc_found_for": "No document found for \"{{query}}\"",
     "template_applied": "Template applied!",
-    "error_applying_template": "Error applying template"
+    "error_applying_template": "Error applying template",
+    "set_as_home": "Set as Home",
+    "home_page": "Home Page",
+    "home_defined_success": "Home page defined successfully!",
+    "error_setting_home": "Error setting home page",
+    "map_image_uploaded": "Map image uploaded successfully!"
   }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, MapPin, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2, Upload, Languages, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FolderPlus, FilePlus, Save, Eye, Edit2, Folder, FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, MapPin, Crown, Book, Star, Skull, Tag, Trash2, Search, Image, Music, Copy, ExternalLink, Layers, Package, Layout, Columns, Bookmark, Share2, Upload, Languages, RefreshCw, Home } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 import { marked } from 'marked';
@@ -354,18 +354,18 @@ function UninitializedFileChooser({ node, onChooseWiki, onChooseMap }) {
   );
 }
 
-function FileTree({ nodes, onFileSelect, onMapSelect, selectedFile, selectedMap, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor }) {
+function FileTree({ nodes, onFileSelect, onMapSelect, selectedFile, selectedMap, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor, worldData }) {
   if (!nodes || nodes.length === 0) return null;
   return (
     <ul className="file-tree">
       {nodes.filter(node => isSearching || node.relationToParent !== 'tab').map(node => (
-        <FileTreeNode key={`${node.source || 'wiki'}:${node.path}`} node={node} onFileSelect={onFileSelect} onMapSelect={onMapSelect} selectedFile={selectedFile} selectedMap={selectedMap} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} isVisitor={isVisitor} />
+        <FileTreeNode key={`${node.source || 'wiki'}:${node.path}`} node={node} onFileSelect={onFileSelect} onMapSelect={onMapSelect} selectedFile={selectedFile} selectedMap={selectedMap} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} isVisitor={isVisitor} worldData={worldData} />
       ))}
     </ul>
   );
 }
 
-function FileTreeNode({ node, onFileSelect, onMapSelect, selectedFile, selectedMap, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor }) {
+function FileTreeNode({ node, onFileSelect, onMapSelect, selectedFile, selectedMap, openPrompt, onIconSelect, onContextMenu, renamingPath, onRename, isSearching, isVisitor, worldData }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [showIcons, setShowIcons] = useState(false);
@@ -374,6 +374,7 @@ function FileTreeNode({ node, onFileSelect, onMapSelect, selectedFile, selectedM
   const isMapFolder = node.source === 'map' && node.type === 'folder';
   const isSelected = isMap ? selectedMap?.path === node.path : selectedFile?.path === node.path;
   const isRenaming = renamingPath === node.path;
+  const isHome = worldData?.homePage === node.path;
   const visibleChildren = isSearching ? (node.children || []) : getTreeChildren(node);
   const showChildren = isOpen || isSearching;
   
@@ -479,7 +480,10 @@ function FileTreeNode({ node, onFileSelect, onMapSelect, selectedFile, selectedM
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center' }}>
+              {node.name}
+              {isHome && <Home size={12} style={{ marginLeft: 6, opacity: 0.7 }} className="accent-text" title={t('workspace.home_page')} />}
+            </span>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -494,7 +498,7 @@ function FileTreeNode({ node, onFileSelect, onMapSelect, selectedFile, selectedM
           )}
         </div>
       </div>
-      {showChildren && visibleChildren.length > 0 && <FileTree nodes={visibleChildren} onFileSelect={onFileSelect} onMapSelect={onMapSelect} selectedFile={selectedFile} selectedMap={selectedMap} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} isVisitor={isVisitor} />}
+      {showChildren && visibleChildren.length > 0 && <FileTree nodes={visibleChildren} onFileSelect={onFileSelect} onMapSelect={onMapSelect} selectedFile={selectedFile} selectedMap={selectedMap} openPrompt={openPrompt} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} isSearching={isSearching} isVisitor={isVisitor} worldData={worldData} />}
     </li>
   );
 }
@@ -1230,9 +1234,41 @@ export default function WorldWorkspace({ params }) {
   };
 
   useEffect(() => {
-    setWorldData({ id: worldId, displayName: decodeURIComponent(worldId) });
-    loadTree();
-    loadMaps();
+    const init = async () => {
+      setWorldData({ id: worldId, displayName: decodeURIComponent(worldId) });
+      const [treeItems, mapItems] = await Promise.all([loadTree(), loadMaps()]);
+      
+      // Auto-select Home or First Doc
+      const configRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/config`);
+      let configData = null;
+      if (configRes.ok) {
+        configData = await configRes.json();
+        setWorldData(prev => ({ ...prev, ...configData }));
+      }
+
+      if (treeItems.length > 0) {
+        const firstDoc = (nodes) => {
+          for (const node of nodes) {
+            if (node.type === 'document' && (!node.children || node.children.length === 0)) return node;
+            if (node.children) {
+              const found = firstDoc(node.children);
+              if (found) return found;
+            }
+          }
+          return nodes[0];
+        };
+
+        const homePath = configData?.homePage;
+        const targetNode = homePath ? findNodeByPath(treeItems, homePath) : firstDoc(treeItems);
+        
+        if (targetNode) {
+          const unified = buildUnifiedProjectTree(treeItems, mapItems);
+          selectFile(targetNode, unified, configData);
+          if (isVisitor) setViewMode('view');
+        }
+      }
+    };
+    init();
   }, [worldId]);
 
   const loadMedia = async () => {
@@ -1274,19 +1310,69 @@ export default function WorldWorkspace({ params }) {
     return [];
   };
 
-  const selectFile = (node) => {
+  const handleSetHomePage = async (path) => {
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/homepage`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ homePage: path })
+      });
+      if (res.ok) {
+        setWorldData(prev => ({ ...prev, homePage: path }));
+        addToast(t('workspace.home_defined_success'), 'success');
+      } else {
+        addToast(t('workspace.error_setting_home'), 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      addToast(t('common.error_connection'), 'error');
+    }
+  };
+
+  const handleGoHome = () => {
+    if (!worldData?.homePage) {
+      // Fallback: first document
+      const firstDoc = (nodes) => {
+        for (const node of nodes) {
+          if (node.type === 'document' && (!node.children || node.children.length === 0)) return node;
+          if (node.children) {
+            const found = firstDoc(node.children);
+            if (found) return found;
+          }
+        }
+        return nodes[0];
+      };
+      const home = firstDoc(tree);
+      if (home) selectFile(home);
+      return;
+    }
+
+    const homeNode = findNodeByPath(tree, worldData.homePage);
+    if (homeNode) {
+      selectFile(homeNode);
+      if (isVisitor) setViewMode('view');
+    }
+  };
+
+  const selectFile = (node, treeOverride = null, configOverride = null) => {
+    const currentTree = treeOverride || unifiedProjectTree;
+    const currentConfig = configOverride || worldData;
+
     // If the document is an uninitialized container (root or tree item) with tab children,
     // open the first tab directly instead of showing the type chooser.
     // Tabs themselves should never redirect.
     if (node.contentType === 'unset' && node.relationToParent !== 'tab') {
-      const unifiedNode = findNodeByPath(unifiedProjectTree, node.path);
+      const unifiedNode = findNodeByPath(currentTree, node.path);
       const tabChildren = unifiedNode ? getTabChildren(unifiedNode) : [];
       if (tabChildren.length > 0) {
-        // Ordenar as abas pela posição antes de selecionar a primeira
-        const sortedTabs = [...tabChildren].sort((a, b) => 
-          (a.metadata?.position || 0) - (b.metadata?.position || 0)
-        );
-        const firstTab = sortedTabs[0];
+        // Priorizar a Home se ela for uma das abas, senão usar a posição
+        const homeTab = tabChildren.find(tab => tab.path === currentConfig?.homePage);
+        const sortedTabs = [...tabChildren].sort((a, b) => {
+          if (a.path === currentConfig?.homePage) return -1;
+          if (b.path === currentConfig?.homePage) return 1;
+          return (a.metadata?.position || 0) - (b.metadata?.position || 0);
+        });
+        const firstTab = homeTab || sortedTabs[0];
         if (firstTab.type === 'map') {
           selectMap(firstTab);
           return;
@@ -1667,14 +1753,20 @@ export default function WorldWorkspace({ params }) {
 
     try {
       const uploaded = await handleUpload(file, 'maps', false);
-      const uploadedPath = uploaded?.path || (uploaded?.filename ? `maps/${uploaded.filename}` : '');
+      if (!uploaded) throw new Error('Upload failed - no data returned');
+      
+      const uploadedPath = uploaded.path || (uploaded.filename ? `maps/${uploaded.filename}` : '');
+      
       if (!uploadedPath) {
         throw new Error('Upload sem caminho retornado');
       }
+      
       setNewMapImagePath(uploadedPath);
+      
       if (!newMapName.trim()) {
         setNewMapName(file.name.replace(/\.[^/.]+$/, ''));
       }
+      
       await loadMedia();
       addToast(t('workspace.map_image_uploaded'), 'success');
     } catch (e) {
@@ -2521,7 +2613,11 @@ export default function WorldWorkspace({ params }) {
 
       tabs.push(
         ...tabChildren
-          .sort((a, b) => (a.metadata?.position || 0) - (b.metadata?.position || 0))
+          .sort((a, b) => {
+            if (a.path === worldData?.homePage) return -1;
+            if (b.path === worldData?.homePage) return 1;
+            return (a.metadata?.position || 0) - (b.metadata?.position || 0);
+          })
           .map(child => ({
           type: child.type === 'map' ? 'map' : child.contentType === 'unset' ? 'unset' : 'document',
           label: child.type === 'map' ? getMapNodeName(child) : child.name,
@@ -2546,7 +2642,7 @@ export default function WorldWorkspace({ params }) {
     }
 
     return [];
-  }, [selectedFile, selectedMap, unifiedProjectTree]);
+  }, [selectedFile, selectedMap, unifiedProjectTree, worldData]);
 
   const contextTabParent = useMemo(() => {
     if (selectedFile && !selectedFile.isTemplate) {
@@ -2666,6 +2762,17 @@ export default function WorldWorkspace({ params }) {
           </button>
           
           <div className="workspace-separator" />
+
+          <button 
+            className="nexus-icon-btn language-switcher" 
+            onClick={handleGoHome}
+            title={t('workspace.home_page')}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', width: 'auto' }}
+          >
+            <Home size={18} />
+          </button>
+          
+          <div className="workspace-separator" />
           
           <button 
             className="nexus-icon-btn language-switcher" 
@@ -2742,6 +2849,7 @@ export default function WorldWorkspace({ params }) {
                     onRename={handleRenameSubmit}
                     isSearching={!!searchQuery}
                     isVisitor={isVisitor}
+                    worldData={worldData}
                   />
                 )}
               </div>
@@ -3209,6 +3317,18 @@ export default function WorldWorkspace({ params }) {
               }}>
                 <Trash2 size={14} /> {t('common.delete')}
               </div>
+              
+              {!isVisitor && contextMenu.node.type === 'document' && (
+                <>
+                  <div className="context-menu-divider" />
+                  <div className="context-menu-item" onClick={() => {
+                    handleSetHomePage(contextMenu.node.path);
+                    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+                  }}>
+                    <Home size={14} /> {t('workspace.set_as_home')}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
