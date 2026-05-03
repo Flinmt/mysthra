@@ -1249,11 +1249,14 @@ export default function WorldWorkspace({ params }) {
       if (treeItems.length > 0) {
         const firstDoc = (nodes) => {
           for (const node of nodes) {
-            if (node.type === 'document' && (!node.children || node.children.length === 0)) return node;
+            if (node.type === 'document' && (!isVisitor || node.contentType !== 'unset') && (!node.children || node.children.length === 0)) return node;
             if (node.children) {
               const found = firstDoc(node.children);
-              if (found) return found;
+              if (found && (!isVisitor || found.contentType !== 'unset')) return found;
             }
+          }
+          for (const node of nodes) {
+            if (node.type === 'document' && (!node.children || node.children.length === 0)) return node;
           }
           return nodes[0];
         };
@@ -1334,11 +1337,14 @@ export default function WorldWorkspace({ params }) {
       // Fallback: first document
       const firstDoc = (nodes) => {
         for (const node of nodes) {
-          if (node.type === 'document' && (!node.children || node.children.length === 0)) return node;
+          if (node.type === 'document' && (!isVisitor || node.contentType !== 'unset') && (!node.children || node.children.length === 0)) return node;
           if (node.children) {
             const found = firstDoc(node.children);
-            if (found) return found;
+            if (found && (!isVisitor || found.contentType !== 'unset')) return found;
           }
+        }
+        for (const node of nodes) {
+          if (node.type === 'document' && (!node.children || node.children.length === 0)) return node;
         }
         return nodes[0];
       };
@@ -1363,7 +1369,9 @@ export default function WorldWorkspace({ params }) {
     // Tabs themselves should never redirect.
     if (node.contentType === 'unset' && node.relationToParent !== 'tab') {
       const unifiedNode = findNodeByPath(currentTree, node.path);
-      const tabChildren = unifiedNode ? getTabChildren(unifiedNode) : [];
+      const rawTabChildren = unifiedNode ? getTabChildren(unifiedNode) : [];
+      const tabChildren = isVisitor ? rawTabChildren.filter(tab => tab.contentType !== 'unset') : rawTabChildren;
+      
       if (tabChildren.length > 0) {
         // Priorizar a Home se ela for uma das abas, senão usar a posição
         const homeTab = tabChildren.find(tab => tab.path === currentConfig?.homePage);
@@ -2242,6 +2250,10 @@ export default function WorldWorkspace({ params }) {
           }
         }
 
+        if (worldData?.homePage && (nodeToDelete.path === worldData.homePage || worldData.homePage.startsWith(nodeToDelete.path + '/'))) {
+          await handleSetHomePage("");
+        }
+
         if (selectedMap && (selectedMap.path === nodeToDelete.path || selectedMap.path.startsWith(nodeToDelete.path + '/'))) {
           setSelectedMap(null);
         }
@@ -2512,7 +2524,28 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
-  const unifiedProjectTree = useMemo(() => buildUnifiedProjectTree(tree, maps), [tree, maps]);
+  const unifiedProjectTree = useMemo(() => {
+    const fullTree = buildUnifiedProjectTree(tree, maps);
+    if (!isVisitor) return fullTree;
+    
+    const filterUnset = (nodes) => {
+      const filtered = [];
+      for (const n of nodes) {
+        const filteredChildren = n.children ? filterUnset(n.children) : undefined;
+        const hasValidChildren = filteredChildren && filteredChildren.length > 0;
+        
+        // Mantém o nó se ele estiver inicializado OU se possuir filhos válidos
+        if (n.contentType !== 'unset' || hasValidChildren) {
+          filtered.push({
+            ...n,
+            children: filteredChildren
+          });
+        }
+      }
+      return filtered;
+    };
+    return filterUnset(fullTree);
+  }, [tree, maps, isVisitor]);
 
   const filteredTree = useMemo(() => {
     if (!searchQuery) return unifiedProjectTree;
@@ -3076,11 +3109,17 @@ export default function WorldWorkspace({ params }) {
               )}
 
               {selectedFile.contentType === 'unset' ? (
-                <UninitializedFileChooser
-                  node={selectedFile}
-                  onChooseWiki={handleChooseWikiType}
-                  onChooseMap={handleChooseMapType}
-                />
+                isVisitor ? (
+                  <div className="empty-state-sidebar" style={{ marginTop: '10vh' }}>
+                    <p>{t('workspace.document_unavailable', 'This document is unavailable or not yet initialized.')}</p>
+                  </div>
+                ) : (
+                  <UninitializedFileChooser
+                    node={selectedFile}
+                    onChooseWiki={handleChooseWikiType}
+                    onChooseMap={handleChooseMapType}
+                  />
+                )
               ) : viewMode === 'edit' ? (
                 <div 
                   className="editor-main-wrapper"
@@ -3322,10 +3361,18 @@ export default function WorldWorkspace({ params }) {
                 <>
                   <div className="context-menu-divider" />
                   <div className="context-menu-item" onClick={() => {
-                    handleSetHomePage(contextMenu.node.path);
+                    if (contextMenu.node.path === worldData?.homePage) {
+                      handleSetHomePage("");
+                    } else {
+                      handleSetHomePage(contextMenu.node.path);
+                    }
                     setContextMenu({ visible: false, x: 0, y: 0, node: null });
                   }}>
-                    <Home size={14} /> {t('workspace.set_as_home')}
+                    {contextMenu.node.path === worldData?.homePage ? (
+                      <><Home size={14} /> {t('workspace.unset_as_home')}</>
+                    ) : (
+                      <><Home size={14} /> {t('workspace.set_as_home')}</>
+                    )}
                   </div>
                 </>
               )}

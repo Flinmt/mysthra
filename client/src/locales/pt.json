@@ -162,9 +162,11 @@
     "template_applied": "Template aplicado!",
     "error_applying_template": "Erro ao aplicar template",
     "set_as_home": "Definir como Home",
+    "unset_as_home": "Remover Home",
     "home_page": "Página Inicial",
     "home_defined_success": "Página inicial definida com sucesso!",
     "error_setting_home": "Erro ao definir página inicial",
+    "document_unavailable": "Este documento está indisponível ou ainda não foi inicializado.",
     "map_image_uploaded": "Imagem do mapa enviada com sucesso!"
   }
 }
