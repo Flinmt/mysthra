@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Save, Eye, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, Unlock, MoveVertical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -18,7 +18,7 @@ function getTreeChildren(node) {
 
 function getTabsForNode(node) {
   // Retorna apenas filhos que são tabs para o Workspace
-  return (node.children || []).filter(child => child.type === 'tab');
+  return (node?.children || []).filter(child => child.type === 'tab');
 }
 
 function findNodeByPath(nodes = [], targetPath = '') {
@@ -517,20 +517,33 @@ export default function WorldWorkspace({ params }) {
   const [worldData, setWorldData] = useState(null);
   const [isVisitor, setIsVisitor] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [saveStatus, setSaveStatus] = useState('saved');
   const assetFileInputRef = useRef(null);
+  const coverFileInputRef = useRef(null);
   
   // Modals/UI State
   const [prompt, setPrompt] = useState({ isOpen: false, parentPath: '', name: '', type: 'container', contentType: 'wiki' });
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
+  const [tabContextMenu, setTabContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
   const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
+  const [tabIconPicker, setTabIconPicker] = useState({ isOpen: false, top: 0, left: 0 });
   const [renamingPath, setRenamingPath] = useState(null);
   const [assetRenamingPath, setAssetRenamingPath] = useState(null);
+  const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
+  const [pageTitleEdit, setPageTitleEdit] = useState({ isEditing: false, value: '' });
+  const [tabCreationPanel, setTabCreationPanel] = useState({ isOpen: false, name: '', contentType: 'wiki' });
+  const [isRepositioningCover, setIsRepositioningCover] = useState(false);
   const assetUploadTargetPathRef = useRef('');
+  const latestContentRef = useRef('');
+  const latestTabPathRef = useRef('');
+  const skipTitleRenameRef = useRef(false);
+  const coverDragRef = useRef({ isDragging: false, startY: 0, startPosition: 50, currentPosition: 50, frame: null });
+  const [coverUploading, setCoverUploading] = useState(false);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -581,9 +594,66 @@ export default function WorldWorkspace({ params }) {
   }, [addToast, t, worldId]);
 
   useEffect(() => {
+    latestContentRef.current = fileContent;
+    latestTabPathRef.current = activeTab?.path || '';
+  }, [activeTab, fileContent]);
+
+  const saveDocument = useCallback(async (silent = true) => {
+    if (!activeTab || isVisitor) return false;
+    const savedPath = activeTab.path;
+    const savedContent = fileContent;
+    setSaveStatus('saving');
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: savedPath,
+          content: savedContent
+        })
+      });
+
+      if (!res.ok) {
+        setSaveStatus('error');
+        if (!silent) addToast(t('common.error'), 'error');
+        return false;
+      }
+
+      if (latestTabPathRef.current === savedPath && latestContentRef.current === savedContent) {
+        setIsDirty(false);
+        setSaveStatus('saved');
+      }
+      if (!silent) addToast(t('common.saved'), 'success');
+      return true;
+    } catch {
+      setSaveStatus('error');
+      if (!silent) addToast(t('common.error'), 'error');
+      return false;
+    }
+  }, [activeTab, addToast, fileContent, isVisitor, t, worldId]);
+
+  useEffect(() => {
     fetchTree();
     fetchWorldData();
   }, [fetchTree, fetchWorldData]);
+
+  useEffect(() => {
+    setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
+    setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
+    setViewMode('view');
+  }, [selectedContainer?.uid, selectedContainer?.name]);
+
+  useEffect(() => {
+    if (!activeTab || isVisitor || !isDirty) return;
+
+    setSaveStatus('idle');
+    const timer = setTimeout(() => {
+      saveDocument(true);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
 
   useEffect(() => {
     if (activeSidebarTab === 'assets') {
@@ -594,22 +664,18 @@ export default function WorldWorkspace({ params }) {
   // Sincroniza o container selecionado quando a árvore muda (para refletir novas abas)
   useEffect(() => {
     if (selectedContainer && tree.length > 0) {
-      const findNode = (nodes) => {
-        for (const n of nodes) {
-          if (n.uid === selectedContainer.uid) return n;
-          if (n.children) {
-            const found = findNode(n.children);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      const updatedNode = findNode(tree);
+      const updatedNode = findNodeByPath(tree, selectedContainer.path);
       if (updatedNode) {
         setSelectedContainer(updatedNode);
       }
     }
-  }, [selectedContainer, tree]);
+    if (activeTab && tree.length > 0) {
+      const updatedTab = findNodeByPath(tree, activeTab.path);
+      if (updatedTab) {
+        setActiveTab(updatedTab);
+      }
+    }
+  }, [activeTab, selectedContainer, tree]);
 
   const selectContainer = async (node) => {
     setSelectedContainer(node);
@@ -623,7 +689,11 @@ export default function WorldWorkspace({ params }) {
   };
 
   const selectTab = async (tabNode) => {
-    if (isDirty && !window.confirm(t('workspace.unsaved_changes'))) return;
+    if (isDirty) {
+      const saved = await saveDocument(true);
+      if (!saved) return;
+    }
+    setTabCreationPanel(prev => ({ ...prev, isOpen: false }));
     
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabNode.path)}`);
@@ -632,27 +702,83 @@ export default function WorldWorkspace({ params }) {
         setActiveTab(tabNode);
         setFileContent(data.content);
         setIsDirty(false);
-        setViewMode('view');
+        setSaveStatus('saved');
       }
     } catch {
       addToast(t('common.error'), 'error');
     }
   };
 
-  const handleSave = async () => {
-    if (!activeTab) return;
+  const getUniqueTabName = () => {
+    const baseName = t('workspace.new_tab_name');
+    const siblingNames = new Set(selectedTabs.map(tab => tab.name));
+    if (!siblingNames.has(baseName)) return baseName;
+
+    let suffix = 2;
+    while (siblingNames.has(`${baseName} ${suffix}`)) {
+      suffix += 1;
+    }
+    return `${baseName} ${suffix}`;
+  };
+
+  const openTabCreationPanel = () => {
+    if (isVisitor || !selectedContainer) return;
+    setTabCreationPanel({ isOpen: true, name: getUniqueTabName(), contentType: 'wiki' });
+  };
+
+  const handleCreateTabInline = async () => {
+    if (isVisitor || !selectedContainer) return;
+    const tabName = tabCreationPanel.name.trim();
+    if (!tabName) return;
+    if (isDirty) {
+      const saved = await saveDocument(true);
+      if (!saved) return;
+    }
+
     try {
+      const contentType = tabCreationPanel.contentType;
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          path: activeTab.path,
-          content: fileContent
+          path: `${selectedContainer.path}/${tabName}`,
+          content: '',
+          metadata: {
+            type: 'tab',
+            contentType
+          }
         })
       });
       if (res.ok) {
-        setIsDirty(false);
-        addToast(t('common.saved'), 'success');
+        const createdTab = await res.json();
+        setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
+        const nextActiveTab = {
+          ...createdTab,
+          icon: null,
+          type: 'tab',
+          contentType,
+          metadata: { type: 'tab', contentType }
+        };
+
+        if (contentType === 'wiki') {
+          const resDoc = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(createdTab.path)}`);
+          if (resDoc.ok) {
+            const data = await resDoc.json();
+            setActiveTab(nextActiveTab);
+            setFileContent(data.content || '');
+            setIsDirty(false);
+            setSaveStatus('saved');
+          }
+        } else {
+          setActiveTab(nextActiveTab);
+          setFileContent('');
+          setIsDirty(false);
+          setSaveStatus('saved');
+        }
+        await fetchTree();
+        addToast(t('common.created'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
       }
     } catch {
       addToast(t('common.error'), 'error');
@@ -706,6 +832,32 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  const commitTabRename = async (tab) => {
+    const nextName = renamingTab.value.trim();
+    if (!tab || !nextName || nextName === tab.name) {
+      setRenamingTab({ path: '', value: '' });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: tab.path, newName: nextName })
+      });
+      if (res.ok) {
+        setRenamingTab({ path: '', value: '' });
+        setActiveTab(prev => prev?.path === tab.path ? { ...prev, name: nextName, metadata: { ...prev.metadata, name: nextName } } : prev);
+        await fetchTree();
+        addToast(t('common.renamed'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
   const handleDelete = async (node) => {
     if (isVisitor || !node) return;
     setDeletePrompt({ isOpen: true, node });
@@ -720,11 +872,16 @@ export default function WorldWorkspace({ params }) {
         method: 'DELETE'
       });
       if (res.ok) {
-        if (
+        if (node.type === 'tab') {
+          if (activeTab?.path === node.path) {
+            setActiveTab(null);
+            setFileContent('');
+            setIsDirty(false);
+            setSaveStatus('saved');
+          }
+        } else if (
           selectedContainer?.path === node.path ||
-          selectedContainer?.path?.startsWith(`${node.path}/`) ||
-          activeTab?.path === node.path ||
-          activeTab?.path?.startsWith(`${node.path}/`)
+          selectedContainer?.path?.startsWith(`${node.path}/`)
         ) {
           setSelectedContainer(null);
           setActiveTab(null);
@@ -733,6 +890,31 @@ export default function WorldWorkspace({ params }) {
         setDeletePrompt({ isOpen: false, node: null });
         await fetchTree();
         addToast(t('common.deleted'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const duplicateTab = async (tab) => {
+    if (isVisitor || !tab) return;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: tab.path,
+          includeChildren: false,
+          name: `${tab.name} ${t('workspace.copy_suffix')}`
+        })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        await fetchTree();
+        setRenamingTab({ path: result.path, value: result.name });
+        addToast(t('workspace.duplicated'), 'success');
       } else {
         addToast(t('common.error'), 'error');
       }
@@ -784,6 +966,36 @@ export default function WorldWorkspace({ params }) {
       });
       if (res.ok) {
         fetchTree();
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const openTabIconPicker = (event) => {
+    if (isVisitor || !selectedContainer) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setTabIconPicker({
+      isOpen: true,
+      top: rect.bottom + 10,
+      left: Math.max(12, rect.left)
+    });
+  };
+
+  const handleTabIconSelect = async (icon) => {
+    if (!selectedContainer) return;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata: { icon } })
+      });
+      if (res.ok) {
+        setTabIconPicker({ isOpen: false, top: 0, left: 0 });
+        setSelectedContainer(prev => prev ? { ...prev, icon, metadata: { ...prev.metadata, icon } } : prev);
+        await fetchTree();
+      } else {
+        addToast(t('common.error'), 'error');
       }
     } catch {
       addToast(t('common.error'), 'error');
@@ -1113,6 +1325,162 @@ export default function WorldWorkspace({ params }) {
     assetFileInputRef.current?.click();
   };
 
+  const commitPageTitleRename = async () => {
+    if (!selectedContainer) return;
+    if (skipTitleRenameRef.current) {
+      skipTitleRenameRef.current = false;
+      return;
+    }
+    const nextName = pageTitleEdit.value.trim();
+    setPageTitleEdit({ isEditing: false, value: selectedContainer.name });
+
+    if (!nextName || nextName === selectedContainer.name) return;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, newName: nextName })
+      });
+      if (res.ok) {
+        setSelectedContainer(prev => prev ? { ...prev, name: nextName, metadata: { ...prev.metadata, name: nextName } } : prev);
+        await fetchTree();
+        addToast(t('common.renamed'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const handleCoverUpload = async (event) => {
+    const [file] = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!file || isVisitor || !selectedContainer) return;
+
+    setCoverUploading(true);
+    try {
+      const prepared = await prepareAssetUpload(file);
+      if (!prepared.contentType.startsWith('image/')) {
+        addToast(t('workspace.asset_unsupported'), 'error');
+        return;
+      }
+
+      const query = new URLSearchParams({
+        path: '',
+        filename: prepared.filename
+      });
+      const uploadRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': prepared.contentType },
+        body: prepared.blob
+      });
+
+      if (!uploadRes.ok) {
+        addToast(t('workspace.asset_upload_failed', { name: file.name }), 'error');
+        return;
+      }
+
+      const uploaded = await uploadRes.json();
+      const metadataRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata: { coverAssetPath: uploaded.path, coverPositionY: 50 } })
+      });
+
+      if (!metadataRes.ok) {
+        addToast(t('common.error'), 'error');
+        return;
+      }
+
+      setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, coverAssetPath: uploaded.path, coverPositionY: 50 } } : prev);
+      await fetchTree();
+      await fetchAssets();
+      addToast(t('common.saved'), 'success');
+    } catch {
+      addToast(t('workspace.asset_unsupported'), 'error');
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
+  const updateSelectedContainerMetadata = (metadata) => {
+    setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
+  };
+
+  const saveSelectedContainerMetadata = async (metadata) => {
+    if (!selectedContainer) return false;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata })
+      });
+      if (!res.ok) {
+        addToast(t('common.error'), 'error');
+        return false;
+      }
+      await fetchTree();
+      return true;
+    } catch {
+      addToast(t('common.error'), 'error');
+      return false;
+    }
+  };
+
+  const removeCover = async () => {
+    if (isVisitor || !selectedContainer || !activeCoverPath) return;
+    updateSelectedContainerMetadata({ coverAssetPath: null, coverPositionY: 50 });
+    setIsRepositioningCover(false);
+    const saved = await saveSelectedContainerMetadata({ coverAssetPath: null, coverPositionY: 50 });
+    if (saved) addToast(t('common.saved'), 'success');
+  };
+
+  const handleCoverPointerDown = (event) => {
+    if (!isRepositioningCover || !selectedContainer || !activeCoverPath) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    document.body.style.userSelect = 'none';
+    coverDragRef.current = {
+      isDragging: true,
+      startY: event.clientY,
+      startPosition: Number(selectedContainer.metadata?.coverPositionY ?? 50),
+      currentPosition: Number(selectedContainer.metadata?.coverPositionY ?? 50),
+      frame: null
+    };
+  };
+
+  const handleCoverPointerMove = (event) => {
+    if (!coverDragRef.current.isDragging) return;
+    const coverElement = event.currentTarget;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const delta = ((coverDragRef.current.startY - event.clientY) / Math.max(rect.height, 1)) * 100;
+    const nextPosition = Math.min(100, Math.max(0, coverDragRef.current.startPosition + delta));
+    coverDragRef.current.currentPosition = nextPosition;
+
+    if (coverDragRef.current.frame) return;
+    coverDragRef.current.frame = window.requestAnimationFrame(() => {
+      coverElement.style.setProperty('--editor-cover-position-y', `${coverDragRef.current.currentPosition}%`);
+      coverDragRef.current.frame = null;
+    });
+  };
+
+  const handleCoverPointerUp = async (event) => {
+    if (!coverDragRef.current.isDragging) return;
+    if (coverDragRef.current.frame) {
+      window.cancelAnimationFrame(coverDragRef.current.frame);
+      coverDragRef.current.frame = null;
+    }
+    coverDragRef.current.isDragging = false;
+    document.body.style.userSelect = '';
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    const finalPosition = Math.round(coverDragRef.current.currentPosition);
+    event.currentTarget.style.setProperty('--editor-cover-position-y', `${finalPosition}%`);
+    updateSelectedContainerMetadata({ coverPositionY: finalPosition });
+    await saveSelectedContainerMetadata({ coverPositionY: finalPosition });
+  };
+
   const handleTreeBlankContextMenu = (event) => {
     if (isVisitor) return;
     event.preventDefault();
@@ -1131,6 +1499,19 @@ export default function WorldWorkspace({ params }) {
     { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image },
     { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
   ];
+  const selectedTabs = getTabsForNode(selectedContainer);
+  const ActiveDisplayIcon = ICON_MAP[selectedContainer?.icon] || Folder;
+  const activeCoverPath = selectedContainer?.metadata?.coverAssetPath;
+  const coverPositionY = Number(selectedContainer?.metadata?.coverPositionY ?? 50);
+  const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
+  const isDocumentUnlocked = viewMode === 'edit';
+  const saveStatusLabel = saveStatus === 'saving'
+    ? t('workspace.save_status_saving')
+    : saveStatus === 'error'
+      ? t('workspace.save_status_error')
+      : isDirty
+        ? t('workspace.save_status_pending')
+        : t('workspace.save_status_saved');
 
   return (
     <div className="workspace-container" style={{ flexDirection: 'row' }}>
@@ -1368,140 +1749,332 @@ export default function WorldWorkspace({ params }) {
       </aside>
 
       {/* Área Principal */}
-      <main className="workspace-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main className="workspace-main workspace-editor-main">
         {selectedContainer ? (
-          <div className="document-workspace" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <header className="document-header" style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border-color)', background: 'rgba(11,13,17,0.4)' }}>
-              {/* Top Bar: Info + Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px' }}>
-                <div className="document-info" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ color: 'var(--accent-color)' }}>
-                    {React.createElement(ICON_MAP[selectedContainer.icon] || Folder, { size: 20 })}
-                  </div>
-                  <h2 style={{ fontSize: '1.2rem', margin: 0 }}>{selectedContainer.name}</h2>
-                </div>
-                
-                <div className="document-actions" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div className="view-toggle glass-panel" style={{ display: 'flex', padding: 4, borderRadius: 8 }}>
-                    <button 
-                      className={`icon-btn ${viewMode === 'view' ? 'active' : ''}`} 
-                      onClick={() => setViewMode('view')}
-                      style={{ background: viewMode === 'view' ? 'var(--accent-color)' : 'transparent', border: 'none', borderRadius: 6, padding: '6px 12px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+          <div className="document-workspace editor-page-shell">
+            <div className="document-content editor-page-scroll">
+              <article className="editor-page">
+                <div
+                  className={`editor-page-cover ${activeCoverPath ? 'has-image' : ''} ${isRepositioningCover ? 'is-repositioning' : ''}`}
+                  style={activeCoverPath ? {
+                    '--editor-cover-image': `url("${getAssetUrl(activeCoverPath)}")`,
+                    '--editor-cover-position-y': `${coverPositionY}%`
+                  } : undefined}
+                  onPointerDown={handleCoverPointerDown}
+                  onPointerMove={handleCoverPointerMove}
+                  onPointerUp={handleCoverPointerUp}
+                  onPointerCancel={handleCoverPointerUp}
+                >
+                  <div className="editor-page-cover-shade" aria-hidden="true" />
+                  <div className="editor-cover-controls">
+                    {activeTab && (
+                      <span className={`editor-save-status ${saveStatus}`}>
+                        {saveStatusLabel}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
+                      onClick={() => {
+                        if (!isVisitor && activeTab) setViewMode(isDocumentUnlocked ? 'view' : 'edit');
+                      }}
+                      disabled={isVisitor || !activeTab}
+                      title={isDocumentUnlocked ? t('workspace.lock_document') : t('workspace.unlock_document')}
                     >
-                      <Eye size={16} color={viewMode === 'view' ? 'white' : 'var(--text-secondary)'} />
+                      {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
                     </button>
+                  </div>
+
+                  {!isVisitor && selectedContainer && (
+                    <>
+                      <input
+                        ref={coverFileInputRef}
+                        type="file"
+                        accept="image/*,.gif"
+                        onChange={handleCoverUpload}
+                        hidden
+                      />
+                      <div className="editor-cover-toolbar">
+                        <button
+                          type="button"
+                          className="editor-cover-action"
+                          onPointerDown={event => event.stopPropagation()}
+                          onClick={() => coverFileInputRef.current?.click()}
+                          disabled={coverUploading}
+                          title={coverActionLabel}
+                        >
+                          <Image size={15} />
+                          <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
+                        </button>
+                        {activeCoverPath && (
+                          <>
+                            <button
+                              type="button"
+                              className={`editor-cover-action icon-only ${isRepositioningCover ? 'active' : ''}`}
+                              onPointerDown={event => event.stopPropagation()}
+                              onClick={() => setIsRepositioningCover(prev => !prev)}
+                              title={t('workspace.reposition_cover')}
+                            >
+                              <MoveVertical size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="editor-cover-action icon-only danger"
+                              onPointerDown={event => event.stopPropagation()}
+                              onClick={removeCover}
+                              title={t('workspace.remove_cover')}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <header className="editor-page-header">
+                  <div className="editor-page-title-row">
+                    <button
+                      type="button"
+                      className={`editor-page-icon ${selectedContainer && !isVisitor ? 'is-editable' : ''}`}
+                      onClick={openTabIconPicker}
+                      disabled={!selectedContainer || isVisitor}
+                      title={selectedContainer && !isVisitor ? t('workspace.change_icon') : undefined}
+                    >
+                      <ActiveDisplayIcon size={34} />
+                    </button>
+                    <div className="editor-title-copy">
+                      {pageTitleEdit.isEditing ? (
+                        <input
+                          className="editor-title-input"
+                          value={pageTitleEdit.value}
+                          onChange={event => setPageTitleEdit(prev => ({ ...prev, value: event.target.value }))}
+                          onBlur={commitPageTitleRename}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+                            if (event.key === 'Escape') {
+                              skipTitleRenameRef.current = true;
+                              setPageTitleEdit({ isEditing: false, value: selectedContainer.name });
+                            }
+                          }}
+                          autoFocus
+                          onFocus={event => event.target.select()}
+                        />
+                      ) : (
+                        <h1
+                          onDoubleClick={() => {
+                            if (!isVisitor) setPageTitleEdit({ isEditing: true, value: selectedContainer.name });
+                          }}
+                          title={!isVisitor ? t('workspace.rename_title_hint') : undefined}
+                        >
+                          {selectedContainer.name || t('workspace.select_document')}
+                        </h1>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="editor-tab-row">
+                    {selectedTabs.map(tab => (
+                      renamingTab.path === tab.path ? (
+                        <input
+                          key={tab.uid}
+                          className="editor-tab-rename-input"
+                          value={renamingTab.value}
+                          onChange={event => setRenamingTab(prev => ({ ...prev, value: event.target.value }))}
+                          onBlur={() => commitTabRename(tab)}
+                          onKeyDown={event => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.currentTarget.blur();
+                            }
+                            if (event.key === 'Escape') {
+                              setRenamingTab({ path: '', value: '' });
+                            }
+                          }}
+                          autoFocus
+                          onFocus={event => event.target.select()}
+                        />
+                      ) : (
+                        <button
+                          key={tab.uid}
+                          type="button"
+                          className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`}
+                          onClick={() => selectTab(tab)}
+                          onContextMenu={event => {
+                            if (isVisitor) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
+                          }}
+                        >
+                          {React.createElement(ICON_MAP[tab.icon] || (tab.contentType === 'map' ? Map : FileText), { size: 14 })}
+                          <span>{tab.name}</span>
+                        </button>
+                      )
+                    ))}
                     {!isVisitor && (
-                      <button 
-                        className={`icon-btn ${viewMode === 'edit' ? 'active' : ''}`} 
-                        onClick={() => setViewMode('edit')}
-                        style={{ background: viewMode === 'edit' ? 'var(--accent-color)' : 'transparent', border: 'none', borderRadius: 6, padding: '6px 12px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                      <button
+                        type="button"
+                        className="editor-tab-add"
+                        onClick={openTabCreationPanel}
+                        title={t('workspace.create_tab')}
                       >
-                        <Edit2 size={16} color={viewMode === 'edit' ? 'white' : 'var(--text-secondary)'} />
+                        <Plus size={16} />
                       </button>
                     )}
                   </div>
-                  
-                  {!isVisitor && (
-                    <button 
-                      className="btn-primary" 
-                      onClick={handleSave} 
-                      disabled={!isDirty || !activeTab}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                    >
-                      <Save size={16} /> {t('common.save')}
-                    </button>
-                  )}
-                </div>
-              </div>
+                </header>
 
-              {/* Tab Bar: Subfolders with index.md */}
-              <div className="tab-bar" style={{ display: 'flex', padding: '0 24px', gap: 4, background: 'rgba(0,0,0,0.1)' }}>
-                {getTabsForNode(selectedContainer).map(tab => (
-                  <button
-                    key={tab.uid}
-                    onClick={() => selectTab(tab)}
-                    style={{
-                      padding: '10px 20px',
-                      background: activeTab?.uid === tab.uid ? 'rgba(255,255,255,0.05)' : 'transparent',
-                      border: 'none',
-                      borderBottom: activeTab?.uid === tab.uid ? '2px solid var(--accent-color)' : '2px solid transparent',
-                      color: activeTab?.uid === tab.uid ? 'white' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                      fontWeight: 500,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {React.createElement(tab.contentType === 'map' ? Map : FileText, { size: 14, opacity: 0.7 })}
-                    {tab.name}
-                  </button>
-                ))}
-                {!isVisitor && (
-                  <button 
-                    onClick={() => setPrompt({ isOpen: true, parentPath: selectedContainer.path, name: '', type: 'tab', contentType: 'wiki' })}
-                    style={{ padding: '10px', background: 'transparent', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                    title={t('workspace.create_tab')}
-                  >
-                    <Plus size={16} />
-                  </button>
-                )}
-              </div>
-            </header>
+                <section className="editor-page-body">
+                  {tabCreationPanel.isOpen ? (
+                    <div className="tab-creation-panel">
+                      <div className="tab-creation-header">
+                        <div className="tab-creation-icon">
+                          <Plus size={20} />
+                        </div>
+                        <div>
+                          <h2>{t('workspace.create_tab')}</h2>
+                          <p>{t('workspace.create_tab_inline_hint')}</p>
+                        </div>
+                      </div>
 
-            <div className="document-content" style={{ flex: 1, overflow: 'hidden', background: '#1e1e1e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {activeTab ? (
-                activeTab.contentType === 'map' ? (
-                  <div style={{ textAlign: 'center', opacity: 0.5 }}>
-                    <Map size={80} style={{ marginBottom: 24, color: 'var(--accent-color)' }} />
-                    <h2 style={{ fontWeight: 700 }}>Módulo de Mapas</h2>
-                    <p>O visualizador de mapas interativos será implementado na próxima fase.</p>
-                  </div>
-                ) : (
-                  viewMode === 'edit' ? (
-                    <div style={{ textAlign: 'center', opacity: 0.5 }}>
-                      <Edit2 size={48} style={{ marginBottom: 16 }} />
-                      <p>Editor em transição para BlockNote...</p>
-                    </div>
-                  ) : (
-                    <div className="markdown-preview" style={{ padding: '40px 60px', height: '100%', overflowY: 'auto' }}>
-                      <div 
-                        className="markdown-body" 
-                        style={{ maxWidth: '800px', margin: '0 auto' }}
-                        dangerouslySetInnerHTML={{ __html: renderedContent }} 
+                      <label className="tab-creation-label" htmlFor="tab-name-input">
+                        {t('common.name')}
+                      </label>
+                      <input
+                        id="tab-name-input"
+                        className="tab-creation-input"
+                        value={tabCreationPanel.name}
+                        onChange={event => setTabCreationPanel(prev => ({ ...prev, name: event.target.value }))}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') handleCreateTabInline();
+                          if (event.key === 'Escape') setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
+                        }}
+                        placeholder={t('workspace.new_tab_name')}
+                        autoFocus
+                        onFocus={event => event.target.select()}
                       />
+
+                      <div className="tab-type-grid">
+                        <button
+                          type="button"
+                          className={`tab-type-card ${tabCreationPanel.contentType === 'wiki' ? 'active' : ''}`}
+                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'wiki' }))}
+                        >
+                          <FileText size={22} />
+                          <strong>Wiki</strong>
+                          <span>{t('workspace.tab_type_wiki_hint')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-type-card ${tabCreationPanel.contentType === 'map' ? 'active' : ''}`}
+                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'map' }))}
+                        >
+                          <Map size={22} />
+                          <strong>{t('workspace.tab_type_map')}</strong>
+                          <span>{t('workspace.tab_type_map_hint')}</span>
+                        </button>
+                      </div>
+
+                      <div className="tab-creation-actions">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' })}
+                        >
+                          {t('common.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={handleCreateTabInline}
+                          disabled={!tabCreationPanel.name.trim()}
+                        >
+                          {t('common.create')}
+                        </button>
+                      </div>
                     </div>
-                  )
-                )
-              ) : (
-                <div style={{ textAlign: 'center', opacity: 0.3 }}>
-                  <Book size={48} style={{ marginBottom: 16 }} />
-                  <p>Esta página não possui abas de conteúdo.</p>
-                  {!isVisitor && (
-                    <button 
-                      className="btn-secondary" 
-                      onClick={() => setPrompt({ isOpen: true, parentPath: selectedContainer.path, name: '', type: 'tab', contentType: 'wiki' })}
-                      style={{ marginTop: 16 }}
-                    >
-                      Criar Primeira Aba
-                    </button>
+                  ) : activeTab ? (
+                    activeTab.contentType === 'map' ? (
+                      <div className="editor-placeholder">
+                        <Map size={76} />
+                        <h2>Módulo de Mapas</h2>
+                        <p>O visualizador de mapas interativos será implementado na próxima fase.</p>
+                      </div>
+                    ) : (
+                      isDocumentUnlocked ? (
+                        <div className="editor-draft-panel">
+                          <textarea
+                            className="raw-editor"
+                            value={fileContent}
+                            onChange={(event) => {
+                              setFileContent(event.target.value);
+                              setIsDirty(true);
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="markdown-preview editor-preview">
+                          <div className="markdown-body" dangerouslySetInnerHTML={{ __html: renderedContent }} />
+                        </div>
+                      )
+                    )
+                  ) : (
+                    <div className="editor-placeholder muted">
+                      <Book size={48} />
+                      <p>Esta página não possui abas de conteúdo.</p>
+                      {!isVisitor && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={openTabCreationPanel}
+                        >
+                          {t('workspace.create_first_tab')}
+                        </button>
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
+                </section>
+              </article>
             </div>
           </div>
         ) : (
-          <div className="empty-state" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>
-            <Castle size={80} style={{ marginBottom: 24 }} />
-            <h2 style={{ fontWeight: 700 }}>{t('workspace.select_document')}</h2>
+          <div className="empty-state editor-empty-state">
+            <Castle size={80} />
+            <h2>{t('workspace.select_document')}</h2>
             <p>{t('workspace.select_document_hint')}</p>
           </div>
         )}
       </main>
 
       {/* Modals & Overlays */}
+      {tabIconPicker.isOpen && (
+        <>
+          <div className="icon-picker-backdrop" onClick={() => setTabIconPicker({ isOpen: false, top: 0, left: 0 })} />
+          <div
+            className="icon-selector-dropdown glass-panel"
+            style={{ top: tabIconPicker.top, left: tabIconPicker.left }}
+            onClick={event => event.stopPropagation()}
+          >
+            {Object.keys(ICON_MAP).map(key => (
+              <button
+                key={key}
+                type="button"
+                className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
+                onClick={() => handleTabIconSelect(key)}
+                title={key}
+              >
+                {React.createElement(ICON_MAP[key], { size: 18 })}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {prompt.isOpen && (
         <div className="modal-overlay" onClick={() => setPrompt({ ...prompt, isOpen: false })}>
           <div className="modal-content glass-panel" onClick={e => e.stopPropagation()}>
@@ -1795,6 +2368,42 @@ export default function WorldWorkspace({ params }) {
                 <Plus size={14} /> {t('workspace.create_root_document')}
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {tabContextMenu.isOpen && (
+        <div className="context-menu-overlay" onClick={() => setTabContextMenu(prev => ({ ...prev, isOpen: false }))}>
+          <div
+            className="context-menu glass-panel"
+            style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setRenamingTab({ path: tabContextMenu.node.path, value: tabContextMenu.node.name });
+                setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+              }}
+            >
+              <Edit2 size={14} /> {t('common.rename')}
+            </button>
+            <button
+              onClick={() => {
+                duplicateTab(tabContextMenu.node);
+                setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+              }}
+            >
+              <Copy size={14} /> {t('workspace.duplicate_tab')}
+            </button>
+            <button
+              className="danger"
+              onClick={() => {
+                handleDelete(tabContextMenu.node);
+                setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+              }}
+            >
+              <Trash2 size={14} /> {t('workspace.delete_tab')}
+            </button>
           </div>
         </div>
       )}
