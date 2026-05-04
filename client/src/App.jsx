@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
-import { LogOut, Plus, Globe, Settings, Trash2, Edit3, Key, ShieldCheck, Sparkles, Search, Home, Layers, Layout as LayoutIcon, User, Languages } from 'lucide-react'
+import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Languages } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
 
@@ -29,7 +29,14 @@ function App() {
         {(params) => {
           const isVisitor = new URLSearchParams(window.location.search).get('view') === 'true';
           if (isAuthenticated || isVisitor) {
-            return <WorldWorkspace params={params} />;
+            return (
+              <>
+                <WorldWorkspace params={params} />
+                <div className="workspace-language-wrapper">
+                  <LanguageSwitcher variant="floating" />
+                </div>
+              </>
+            );
           }
           return <Login onLogin={() => setIsAuthenticated(true)} />;
         }}
@@ -69,7 +76,7 @@ function Login({ onLogin }) {
         const data = await res.json()
         setError(data.error || t('login.failed'))
       }
-    } catch (err) {
+    } catch {
       setError(t('common.error_connection'))
     } finally {
       setLoading(false)
@@ -196,10 +203,7 @@ function Dashboard({ onLogout }) {
           <div className="nexus-grid">
             {filteredWorlds.map(world => (
               <div key={world.id} className="nexus-card" onClick={() => setLocation(`/world/${world.id}`)}>
-                <div 
-                  className="nexus-card-bg" 
-                  style={{ backgroundImage: world.thumbnailUrl ? `url(${world.thumbnailUrl})` : 'none' }}
-                ></div>
+                <div className="nexus-card-bg"></div>
                 <div className="nexus-card-actions">
                   <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>
                     <Settings size={14} />
@@ -270,28 +274,8 @@ function CreateWorldModal({ onClose, onCreated }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [thumbnailBase64, setThumbnailBase64] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const fileInputRef = useRef(null)
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      setError(t('dashboard.invalid_image_error'))
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      setThumbnailBase64(event.target.result)
-      setPreviewUrl(event.target.result)
-    }
-    reader.readAsDataURL(file)
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -304,8 +288,7 @@ function CreateWorldModal({ onClose, onCreated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          description,
-          thumbnailBase64
+          description
         })
       })
 
@@ -315,7 +298,7 @@ function CreateWorldModal({ onClose, onCreated }) {
         const data = await res.json()
         setError(data.error || t('dashboard.create_world_error'))
       }
-    } catch (err) {
+    } catch {
       setError(t('common.error_connection'))
     } finally {
       setSaving(false)
@@ -349,27 +332,6 @@ function CreateWorldModal({ onClose, onCreated }) {
             />
           </div>
 
-          <div className="input-group">
-            <label>{t('dashboard.thumbnail_label')}</label>
-            <div 
-              className="thumbnail-upload-area" 
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {previewUrl ? (
-                <img src={previewUrl} alt="Preview" />
-              ) : (
-                <span>{t('dashboard.click_to_select_image')}</span>
-              )}
-            </div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              style={{ display: 'none' }} 
-              accept="image/*"
-              onChange={handleFileChange}
-            />
-          </div>
-
           {error && <div className="error-msg">{error}</div>}
 
           <div className="modal-actions">
@@ -390,28 +352,8 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const { t } = useTranslation()
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
-  const [thumbnailBase64, setThumbnailBase64] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(world.thumbnailUrl ? `${world.thumbnailUrl}?v=${Date.now()}` : null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const fileInputRef = useRef(null)
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      setError(t('dashboard.invalid_image_error'))
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      setThumbnailBase64(event.target.result)
-      setPreviewUrl(event.target.result)
-    }
-    reader.readAsDataURL(file)
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -424,8 +366,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          description,
-          thumbnailBase64
+          description
         })
       })
 
@@ -435,7 +376,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
         const data = await res.json()
         setError(data.error || t('dashboard.create_world_error'))
       }
-    } catch (err) {
+    } catch {
       setError(t('common.error_connection'))
     } finally {
       setSaving(false)
@@ -463,27 +404,6 @@ function EditWorldModal({ world, onClose, onUpdated }) {
               type="text" 
               value={description} 
               onChange={e => setDescription(e.target.value)} 
-            />
-          </div>
-
-          <div className="input-group">
-            <label>{t('dashboard.new_thumbnail_optional')}</label>
-            <div 
-              className="thumbnail-upload-area" 
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {previewUrl ? (
-                <img src={previewUrl} alt="Preview" />
-              ) : (
-                <span>{t('dashboard.click_to_select_image')}</span>
-              )}
-            </div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              style={{ display: 'none' }} 
-              accept="image/*"
-              onChange={handleFileChange}
             />
           </div>
 
@@ -532,7 +452,7 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
         const data = await res.json()
         setError(data.error || t('common.delete_error'))
       }
-    } catch (err) {
+    } catch {
       setError(t('common.error_connection'))
     } finally {
       setDeleting(false)
@@ -575,7 +495,7 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
   )
 }
 
-function LanguageSwitcher() {
+function LanguageSwitcher({ variant = 'default' }) {
   const { i18n } = useTranslation();
 
   const toggleLanguage = () => {
@@ -585,13 +505,12 @@ function LanguageSwitcher() {
 
   return (
     <button 
-      className="nexus-icon-btn language-switcher" 
+      className={`nexus-icon-btn language-switcher language-switcher-${variant}`}
       onClick={toggleLanguage} 
       title={i18n.language === 'pt' ? 'Switch to English' : 'Mudar para Português'}
-      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px', minWidth: '60px' }}
     >
       <Languages size={18} />
-      <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' }}>
+      <span>
         {i18n.language}
       </span>
     </button>

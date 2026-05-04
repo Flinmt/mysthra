@@ -2,6 +2,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { getWorldPaths, validateRelativePath, ensureWorldStructure, validateWorldName } = require("../data/filesystem");
+const { updateIndex, removeFromIndex } = require("./indexer");
 
 async function getFileTree(worldName) {
   const safeName = validateWorldName(worldName);
@@ -24,55 +25,45 @@ async function getFileTree(worldName) {
       
       if (entry.isDirectory()) {
         const currentRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+        const fullDirPath = path.join(dirPath, entry.name);
         
         let metadata = {};
-        let icon = null;
-        let uid = null;
         try {
-          const metaPath = path.join(dirPath, entry.name, "metadata.json");
-          try {
-            const metaStr = await fs.readFile(metaPath, "utf-8");
-            metadata = JSON.parse(metaStr);
-          } catch (e) {
-            // Meta doesn't exist or is invalid
-          }
-
-          let changed = false;
-          if (metadata.icon) icon = metadata.icon;
-          
-          if (metadata.uid) {
-            uid = metadata.uid;
-          } else {
-            uid = crypto.randomUUID();
-            metadata.uid = uid;
-            changed = true;
-          }
-
-          if (changed) {
-            await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
-          }
+          const metaPath = path.join(fullDirPath, "metadata.json");
+          const metaStr = await fs.readFile(metaPath, "utf-8");
+          metadata = JSON.parse(metaStr);
         } catch (e) {
-          // ignore error in individual meta reading
+          // Meta doesn't exist or is invalid
         }
-        
-        const children = await walk(path.join(dirPath, entry.name), currentRelativePath);
+
+        // Se não tiver UID, gera um e salva (Garante consistência)
+        if (!metadata.uid) {
+          metadata.uid = crypto.randomUUID();
+          await fs.writeFile(path.join(fullDirPath, "metadata.json"), JSON.stringify(metadata, null, 2));
+          updateIndex(safeName, metadata.uid, currentRelativePath);
+        }
+
+        const children = await walk(fullDirPath, currentRelativePath);
         
         nodes.push({
-          name: entry.name,
+          name: metadata.name || entry.name, // Prioriza o nome de exibição
           path: currentRelativePath,
-          type: "document",
-          icon,
-          uid,
-          contentType: metadata.contentType || "wiki",
-          relationToParent: metadata.relationToParent || "tree",
+          uid: metadata.uid,
+          icon: metadata.icon || null,
+          type: metadata.type || "container", 
+          contentType: metadata.contentType || (metadata.type === "tab" ? "wiki" : null),
           metadata,
           children
         });
       }
     }
     
-    nodes.sort((a, b) => a.name.localeCompare(b.name));
-    
+    nodes.sort((a, b) => {
+      const orderA = a.metadata?.order ?? 999;
+      const orderB = b.metadata?.order ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
     return nodes;
   }
   
@@ -97,49 +88,59 @@ async function writeDocumentMetadata(pagesDir, safePath, metadata) {
 
 async function createDocument(worldName, docPath, content, metadata = {}) {
   const safeName = validateWorldName(worldName);
-  const safePath = validateRelativePath(docPath);
+  const rawPath = validateRelativePath(docPath);
   await ensureWorldStructure(safeName);
   const { pages: pagesDir } = getWorldPaths(safeName);
   
+  // NOVO PADRÃO: Extraímos o nome de exibição do caminho enviado
+  const parentPath = path.dirname(rawPath);
+  const displayName = path.basename(rawPath);
+  const uid = metadata.uid || crypto.randomUUID();
+  
+  // O caminho físico será composto pelos UIDs dos pais + o novo UID
+  const safePath = (parentPath === "." ? uid : `${parentPath}/${uid}`).replace(/\\/g, "/");
   const fullDirPath = path.join(pagesDir, safePath);
   
   await fs.mkdir(fullDirPath, { recursive: true });
   
-  const indexPath = path.join(fullDirPath, "index.md");
-  await fs.writeFile(indexPath, content || "", "utf-8");
+  // Se for uma aba do tipo WIKI, salvamos o arquivo de conteúdo Markdown
+  if (metadata.type === "tab" && (metadata.contentType === "wiki" || !metadata.contentType)) {
+    const indexPath = path.join(fullDirPath, "index.md");
+    await fs.writeFile(indexPath, content || "", "utf-8");
+  }
 
   const currentMeta = await readDocumentMetadata(pagesDir, safePath);
-  const uid = currentMeta.uid || crypto.randomUUID();
+  
+  // Ordem de criação
+  let order = currentMeta.order;
+  if (metadata.type === "tab" && order === undefined) {
+    const parentDir = path.dirname(fullDirPath);
+    try {
+      const peers = await fs.readdir(parentDir);
+      order = peers.length;
+    } catch (e) {
+      order = 1;
+    }
+  }
+
   const nextMeta = {
     ...currentMeta,
     ...metadata,
+    name: metadata.name || displayName, // Salva o nome amigável aqui
     uid,
-    contentType: metadata.contentType || currentMeta.contentType || "wiki"
+    order: order ?? 0,
+    type: metadata.type || currentMeta.type || "container",
+    contentType: metadata.contentType || currentMeta.contentType || (metadata.type === "tab" ? "wiki" : null)
   };
   await writeDocumentMetadata(pagesDir, safePath, nextMeta);
   
-  return { success: true, path: safePath, uid };
+  updateIndex(safeName, uid, safePath);
+  
+  return { success: true, path: safePath, uid, name: nextMeta.name };
 }
 
 async function createDocumentPlaceholder(worldName, docPath, metadata = {}) {
-  const safeName = validateWorldName(worldName);
-  const safePath = validateRelativePath(docPath);
-  await ensureWorldStructure(safeName);
-  const { pages: pagesDir } = getWorldPaths(safeName);
-  const fullDirPath = path.join(pagesDir, safePath);
-  await fs.mkdir(fullDirPath, { recursive: true });
-
-  const currentMeta = await readDocumentMetadata(pagesDir, safePath);
-  const uid = currentMeta.uid || crypto.randomUUID();
-  const nextMeta = {
-    ...currentMeta,
-    ...metadata,
-    uid,
-    contentType: metadata.contentType || currentMeta.contentType || "unset"
-  };
-  await writeDocumentMetadata(pagesDir, safePath, nextMeta);
-
-  return { success: true, path: safePath, uid, metadata: nextMeta };
+  return createDocument(worldName, docPath, "", metadata);
 }
 
 async function readDocument(worldName, docPath) {
@@ -152,10 +153,27 @@ async function readDocument(worldName, docPath) {
     const content = await fs.readFile(indexPath, "utf-8");
     return { path: safePath, content };
   } catch (e) {
-    const error = new Error("Document not found");
+    const error = new Error("Document content not found (This might be a container)");
     error.code = "DOCUMENT_NOT_FOUND";
     throw error;
   }
+}
+
+async function updateDocumentContent(worldName, docPath, content) {
+  const safeName = validateWorldName(worldName);
+  const safePath = validateRelativePath(docPath);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  const metadata = await readDocumentMetadata(pagesDir, safePath);
+
+  if (metadata.type !== "tab") {
+    const error = new Error("Only tab documents can store editable content");
+    error.code = "DOCUMENT_NOT_FOUND";
+    throw error;
+  }
+
+  const indexPath = path.join(pagesDir, safePath, "index.md");
+  await fs.writeFile(indexPath, content, "utf-8");
+  return { success: true, path: safePath };
 }
 
 async function updateDocumentMetadata(worldName, docPath, metadata) {
@@ -163,18 +181,9 @@ async function updateDocumentMetadata(worldName, docPath, metadata) {
   const safePath = validateRelativePath(docPath);
   const { pages: pagesDir } = getWorldPaths(safeName);
   
-  const metaPath = path.join(pagesDir, safePath, "metadata.json");
-  
-  let currentMeta = {};
-  try {
-    const metaStr = await fs.readFile(metaPath, "utf-8");
-    currentMeta = JSON.parse(metaStr);
-  } catch (e) {
-    // Doesn't exist yet
-  }
-  
+  const currentMeta = await readDocumentMetadata(pagesDir, safePath);
   const newMeta = { ...currentMeta, ...metadata };
-  await fs.writeFile(metaPath, JSON.stringify(newMeta, null, 2), "utf-8");
+  await writeDocumentMetadata(pagesDir, safePath, newMeta);
   
   return { success: true, metadata: newMeta };
 }
@@ -182,56 +191,34 @@ async function updateDocumentMetadata(worldName, docPath, metadata) {
 async function deleteDocument(worldName, docPath) {
   const safeName = validateWorldName(worldName);
   const safePath = validateRelativePath(docPath);
-  const { pages: pagesDir, maps: mapsDir } = getWorldPaths(safeName);
+  const { pages: pagesDir } = getWorldPaths(safeName);
   
   const fullDirPath = path.join(pagesDir, safePath);
-  console.log(`[Backend] deleteDocument: world=${worldName}, path=${docPath}, fullPath=${fullDirPath}`);
   
   try {
+    const metadata = await readDocumentMetadata(pagesDir, safePath);
     await fs.rm(fullDirPath, { recursive: true, force: true });
-
-    // Also remove the corresponding maps directory so map tabs don't leave ghosts
-    const mapsPath = path.join(mapsDir, safePath);
-    await fs.rm(mapsPath, { recursive: true, force: true }).catch(() => {});
+    
+    if (metadata.uid) {
+      removeFromIndex(safeName, metadata.uid);
+    }
 
     return { success: true };
   } catch (e) {
-    const error = new Error("Failed to delete document");
-    error.code = "DELETE_FAILED";
-    throw error;
+    throw new Error("Failed to delete document");
   }
 }
 
-async function renameDocument(worldName, oldPath, newName) {
+async function renameDocument(worldName, docPath, newName) {
   const safeName = validateWorldName(worldName);
-  const safeOldPath = validateRelativePath(oldPath);
-  const { pages: pagesDir, maps: mapsDir } = getWorldPaths(safeName);
-  
-  const parentDir = path.dirname(safeOldPath);
-  const newPath = path.join(parentDir, newName);
-  
-  const fullOldPath = path.join(pagesDir, safeOldPath);
-  const fullNewPath = path.join(pagesDir, newPath);
-  
-  try {
-    await fs.rename(fullOldPath, fullNewPath);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  const safePath = validateRelativePath(docPath);
 
-    // Also rename the corresponding maps directory so map tabs stay in sync
-    const mapsOldPath = path.join(mapsDir, safeOldPath);
-    const mapsNewPath = path.join(mapsDir, newPath);
-    try {
-      await fs.access(mapsOldPath);
-      await fs.rename(mapsOldPath, mapsNewPath);
-    } catch (_) {
-      // Maps directory doesn't exist for this document — that's fine
-    }
-
-    return { success: true, newPath };
-  } catch (e) {
-    const error = new Error("Failed to rename document");
-    error.code = "RENAME_FAILED";
-    throw error;
-  }
+  const metadata = await readDocumentMetadata(pagesDir, safePath);
+  metadata.name = newName;
+  await writeDocumentMetadata(pagesDir, safePath, metadata);
+  
+  return { success: true, path: safePath, name: newName, uid: metadata.uid };
 }
 
 async function moveDocument(worldName, sourcePath, targetPath) {
@@ -244,12 +231,115 @@ async function moveDocument(worldName, sourcePath, targetPath) {
   const fullTarget = path.join(pagesDir, safeTarget);
   
   try {
+    const metadata = await readDocumentMetadata(pagesDir, safeSource);
     await fs.mkdir(path.dirname(fullTarget), { recursive: true });
     await fs.rename(fullSource, fullTarget);
+    
+    if (metadata.uid) {
+      updateIndex(safeName, metadata.uid, safeTarget);
+    }
+    
     return { success: true, targetPath: safeTarget };
   } catch (e) {
     throw new Error("Failed to move document: " + e.message);
   }
+}
+
+async function getUniqueSiblingName(pagesDir, parentPath, baseName) {
+  const parentDir = parentPath ? path.join(pagesDir, parentPath) : pagesDir;
+  const siblingNames = new Set();
+
+  try {
+    const entries = await fs.readdir(parentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const siblingPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+      const metadata = await readDocumentMetadata(pagesDir, siblingPath);
+      siblingNames.add(metadata.name || entry.name);
+    }
+  } catch (e) {
+    // Missing parent will be handled by the caller when filesystem operations run.
+  }
+
+  if (!siblingNames.has(baseName)) return baseName;
+
+  let suffix = 2;
+  while (siblingNames.has(`${baseName} ${suffix}`)) {
+    suffix += 1;
+  }
+  return `${baseName} ${suffix}`;
+}
+
+async function copyDocumentDirectory(safeName, pagesDir, sourcePath, targetPath, options = {}) {
+  const sourceDir = path.join(pagesDir, sourcePath);
+  const targetDir = path.join(pagesDir, targetPath);
+  const sourceMetadata = await readDocumentMetadata(pagesDir, sourcePath);
+  const uid = path.basename(targetPath);
+  const metadata = {
+    ...sourceMetadata,
+    uid,
+    name: options.name || sourceMetadata.name || path.basename(targetPath)
+  };
+
+  await fs.mkdir(targetDir, { recursive: true });
+  await writeDocumentMetadata(pagesDir, targetPath, metadata);
+  updateIndex(safeName, uid, targetPath);
+
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === "metadata.json" || entry.name.startsWith(".")) continue;
+
+    const childSource = `${sourcePath}/${entry.name}`;
+    const childTarget = `${targetPath}/${crypto.randomUUID()}`;
+
+    if (entry.isDirectory()) {
+      if (!options.includeChildren) continue;
+      await copyDocumentDirectory(safeName, pagesDir, childSource, childTarget, {
+        includeChildren: true
+      });
+      continue;
+    }
+
+    if (entry.isFile()) {
+      await fs.copyFile(path.join(sourceDir, entry.name), path.join(targetDir, entry.name));
+    }
+  }
+
+  return { path: targetPath, uid, name: metadata.name };
+}
+
+async function duplicateDocument(worldName, docPath, options = {}) {
+  const safeName = validateWorldName(worldName);
+  const safePath = validateRelativePath(docPath);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  const sourceDir = path.join(pagesDir, safePath);
+
+  try {
+    const stat = await fs.stat(sourceDir);
+    if (!stat.isDirectory()) {
+      const error = new Error("Document not found");
+      error.code = "DOCUMENT_NOT_FOUND";
+      throw error;
+    }
+  } catch (error) {
+    if (error.code === "DOCUMENT_NOT_FOUND") throw error;
+    const notFound = new Error("Document not found");
+    notFound.code = "DOCUMENT_NOT_FOUND";
+    throw notFound;
+  }
+
+  const parentPath = path.dirname(safePath) === "." ? "" : path.dirname(safePath).replace(/\\/g, "/");
+  const sourceMetadata = await readDocumentMetadata(pagesDir, safePath);
+  const sourceName = sourceMetadata.name || path.basename(safePath);
+  const copyName = await getUniqueSiblingName(pagesDir, parentPath, options.name || `${sourceName} Copy`);
+  const targetUid = crypto.randomUUID();
+  const targetPath = parentPath ? `${parentPath}/${targetUid}` : targetUid;
+  const copied = await copyDocumentDirectory(safeName, pagesDir, safePath, targetPath, {
+    includeChildren: Boolean(options.includeChildren),
+    name: copyName
+  });
+
+  return { success: true, ...copied };
 }
 
 module.exports = {
@@ -257,8 +347,10 @@ module.exports = {
   createDocument,
   createDocumentPlaceholder,
   readDocument,
+  updateDocumentContent,
   updateDocumentMetadata,
   deleteDocument,
   renameDocument,
-  moveDocument
+  moveDocument,
+  duplicateDocument
 };

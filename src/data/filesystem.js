@@ -2,12 +2,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const WORLD_DIRECTORY_NAMES = Object.freeze({
-  pages: "pages",
-  entities: "entities",
-  relations: "relations",
-  themes: "themes",
-  maps: "maps",
-  media: "media"
+  pages: "pages"
 });
 
 const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 _.-]*[A-Za-z0-9]$|^[A-Za-z0-9]$/;
@@ -81,10 +76,6 @@ function getWorldsRoot() {
   return path.join(getDataRoot(), "worlds");
 }
 
-function getTemplatesRoot() {
-  return path.join(getDataRoot(), "templates");
-}
-
 function assertPathInsideRoot(rootPath, targetPath) {
   const relativePath = path.relative(rootPath, targetPath);
 
@@ -121,12 +112,7 @@ function getWorldPaths(worldName) {
 
   return {
     worldRoot,
-    pages: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.pages),
-    entities: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.entities),
-    relations: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.relations),
-    themes: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.themes),
-    maps: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.maps),
-    media: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.media)
+    pages: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.pages)
   };
 }
 
@@ -137,7 +123,6 @@ async function ensureDirectory(directoryPath) {
 
 async function ensureWorldStructure(worldName) {
   await ensureDirectory(getWorldsRoot());
-  await ensureDirectory(getTemplatesRoot());
 
   const worldPaths = getWorldPaths(worldName);
   const directories = Object.values(worldPaths);
@@ -156,7 +141,6 @@ module.exports = {
   getDataRoot,
   getWorldPaths,
   getWorldsRoot,
-  getTemplatesRoot,
   resolveWorldPath,
   resolveWorldRoot,
   validateFileName,

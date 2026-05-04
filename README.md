@@ -15,7 +15,7 @@
 
 ## 🌌 What is Mysthra?
 
-**Mysthra** is an open-source, self-hosted workspace designed specifically for world-building. It combines the simplicity of **Markdown** with the limitless flexibility of **HTML/CSS**, allowing you to forge immersive lore, detailed maps, and complex character databases with a premium, focused interface.
+**Mysthra** is an open-source, self-hosted workspace designed specifically for world-building. It is currently being restructured around a lean document hierarchy with containers and editable tabs, keeping the core data model simple while the editor is rebuilt.
 
 Unlike general-purpose note apps, Mysthra is built for **atmosphere**. Every pixel of the "Nexus" dashboard and the editor was designed to keep you in the creative flow.
 
@@ -30,12 +30,11 @@ Your gateway to all your universes. A high-fidelity, horizontal gallery that pre
 - **Monaco-Powered Editor**: The same engine that powers VS Code, now optimized for world-building.
 - **Live Hybrid Preview**: See your Markdown and HTML come to life instantly with a high-fidelity rendering engine.
 - **Intelligent Autosave**: Never lose a single word. Mysthra saves your progress every 2 seconds in the background and supports `Ctrl + S`.
-- **Media Management**: Drag and drop support for images and audio, automatically converted into clean HTML tags for total control over your layout.
+- **Document Tabs**: Organize each world node as a container with dedicated content tabs.
 
 ### 🛠️ Total Customization
 - **HTML & CSS First**: Use standard web technologies to create custom layouts, embedded music players, or interactive lore pieces.
-- **Global Template System**: Save your best structures (stat blocks, locations, timelines) as templates and reuse them across any world or file.
-- **Wiki-style Linking**: Connect your ideas with easy internal linking (`[[page-name]]`).
+- **Lean Core**: Entities, maps, media, themes, templates, and relation extraction are suspended during the editor migration and will return on top of the new architecture.
 
 ---
 
@@ -109,9 +108,9 @@ The easiest way to run Mysthra is using Docker Compose:
    export PUBLIC_READ=false
    docker-compose up -d
    ```
-   The app will be available at `http://localhost:3000`. All your worlds and media will be persisted in the `./data` folder.
+   The app will be available at `http://localhost:3000`. All your worlds and documents will be persisted in the `./data` folder.
 
-   Set `PUBLIC_READ=true` only when you want unauthenticated visitor/share access to worlds, pages, themes, documents, and media.
+   Set `PUBLIC_READ=true` only when you want unauthenticated visitor/share access to world document data.
 
 ---
 
@@ -127,9 +126,7 @@ Mysthra follows the **Nexus Aesthetic**:
 ## 🛠️ Tech Stack
 
 - **Frontend**: [React 19](https://reactjs.org/), [Vite](https://vitejs.dev/), [Lucide Icons](https://lucide.dev/)
-- **Editor**: [Monaco Editor](https://microsoft.github.io/monaco-editor/)
 - **Backend**: [Node.js](https://nodejs.org/)
-- **Media Processing**: [Sharp](https://sharp.pixelplumbing.com/), [FFmpeg](https://www.ffmpeg.org/)
 
 ---
 
