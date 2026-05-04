@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Save, Eye, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy } from 'lucide-react';
+import { ArrowLeft, Save, Eye, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -235,6 +235,7 @@ export default function WorldWorkspace({ params }) {
   const [isDirty, setIsDirty] = useState(false);
   const [viewMode, setViewMode] = useState('view'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
   const [worldData, setWorldData] = useState(null);
   const [isVisitor, setIsVisitor] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -552,6 +553,12 @@ export default function WorldWorkspace({ params }) {
     setContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: null });
   };
 
+  const sidebarTabs = [
+    { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
+    { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image },
+    { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
+  ];
+
   return (
     <div className="workspace-container" style={{ flexDirection: 'row' }}>
       <aside className="workspace-sidebar sidebar-nexus">
@@ -565,72 +572,106 @@ export default function WorldWorkspace({ params }) {
           </div>
         </div>
 
-        <nav
-          className={`sidebar-tree sidebar-nexus-tree ${tree.length === 0 ? 'is-empty' : ''}`}
-          onContextMenu={handleTreeBlankContextMenu}
-        >
-          {tree.length === 0 ? (
-            <div className="sidebar-empty-state">
-              <div className="sidebar-empty-icon">
-                <Castle size={30} />
-              </div>
-              <h2>{t('workspace.empty_sidebar_title')}</h2>
-              <p>{t('workspace.empty_sidebar_hint')}</p>
-              {!isVisitor && (
-                <button className="btn-primary sidebar-empty-cta" onClick={() => createDocumentInline()}>
-                  <Plus size={16} /> {t('workspace.create_first_document')}
-                </button>
+        <div className="sidebar-nexus-tabs" role="tablist" aria-label={t('workspace.sidebar_tabs_label')}>
+          {sidebarTabs.map(tab => {
+            const TabIcon = tab.icon;
+            const isActive = activeSidebarTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`sidebar-nexus-tab ${isActive ? 'active' : ''}`}
+                onClick={() => setActiveSidebarTab(tab.id)}
+                role="tab"
+                aria-selected={isActive}
+              >
+                <TabIcon size={14} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeSidebarTab === 'wiki' ? (
+          <>
+            <nav
+              className={`sidebar-tree sidebar-nexus-tree ${tree.length === 0 ? 'is-empty' : ''}`}
+              onContextMenu={handleTreeBlankContextMenu}
+            >
+              {tree.length === 0 ? (
+                <div className="sidebar-empty-state">
+                  <div className="sidebar-empty-icon">
+                    <Castle size={30} />
+                  </div>
+                  <h2>{t('workspace.empty_sidebar_title')}</h2>
+                  <p>{t('workspace.empty_sidebar_hint')}</p>
+                  {!isVisitor && (
+                    <button className="btn-primary sidebar-empty-cta" onClick={() => createDocumentInline()}>
+                      <Plus size={16} /> {t('workspace.create_first_document')}
+                    </button>
+                  )}
+                </div>
+              ) : filteredTree.length === 0 ? (
+                <div className="sidebar-empty-state compact">
+                  <div className="sidebar-empty-icon">
+                    <Search size={26} />
+                  </div>
+                  <h2>{t('workspace.no_search_results')}</h2>
+                  <p>{t('workspace.no_search_results_hint')}</p>
+                </div>
+              ) : (
+                <FileTree 
+                  nodes={filteredTree} 
+                  onFileSelect={selectContainer}
+                  selectedFile={selectedContainer}
+                  onCreateChild={createDocumentInline}
+                  onIconSelect={handleIconSelect}
+                  onContextMenu={(e, node) => setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, node })}
+                  renamingPath={renamingPath}
+                  onRename={handleRename}
+                  onRequestRename={(node) => setRenamingPath(node.path)}
+                  onDelete={handleDelete}
+                  isSearching={!!searchQuery}
+                  isVisitor={isVisitor}
+                  worldData={worldData}
+                />
               )}
+            </nav>
+
+            <div className="sidebar-search-dock">
+              <div className="sidebar-search-bar">
+                <Search size={15} />
+                <input
+                  placeholder={t('workspace.search_tree')}
+                  value={searchQuery}
+                  onChange={event => setSearchQuery(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Escape') setSearchQuery('');
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    title={t('common.cancel')}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
             </div>
-          ) : filteredTree.length === 0 ? (
+          </>
+        ) : (
+          <div className="sidebar-panel-placeholder">
             <div className="sidebar-empty-state compact">
               <div className="sidebar-empty-icon">
-                <Search size={26} />
+                {activeSidebarTab === 'assets' ? <Image size={28} /> : <FileText size={28} />}
               </div>
-              <h2>{t('workspace.no_search_results')}</h2>
-              <p>{t('workspace.no_search_results_hint')}</p>
+              <h2>{activeSidebarTab === 'assets' ? t('workspace.assets_empty_title') : t('workspace.templates_empty_title')}</h2>
+              <p>{activeSidebarTab === 'assets' ? t('workspace.assets_empty_hint') : t('workspace.templates_empty_hint')}</p>
             </div>
-          ) : (
-            <FileTree 
-              nodes={filteredTree} 
-              onFileSelect={selectContainer}
-              selectedFile={selectedContainer}
-              onCreateChild={createDocumentInline}
-              onIconSelect={handleIconSelect}
-              onContextMenu={(e, node) => setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, node })}
-              renamingPath={renamingPath}
-              onRename={handleRename}
-              onRequestRename={(node) => setRenamingPath(node.path)}
-              onDelete={handleDelete}
-              isSearching={!!searchQuery}
-              isVisitor={isVisitor}
-              worldData={worldData}
-            />
-          )}
-        </nav>
-
-        <div className="sidebar-search-dock">
-          <div className="sidebar-search-bar">
-            <Search size={15} />
-            <input
-              placeholder={t('workspace.search_tree')}
-              value={searchQuery}
-              onChange={event => setSearchQuery(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Escape') setSearchQuery('');
-              }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                title={t('common.cancel')}
-              >
-                <X size={14} />
-              </button>
-            )}
           </div>
-        </div>
+        )}
       </aside>
 
       {/* Área Principal */}
