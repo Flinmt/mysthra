@@ -1,5 +1,6 @@
 const worlds = require("./worlds");
 const indexer = require("./indexer");
+const assets = require("./assets");
 const {
   getFileTree,
   createDocument,
@@ -16,6 +17,7 @@ const {
 module.exports = {
   ...worlds,
   ...indexer,
+  ...assets,
   getFileTree,
   createDocument,
   createDocumentPlaceholder,

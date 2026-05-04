@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Save, Eye, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image } from 'lucide-react';
+import { ArrowLeft, Save, Eye, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -8,6 +8,8 @@ import DOMPurify from 'dompurify';
 const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
 };
+
+const AUDIO_EXTENSIONS = new Set(['mp3', 'ogg', 'wav', 'm4a', 'mp4']);
 
 function getTreeChildren(node) {
   // Retorna apenas filhos que são containers para a Sidebar
@@ -26,6 +28,276 @@ function findNodeByPath(nodes = [], targetPath = '') {
     if (childMatch) return childMatch;
   }
   return null;
+}
+
+function findAssetByPath(nodes = [], targetPath = '') {
+  for (const node of nodes) {
+    if (node.path === targetPath) return node;
+    const childMatch = findAssetByPath(node.children || [], targetPath);
+    if (childMatch) return childMatch;
+  }
+  return null;
+}
+
+function getAssetFolders(nodes = []) {
+  const folders = [];
+  const walk = (items) => {
+    for (const item of items) {
+      if (item.type !== 'folder') continue;
+      folders.push(item);
+      walk(item.children || []);
+    }
+  };
+  walk(nodes);
+  return folders;
+}
+
+function isInvalidAssetMoveTarget(sourceNode, targetPath) {
+  if (!sourceNode || sourceNode.type !== 'folder') return false;
+  return targetPath === sourceNode.path || targetPath.startsWith(`${sourceNode.path}/`);
+}
+
+function getFileExtension(filename = '') {
+  return filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
+}
+
+function getFileBaseName(filename = '') {
+  const dotIndex = filename.lastIndexOf('.');
+  return dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
+}
+
+function pathParent(assetPath = '') {
+  const normalized = String(assetPath || '').replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/');
+  return index > 0 ? normalized.slice(0, index) : '';
+}
+
+function formatAssetSize(size = 0) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function convertImageToWebp(file) {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl);
+        if (!blob) {
+          reject(new Error('Could not convert image'));
+          return;
+        }
+        resolve(blob);
+      }, 'image/webp', 0.86);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read image'));
+    };
+    image.src = objectUrl;
+  });
+}
+
+async function prepareAssetUpload(file) {
+  const extension = getFileExtension(file.name);
+  const isGif = extension === 'gif' || file.type === 'image/gif';
+
+  if (file.type.startsWith('image/') && !isGif) {
+    const blob = await convertImageToWebp(file);
+    return {
+      blob,
+      filename: `${getFileBaseName(file.name)}.webp`,
+      contentType: 'image/webp'
+    };
+  }
+
+  if (isGif) {
+    return { blob: file, filename: file.name, contentType: file.type || 'image/gif' };
+  }
+
+  if (file.type.startsWith('audio/') && AUDIO_EXTENSIONS.has(extension)) {
+    return { blob: file, filename: file.name, contentType: file.type || 'application/octet-stream' };
+  }
+
+  throw new Error('Unsupported asset type');
+}
+
+function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
+  if (!nodes || nodes.length === 0) return null;
+  return (
+    <ul className="asset-tree">
+      {nodes.map(node => (
+        <AssetTreeNode
+          key={node.path}
+          node={node}
+          selectedAsset={selectedAsset}
+          selectedFolderPath={selectedFolderPath}
+          onSelectAsset={onSelectAsset}
+          onSelectFolder={onSelectFolder}
+          onCreateFolder={onCreateFolder}
+          onContextMenu={onContextMenu}
+          renamingPath={renamingPath}
+          onRename={onRename}
+          onRequestRename={onRequestRename}
+          onDelete={onDelete}
+          isVisitor={isVisitor}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
+  const { t } = useTranslation();
+  const [isOpen, setIsOpen] = useState(true);
+  const [editValue, setEditValue] = useState(node.name);
+  const isFolder = node.type === 'folder';
+  const isRenaming = renamingPath === node.path;
+  const isSelected = isFolder ? selectedFolderPath === node.path : selectedAsset?.path === node.path;
+  const Icon = isFolder ? Folder : node.mediaType === 'audio' ? Music : Image;
+
+  useEffect(() => {
+    if (isRenaming) setEditValue(node.name);
+  }, [isRenaming, node.name]);
+
+  useEffect(() => {
+    if (renamingPath?.startsWith(`${node.path}/`)) setIsOpen(true);
+  }, [node.path, renamingPath]);
+
+  return (
+    <li className="asset-tree-document">
+      <div
+        className={`asset-tree-node ${isSelected ? 'selected' : ''}`}
+        onContextMenu={(event) => {
+          if (isVisitor || isRenaming) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onContextMenu(event, node);
+        }}
+        onClick={() => {
+          if (isRenaming) return;
+          if (isFolder) {
+            setIsOpen(prev => !prev);
+            onSelectFolder(node.path);
+          } else {
+            onSelectAsset(node);
+          }
+        }}
+      >
+        <span className={`tree-expander ${isFolder && node.children?.length ? 'has-children' : ''}`} aria-hidden="true">
+          {isFolder && node.children?.length ? (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : null}
+        </span>
+        <span className="tree-icon">
+          <Icon size={14} />
+        </span>
+        {isRenaming ? (
+          <input
+            className="tree-rename-input"
+            value={editValue}
+            onChange={(event) => setEditValue(event.target.value)}
+            onBlur={() => onRename(null)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onRename(node, editValue);
+              if (event.key === 'Escape') onRename(null);
+            }}
+            autoFocus
+            onFocus={(event) => event.target.select()}
+            onClick={(event) => event.stopPropagation()}
+          />
+        ) : (
+          <span className="asset-tree-label">
+            <span>{node.name}</span>
+            {!isFolder && <small>{formatAssetSize(node.size)}</small>}
+          </span>
+        )}
+        {!isVisitor && !isRenaming && (
+          <span className="tree-node-actions asset-node-actions">
+            {isFolder && (
+              <span
+                role="button"
+                tabIndex={0}
+                className="node-action-btn"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsOpen(true);
+                  onCreateFolder(node.path);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setIsOpen(true);
+                    onCreateFolder(node.path);
+                  }
+                }}
+                title={t('common.create')}
+              >
+                <Plus size={14} />
+              </span>
+            )}
+            <span
+              role="button"
+              tabIndex={0}
+              className="node-action-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRequestRename(node);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onRequestRename(node);
+                }
+              }}
+              title={t('common.rename')}
+            >
+              <Edit2 size={14} />
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              className="node-action-btn danger"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(node);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onDelete(node);
+                }
+              }}
+              title={t('common.delete')}
+            >
+              <Trash2 size={14} />
+            </span>
+          </span>
+        )}
+      </div>
+      {isFolder && isOpen && node.children?.length > 0 && (
+        <AssetTree
+          nodes={node.children}
+          selectedAsset={selectedAsset}
+          selectedFolderPath={selectedFolderPath}
+          onSelectAsset={onSelectAsset}
+          onSelectFolder={onSelectFolder}
+          onCreateFolder={onCreateFolder}
+          onContextMenu={onContextMenu}
+          renamingPath={renamingPath}
+          onRename={onRename}
+          onRequestRename={onRequestRename}
+          onDelete={onDelete}
+          isVisitor={isVisitor}
+        />
+      )}
+    </li>
+  );
 }
 
 function FileTree({ nodes, onFileSelect, selectedFile, onCreateChild, onIconSelect, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isSearching, isVisitor, worldData }) {
@@ -235,17 +507,30 @@ export default function WorldWorkspace({ params }) {
   const [isDirty, setIsDirty] = useState(false);
   const [viewMode, setViewMode] = useState('view'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
+  const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
+  const [assetTree, setAssetTree] = useState([]);
+  const [assetLoading, setAssetLoading] = useState(false);
+  const [assetUploading, setAssetUploading] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [selectedAssetFolderPath, setSelectedAssetFolderPath] = useState('');
   const [worldData, setWorldData] = useState(null);
   const [isVisitor, setIsVisitor] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const assetFileInputRef = useRef(null);
   
   // Modals/UI State
   const [prompt, setPrompt] = useState({ isOpen: false, parentPath: '', name: '', type: 'container', contentType: 'wiki' });
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
+  const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
+  const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
+  const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
+  const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
   const [renamingPath, setRenamingPath] = useState(null);
+  const [assetRenamingPath, setAssetRenamingPath] = useState(null);
+  const assetUploadTargetPathRef = useRef('');
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -280,10 +565,31 @@ export default function WorldWorkspace({ params }) {
     }
   }, [worldId]);
 
+  const fetchAssets = useCallback(async () => {
+    setAssetLoading(true);
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets`);
+      if (res.ok) {
+        const data = await res.json();
+        setAssetTree(data.items || []);
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    } finally {
+      setAssetLoading(false);
+    }
+  }, [addToast, t, worldId]);
+
   useEffect(() => {
     fetchTree();
     fetchWorldData();
   }, [fetchTree, fetchWorldData]);
+
+  useEffect(() => {
+    if (activeSidebarTab === 'assets') {
+      fetchAssets();
+    }
+  }, [activeSidebarTab, fetchAssets]);
 
   // Sincroniza o container selecionado quando a árvore muda (para refletir novas abas)
   useEffect(() => {
@@ -499,6 +805,41 @@ export default function WorldWorkspace({ params }) {
     return search(tree);
   }, [tree, searchQuery]);
 
+  const filteredAssetTree = useMemo(() => {
+    if (!assetSearchQuery) return assetTree;
+
+    const query = assetSearchQuery.toLowerCase();
+    const filterNodes = (nodes) => {
+      return nodes.map(node => {
+        const matches = node.name.toLowerCase().includes(query);
+        const children = node.children ? filterNodes(node.children) : [];
+        if (matches || children.length > 0) {
+          return { ...node, children };
+        }
+        return null;
+      }).filter(Boolean);
+    };
+
+    return filterNodes(assetTree);
+  }, [assetSearchQuery, assetTree]);
+
+  const assetMoveTargets = useMemo(() => {
+    const sourceNode = assetMovePrompt.node;
+    return [
+      {
+        name: t('workspace.assets_root_target'),
+        path: '',
+        depth: 0,
+        disabled: isInvalidAssetMoveTarget(sourceNode, '')
+      },
+      ...getAssetFolders(assetTree).map(folder => ({
+        ...folder,
+        depth: folder.path.split('/').length,
+        disabled: isInvalidAssetMoveTarget(sourceNode, folder.path)
+      }))
+    ];
+  }, [assetMovePrompt.node, assetTree, t]);
+
   const renderedContent = useMemo(() => {
     return DOMPurify.sanitize(marked(fileContent));
   }, [fileContent]);
@@ -547,10 +888,242 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  const getAssetUrl = (assetPath) => {
+    return `/api/worlds/${encodeURIComponent(worldId)}/assets/file?path=${encodeURIComponent(assetPath)}`;
+  };
+
+  const getUniqueAssetFolderName = (parentPath = '') => {
+    const baseName = t('workspace.new_asset_folder_name');
+    const parentNode = parentPath ? findAssetByPath(assetTree, parentPath) : null;
+    const siblingNodes = parentNode ? (parentNode.children || []) : assetTree;
+    const siblingNames = new Set(siblingNodes.filter(node => node.type === 'folder').map(node => node.name));
+    if (!siblingNames.has(baseName)) return baseName;
+
+    let suffix = 2;
+    while (siblingNames.has(`${baseName} ${suffix}`)) {
+      suffix += 1;
+    }
+    return `${baseName} ${suffix}`;
+  };
+
+  const createAssetFolderInline = async (parentPath = selectedAssetFolderPath) => {
+    if (isVisitor) return;
+    const name = getUniqueAssetFolderName(parentPath);
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentPath,
+          name
+        })
+      });
+      if (res.ok) {
+        const folder = await res.json();
+        setAssetSearchQuery('');
+        setSelectedAssetFolderPath(folder.path);
+        setSelectedAsset(null);
+        await fetchAssets();
+        setAssetRenamingPath(folder.path);
+        addToast(t('workspace.asset_folder_created'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const handleAssetRename = async (node, newName) => {
+    if (!node || !newName || newName === node.name) {
+      setAssetRenamingPath(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: node.path, newName })
+      });
+      if (res.ok) {
+        const renamed = await res.json();
+        setAssetRenamingPath(null);
+        if (selectedAsset?.path === node.path) setSelectedAsset(renamed.type === 'file' ? renamed : null);
+        if (selectedAssetFolderPath === node.path) setSelectedAssetFolderPath(renamed.path);
+        await fetchAssets();
+        addToast(t('common.renamed'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const handleAssetDelete = (node) => {
+    if (isVisitor || !node) return;
+    setAssetDeletePrompt({ isOpen: true, node });
+  };
+
+  const confirmAssetDelete = async () => {
+    const node = assetDeletePrompt.node;
+    if (isVisitor || !node) return;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets?path=${encodeURIComponent(node.path)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        if (selectedAsset?.path === node.path || selectedAsset?.path?.startsWith(`${node.path}/`)) {
+          setSelectedAsset(null);
+        }
+        if (selectedAssetFolderPath === node.path || selectedAssetFolderPath?.startsWith(`${node.path}/`)) {
+          setSelectedAssetFolderPath('');
+        }
+        setAssetDeletePrompt({ isOpen: false, node: null });
+        await fetchAssets();
+        addToast(t('common.deleted'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const handleAssetDuplicate = async (includeChildren) => {
+    const node = assetDuplicatePrompt.node;
+    if (isVisitor || !node) return;
+
+    const extension = node.type === 'file' ? getFileExtension(node.name) : '';
+    const baseName = node.type === 'file' ? getFileBaseName(node.name) : node.name;
+    const copyName = extension
+      ? `${baseName} ${t('workspace.copy_suffix')}.${extension}`
+      : `${baseName} ${t('workspace.copy_suffix')}`;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: node.path,
+          includeChildren,
+          name: copyName
+        })
+      });
+      if (res.ok) {
+        const duplicated = await res.json();
+        setAssetDuplicatePrompt({ isOpen: false, node: null });
+        setAssetSearchQuery('');
+        await fetchAssets();
+        setAssetRenamingPath(duplicated.path);
+        if (duplicated.type === 'file') setSelectedAsset(duplicated);
+        if (duplicated.type === 'folder') setSelectedAssetFolderPath(duplicated.path);
+        addToast(t('workspace.duplicated'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const openAssetMovePrompt = (node) => {
+    if (isVisitor || !node) return;
+    const parentPath = pathParent(node.path);
+    setAssetMovePrompt({ isOpen: true, node, targetPath: parentPath });
+  };
+
+  const confirmAssetMove = async () => {
+    const node = assetMovePrompt.node;
+    if (isVisitor || !node) return;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourcePath: node.path,
+          targetFolderPath: assetMovePrompt.targetPath
+        })
+      });
+      if (res.ok) {
+        const moved = await res.json();
+        setAssetMovePrompt({ isOpen: false, node: null, targetPath: '' });
+        setAssetSearchQuery('');
+        await fetchAssets();
+        if (moved.type === 'file') {
+          setSelectedAsset(moved);
+          setSelectedAssetFolderPath(pathParent(moved.path));
+        } else {
+          setSelectedAsset(null);
+          setSelectedAssetFolderPath(moved.path);
+        }
+        addToast(t('workspace.asset_moved'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const handleAssetUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    const uploadPath = assetUploadTargetPathRef.current || selectedAssetFolderPath;
+    assetUploadTargetPathRef.current = '';
+    setAssetUploading(true);
+    try {
+      for (const file of files) {
+        const prepared = await prepareAssetUpload(file);
+        const query = new URLSearchParams({
+          path: uploadPath,
+          filename: prepared.filename
+        });
+        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': prepared.contentType },
+          body: prepared.blob
+        });
+
+        if (!res.ok) {
+          addToast(t('workspace.asset_upload_failed', { name: file.name }), 'error');
+          continue;
+        }
+
+        const uploaded = await res.json();
+        setSelectedAsset(uploaded);
+      }
+
+      await fetchAssets();
+      addToast(t('workspace.assets_uploaded'), 'success');
+    } catch {
+      addToast(t('workspace.asset_unsupported'), 'error');
+    } finally {
+      setAssetUploading(false);
+    }
+  };
+
+  const openAssetUpload = (targetPath = selectedAssetFolderPath) => {
+    assetUploadTargetPathRef.current = targetPath;
+    assetFileInputRef.current?.click();
+  };
+
   const handleTreeBlankContextMenu = (event) => {
     if (isVisitor) return;
     event.preventDefault();
     setContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: null });
+  };
+
+  const handleAssetsBlankContextMenu = (event) => {
+    if (isVisitor) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setAssetContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: null });
   };
 
   const sidebarTabs = [
@@ -639,6 +1212,14 @@ export default function WorldWorkspace({ params }) {
             </nav>
 
             <div className="sidebar-search-dock">
+              {tree.length > 0 && !isVisitor && (
+                <div className="wiki-toolbar">
+                  <button type="button" onClick={() => createDocumentInline()}>
+                    <Plus size={14} />
+                    <span>{t('workspace.create_root_document')}</span>
+                  </button>
+                </div>
+              )}
               <div className="sidebar-search-bar">
                 <Search size={15} />
                 <input
@@ -661,14 +1242,126 @@ export default function WorldWorkspace({ params }) {
               </div>
             </div>
           </>
+        ) : activeSidebarTab === 'assets' ? (
+          <div className="sidebar-assets-panel">
+            <div
+              className="assets-tree-panel"
+              onContextMenu={(event) => {
+                handleAssetsBlankContextMenu(event);
+              }}
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSelectedAssetFolderPath('');
+                }
+              }}
+            >
+              {assetLoading ? (
+                <div className="sidebar-empty-state compact">
+                  <div className="sidebar-empty-icon">
+                    <Image size={26} />
+                  </div>
+                  <h2>{t('common.loading')}</h2>
+                </div>
+              ) : assetTree.length === 0 ? (
+                <div className="sidebar-empty-state compact">
+                  <div className="sidebar-empty-icon">
+                    <Image size={26} />
+                  </div>
+                  <h2>{t('workspace.assets_empty_title')}</h2>
+                  <p>{t('workspace.assets_empty_hint')}</p>
+                </div>
+              ) : filteredAssetTree.length === 0 ? (
+                <div className="sidebar-empty-state compact">
+                  <div className="sidebar-empty-icon">
+                    <Search size={26} />
+                  </div>
+                  <h2>{t('workspace.no_search_results')}</h2>
+                  <p>{t('workspace.no_search_results_hint')}</p>
+                </div>
+              ) : (
+                <AssetTree
+                  nodes={filteredAssetTree}
+                  selectedAsset={selectedAsset}
+                  selectedFolderPath={selectedAssetFolderPath}
+                  onSelectAsset={setSelectedAsset}
+                  onSelectFolder={setSelectedAssetFolderPath}
+                  onCreateFolder={createAssetFolderInline}
+                  onContextMenu={(event, node) => setAssetContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node })}
+                  renamingPath={assetRenamingPath}
+                  onRename={handleAssetRename}
+                  onRequestRename={(node) => setAssetRenamingPath(node.path)}
+                  onDelete={handleAssetDelete}
+                  isVisitor={isVisitor}
+                />
+              )}
+            </div>
+
+            {selectedAsset && (
+              <div className="asset-preview-panel">
+                <div className="asset-preview-header">
+                  <strong>{selectedAsset.name}</strong>
+                  <span>{formatAssetSize(selectedAsset.size)}</span>
+                </div>
+                {selectedAsset.mediaType === 'audio' ? (
+                  <audio controls src={getAssetUrl(selectedAsset.path)} />
+                ) : (
+                  <img src={getAssetUrl(selectedAsset.path)} alt={selectedAsset.name} />
+                )}
+              </div>
+            )}
+
+            <div className="assets-bottom-dock">
+              {!isVisitor && (
+                <div className="assets-toolbar">
+                  <input
+                    ref={assetFileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,.gif,audio/*"
+                    onChange={handleAssetUpload}
+                    hidden
+                  />
+                  <button type="button" onClick={() => openAssetUpload()} disabled={assetUploading}>
+                    <Upload size={14} />
+                    <span>{assetUploading ? t('common.uploading') : t('workspace.assets_upload')}</span>
+                  </button>
+                  <button type="button" onClick={() => createAssetFolderInline()}>
+                    <FolderPlus size={14} />
+                    <span>{t('workspace.assets_new_folder')}</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="sidebar-search-bar">
+                <Search size={15} />
+                <input
+                  placeholder={t('workspace.assets_search')}
+                  value={assetSearchQuery}
+                  onChange={event => setAssetSearchQuery(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Escape') setAssetSearchQuery('');
+                  }}
+                />
+                {assetSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setAssetSearchQuery('')}
+                    title={t('common.cancel')}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="sidebar-panel-placeholder">
             <div className="sidebar-empty-state compact">
               <div className="sidebar-empty-icon">
-                {activeSidebarTab === 'assets' ? <Image size={28} /> : <FileText size={28} />}
+                <FileText size={28} />
               </div>
-              <h2>{activeSidebarTab === 'assets' ? t('workspace.assets_empty_title') : t('workspace.templates_empty_title')}</h2>
-              <p>{activeSidebarTab === 'assets' ? t('workspace.assets_empty_hint') : t('workspace.templates_empty_hint')}</p>
+              <h2>{t('workspace.templates_empty_title')}</h2>
+              <p>{t('workspace.templates_empty_hint')}</p>
             </div>
           </div>
         )}
@@ -948,6 +1641,133 @@ export default function WorldWorkspace({ params }) {
         </div>
       )}
 
+      {assetDuplicatePrompt.isOpen && (
+        <div className="duplicate-modal-overlay" onClick={() => setAssetDuplicatePrompt({ isOpen: false, node: null })}>
+          <div className="modal-content glass-panel duplicate-modal" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={() => setAssetDuplicatePrompt({ isOpen: false, node: null })}
+              title={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon">
+                <Copy size={20} />
+              </div>
+              <div>
+                <h3>{t('workspace.duplicate_asset')}</h3>
+                <p>{t('workspace.duplicate_asset_hint', { name: assetDuplicatePrompt.node?.name })}</p>
+              </div>
+            </div>
+
+            {assetDuplicatePrompt.node?.type === 'folder' ? (
+              <div className="duplicate-scope-grid">
+                <button type="button" onClick={() => handleAssetDuplicate(false)}>
+                  <Folder size={18} />
+                  <span>{t('workspace.duplicate_asset_single')}</span>
+                </button>
+                <button type="button" onClick={() => handleAssetDuplicate(true)}>
+                  <FolderPlus size={18} />
+                  <span>{t('workspace.duplicate_asset_with_children')}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="delete-modal-actions">
+                <button type="button" className="asset-folder-create-button" onClick={() => handleAssetDuplicate(false)}>
+                  <Copy size={16} />
+                  <span>{t('workspace.duplicate_asset_single')}</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {assetDeletePrompt.isOpen && (
+        <div className="duplicate-modal-overlay" onClick={() => setAssetDeletePrompt({ isOpen: false, node: null })}>
+          <div className="modal-content glass-panel duplicate-modal delete-modal" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={() => setAssetDeletePrompt({ isOpen: false, node: null })}
+              title={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon delete-modal-icon">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3>{t('workspace.delete_asset')}</h3>
+                <p>{t('workspace.delete_asset_hint', { name: assetDeletePrompt.node?.name })}</p>
+              </div>
+            </div>
+
+            <div className="delete-modal-actions">
+              <button type="button" className="delete-confirm-button" onClick={confirmAssetDelete}>
+                <Trash2 size={16} />
+                <span>{t('workspace.delete_asset_confirm')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assetMovePrompt.isOpen && (
+        <div className="duplicate-modal-overlay" onClick={() => setAssetMovePrompt({ isOpen: false, node: null, targetPath: '' })}>
+          <div className="modal-content glass-panel duplicate-modal" onClick={event => event.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={() => setAssetMovePrompt({ isOpen: false, node: null, targetPath: '' })}
+              title={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon">
+                <MoveRight size={20} />
+              </div>
+              <div>
+                <h3>{t('workspace.move_asset')}</h3>
+                <p>{t('workspace.move_asset_hint', { name: assetMovePrompt.node?.name })}</p>
+              </div>
+            </div>
+
+            <div className="asset-move-target-list">
+              {assetMoveTargets.map(target => (
+                <button
+                  key={target.path || '__root__'}
+                  type="button"
+                  className={`asset-move-target ${assetMovePrompt.targetPath === target.path ? 'selected' : ''}`}
+                  disabled={target.disabled}
+                  onClick={() => setAssetMovePrompt(prev => ({ ...prev, targetPath: target.path }))}
+                  style={{ paddingLeft: 12 + target.depth * 16 }}
+                >
+                  <Folder size={15} />
+                  <span>{target.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="asset-folder-create-button"
+                onClick={confirmAssetMove}
+                disabled={assetMoveTargets.find(target => target.path === assetMovePrompt.targetPath)?.disabled}
+              >
+                <MoveRight size={16} />
+                <span>{t('workspace.move_asset_confirm')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {contextMenu.isOpen && (
         <div className="context-menu-overlay" onClick={() => setContextMenu(prev => ({ ...prev, isOpen: false }))}>
           <div 
@@ -974,6 +1794,52 @@ export default function WorldWorkspace({ params }) {
               <button onClick={() => { setContextMenu(prev => ({ ...prev, isOpen: false })); createDocumentInline(); }}>
                 <Plus size={14} /> {t('workspace.create_root_document')}
               </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {assetContextMenu.isOpen && (
+        <div className="context-menu-overlay" onClick={() => setAssetContextMenu(prev => ({ ...prev, isOpen: false }))}>
+          <div
+            className="context-menu glass-panel"
+            style={{ top: assetContextMenu.y, left: assetContextMenu.x }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {assetContextMenu.node ? (
+              <>
+                {assetContextMenu.node.type === 'folder' && (
+                  <>
+                    <button onClick={() => { openAssetUpload(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                      <Upload size={14} /> {t('workspace.assets_upload_here')}
+                    </button>
+                    <button onClick={() => { createAssetFolderInline(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                      <Plus size={14} /> {t('workspace.assets_new_folder')}
+                    </button>
+                  </>
+                )}
+                <button onClick={() => { setAssetDuplicatePrompt({ isOpen: true, node: assetContextMenu.node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                  <Copy size={14} /> {t('workspace.duplicate_asset')}
+                </button>
+                <button onClick={() => { openAssetMovePrompt(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                  <MoveRight size={14} /> {t('workspace.move_asset')}
+                </button>
+                <button onClick={() => { setAssetRenamingPath(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                  <Edit2 size={14} /> {t('common.rename')}
+                </button>
+                <button className="danger" onClick={() => { handleAssetDelete(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                  <Trash2 size={14} /> {t('common.delete')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => { setAssetContextMenu(prev => ({ ...prev, isOpen: false })); openAssetUpload(''); }}>
+                  <Upload size={14} /> {t('workspace.assets_upload_here')}
+                </button>
+                <button onClick={() => { setAssetContextMenu(prev => ({ ...prev, isOpen: false })); createAssetFolderInline(''); }}>
+                  <Plus size={14} /> {t('workspace.assets_new_folder')}
+                </button>
+              </>
             )}
           </div>
         </div>
