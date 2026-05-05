@@ -105,6 +105,51 @@ function parseBlockNoteContent(content = '') {
   return null;
 }
 
+const MYTHRA_BLOCKNOTE_THEME = {
+  colors: {
+    editor: {
+      text: 'rgba(248, 250, 252, 0.93)',
+      background: 'transparent'
+    },
+    menu: {
+      text: 'rgba(226, 232, 240, 0.92)',
+      background: 'rgba(9, 14, 27, 0.94)'
+    },
+    tooltip: {
+      text: 'rgba(226, 232, 240, 0.92)',
+      background: 'rgba(30, 41, 59, 0.96)'
+    },
+    hovered: {
+      text: 'rgba(248, 250, 252, 0.98)',
+      background: 'rgba(124, 58, 237, 0.18)'
+    },
+    selected: {
+      text: '#f8fafc',
+      background: 'rgba(139, 92, 246, 0.3)'
+    },
+    disabled: {
+      text: 'rgba(100, 116, 139, 0.82)',
+      background: 'rgba(15, 23, 42, 0.56)'
+    },
+    shadow: 'rgba(2, 6, 23, 0.42)',
+    border: 'rgba(148, 163, 184, 0.18)',
+    sideMenu: 'rgba(203, 213, 225, 0.58)',
+    highlights: {
+      gray: { text: '#cbd5e1', background: 'rgba(100, 116, 139, 0.18)' },
+      brown: { text: '#d6d3d1', background: 'rgba(120, 113, 108, 0.18)' },
+      red: { text: '#fecaca', background: 'rgba(239, 68, 68, 0.18)' },
+      orange: { text: '#fed7aa', background: 'rgba(249, 115, 22, 0.18)' },
+      yellow: { text: '#fef08a', background: 'rgba(234, 179, 8, 0.16)' },
+      green: { text: '#bbf7d0', background: 'rgba(34, 197, 94, 0.16)' },
+      blue: { text: '#bfdbfe', background: 'rgba(59, 130, 246, 0.18)' },
+      purple: { text: '#ddd6fe', background: 'rgba(139, 92, 246, 0.22)' },
+      pink: { text: '#fbcfe8', background: 'rgba(236, 72, 153, 0.18)' }
+    }
+  },
+  borderRadius: 8,
+  fontFamily: 'inherit'
+};
+
 function WikiBlockEditor({
   content,
   contentKey,
@@ -306,7 +351,8 @@ function WikiBlockEditor({
       <BlockNoteView
         editor={editor}
         editable={editable}
-        theme="dark"
+        theme={MYTHRA_BLOCKNOTE_THEME}
+        className="mythra-blocknote"
         onChange={(instance) => {
           if (isLoadingRef.current) return;
           onChangeRef.current(JSON.stringify(instance.document));

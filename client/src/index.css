@@ -3481,23 +3481,62 @@ body {
 
 .wiki-block-editor {
   min-height: 420px;
-  padding: 16px 0 72px;
+  padding: 10px 0 72px;
   color: rgba(248, 250, 252, 0.92);
+  --bn-colors-editor-text: rgba(248, 250, 252, 0.93);
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-text: rgba(226, 232, 240, 0.92);
+  --bn-colors-menu-background: rgba(9, 14, 27, 0.88);
+  --bn-colors-tooltip-text: rgba(226, 232, 240, 0.9);
+  --bn-colors-tooltip-background: rgba(30, 41, 59, 0.94);
+  --bn-colors-hovered-text: rgba(248, 250, 252, 0.98);
+  --bn-colors-hovered-background: rgba(124, 58, 237, 0.16);
+  --bn-colors-selected-text: #f8fafc;
+  --bn-colors-selected-background: rgba(139, 92, 246, 0.28);
+  --bn-colors-disabled-text: rgba(100, 116, 139, 0.82);
+  --bn-colors-disabled-background: rgba(15, 23, 42, 0.52);
+  --bn-colors-border: rgba(148, 163, 184, 0.18);
+  --bn-colors-side-menu: rgba(203, 213, 225, 0.54);
+  --bn-border: 1px solid rgba(148, 163, 184, 0.18);
+  --bn-border-radius-small: 7px;
+  --bn-border-radius-medium: 10px;
+  --bn-border-radius-large: 12px;
+  --bn-font-family: inherit;
+  --bn-shadow-light: 0 10px 24px rgba(2, 6, 23, 0.2);
+  --bn-shadow-medium: 0 18px 44px rgba(2, 6, 23, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .wiki-block-editor .bn-container,
 .wiki-block-editor .bn-editor,
-.wiki-block-editor [data-color-scheme="dark"] {
+.wiki-block-editor [data-color-scheme="dark"],
+.wiki-block-editor .bn-mantine {
   background: transparent;
 }
 
 .wiki-block-editor .bn-container {
   color: rgba(248, 250, 252, 0.92);
   font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.75;
 }
 
 .wiki-block-editor .bn-editor {
   padding: 0;
+  caret-color: #c4b5fd;
+}
+
+.wiki-block-editor .bn-block-outer {
+  line-height: 1.72;
+}
+
+.wiki-block-editor .bn-block {
+  transition: background 0.16s ease;
+}
+
+.wiki-block-editor .bn-block-content {
+  min-height: 30px;
+  padding: 3px 0;
+  border-radius: 7px;
 }
 
 .wiki-block-editor .bn-block-content,
@@ -3505,15 +3544,397 @@ body {
   color: rgba(248, 250, 252, 0.92);
 }
 
+.wiki-block-editor .bn-block-content.ProseMirror-selectednode > *,
+.wiki-block-editor .ProseMirror-selectednode > .bn-block-content > * {
+  border-radius: 8px;
+  outline: 2px solid rgba(167, 139, 250, 0.52);
+  outline-offset: 3px;
+}
+
 .wiki-block-editor .bn-block-content[data-is-empty-and-focused] .bn-inline-content::before,
 .wiki-block-editor .bn-block-content[data-is-empty-and-focused]::before {
-  color: rgba(148, 163, 184, 0.52);
+  color: rgba(148, 163, 184, 0.5);
+  font-style: italic;
+}
+
+.wiki-block-editor .bn-default-styles h1,
+.wiki-block-editor .bn-default-styles h2,
+.wiki-block-editor .bn-default-styles h3 {
+  color: rgba(248, 250, 252, 0.96);
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.wiki-block-editor .bn-default-styles h1 {
+  font-size: 2rem;
+  line-height: 1.18;
+  margin-top: 1.05em;
+  margin-bottom: 0.35em;
+}
+
+.wiki-block-editor .bn-default-styles h2 {
+  font-size: 1.48rem;
+  line-height: 1.25;
+  margin-top: 1em;
+  margin-bottom: 0.25em;
+}
+
+.wiki-block-editor .bn-default-styles h3 {
+  font-size: 1.18rem;
+  line-height: 1.34;
+  margin-top: 0.9em;
+  margin-bottom: 0.15em;
+}
+
+.wiki-block-editor .bn-inline-content code {
+  padding: 0.12rem 0.32rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  color: #ddd6fe;
+  background: rgba(15, 23, 42, 0.48);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.wiki-block-editor .bn-block-content[data-content-type="codeBlock"] {
+  margin: 8px 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  color: rgba(226, 232, 240, 0.94);
+  background: rgba(2, 6, 23, 0.44);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.wiki-block-editor .bn-block-content[data-content-type="codeBlock"] > pre {
+  padding: 20px;
+}
+
+.wiki-block-editor .bn-block-content[data-content-type="codeBlock"] > div > select {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.wiki-block-editor .bn-block-content[data-content-type="bulletListItem"]::before,
+.wiki-block-editor .bn-block-content[data-content-type="numberedListItem"]::before {
+  color: rgba(196, 181, 253, 0.86);
+}
+
+.wiki-block-editor .bn-block-group .bn-block-group > .bn-block-outer:not([data-prev-depth-changed])::before {
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.wiki-block-editor [data-file-block] .bn-add-file-button {
+  border: 1px dashed rgba(167, 139, 250, 0.3);
+  border-radius: 10px;
+  color: rgba(226, 232, 240, 0.84);
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.wiki-block-editor .bn-editor[contenteditable="true"] [data-file-block] .bn-add-file-button:hover,
+.wiki-block-editor [data-file-block] .bn-file-name-with-icon:hover,
+.wiki-block-editor .ProseMirror-selectednode .bn-file-name-with-icon {
+  background: rgba(124, 58, 237, 0.14);
+}
+
+.wiki-block-editor [data-file-block] .bn-visual-media {
+  border-radius: 10px;
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.22);
+}
+
+.wiki-block-editor [data-file-block] .bn-file-caption {
+  color: rgba(148, 163, 184, 0.86);
+  font-size: 0.82rem;
+}
+
+.wiki-block-editor [data-file-block] .bn-resize-handle {
+  width: 9px;
+  height: 36px;
+  border: 1px solid rgba(221, 214, 254, 0.72);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.84);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.34);
 }
 
 .wiki-block-editor .bn-side-menu,
 .wiki-block-editor .bn-formatting-toolbar,
 .wiki-block-editor .bn-suggestion-menu {
   font-family: inherit;
+}
+
+.wiki-block-editor .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item) {
+  border-radius: 7px;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.wiki-block-editor .bn-side-menu .mantine-UnstyledButton-root:hover {
+  background: rgba(124, 58, 237, 0.14);
+  transform: translateY(-1px);
+}
+
+.wiki-block-editor .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item) svg {
+  color: rgba(203, 213, 225, 0.62);
+}
+
+.wiki-block-editor .bn-mantine .bn-toolbar,
+.wiki-block-editor .bn-mantine .bn-panel,
+.wiki-block-editor .bn-mantine .bn-form-popover,
+.wiki-block-editor .bn-mantine .mantine-Menu-dropdown,
+.wiki-block-editor .bn-mantine .bn-menu-dropdown,
+.wiki-block-editor .bn-mantine .bn-suggestion-menu,
+.wiki-block-editor .bn-mantine .bn-grid-suggestion-menu {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: rgba(226, 232, 240, 0.92);
+  background: rgba(9, 14, 27, 0.9);
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.wiki-block-editor .bn-mantine .bn-toolbar {
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.wiki-block-editor .bn-toolbar .mantine-Button-root,
+.wiki-block-editor .bn-toolbar .mantine-ActionIcon-root,
+.wiki-block-editor .bn-panel .mantine-Button-root,
+.wiki-block-editor .bn-action-toolbar .mantine-Button-root,
+.wiki-block-editor .bn-action-toolbar .mantine-ActionIcon-root {
+  border-radius: 7px;
+  color: rgba(226, 232, 240, 0.88);
+  background: transparent;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.wiki-block-editor .bn-toolbar .mantine-Button-root:hover,
+.wiki-block-editor .bn-toolbar .mantine-ActionIcon-root:hover,
+.wiki-block-editor .bn-panel .mantine-Button-root:hover,
+.wiki-block-editor .bn-action-toolbar .mantine-Button-root:hover,
+.wiki-block-editor .bn-action-toolbar .mantine-ActionIcon-root:hover {
+  color: rgba(248, 250, 252, 0.98);
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.wiki-block-editor .bn-toolbar .mantine-Button-root[data-selected],
+.wiki-block-editor .bn-toolbar .mantine-ActionIcon-root[data-selected],
+.wiki-block-editor .bn-action-toolbar .mantine-Button-root[data-selected],
+.wiki-block-editor .bn-action-toolbar .mantine-ActionIcon-root[data-selected] {
+  color: #f8fafc;
+  background: rgba(139, 92, 246, 0.28);
+}
+
+.wiki-block-editor .bn-mantine .mantine-Menu-item,
+.wiki-block-editor .bn-mantine .bn-suggestion-menu-item {
+  border-radius: 8px;
+  color: rgba(226, 232, 240, 0.88);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.wiki-block-editor .bn-mantine .mantine-Menu-item:hover,
+.wiki-block-editor .bn-mantine .mantine-Menu-item[aria-selected="true"],
+.wiki-block-editor .bn-mantine .bn-suggestion-menu-item:hover,
+.wiki-block-editor .bn-mantine .bn-suggestion-menu-item[aria-selected="true"] {
+  color: rgba(248, 250, 252, 0.98);
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.wiki-block-editor .bn-mt-suggestion-menu-item-title {
+  color: rgba(248, 250, 252, 0.94);
+  font-weight: 660;
+}
+
+.wiki-block-editor .bn-mt-suggestion-menu-item-subtitle {
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.wiki-block-editor .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  color: #ddd6fe;
+  background: rgba(124, 58, 237, 0.18);
+}
+
+.wiki-block-editor .mantine-TextInput-input,
+.wiki-block-editor .mantine-FileInput-input {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: rgba(226, 232, 240, 0.92);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.wiki-block-editor .mantine-TextInput-input:focus,
+.wiki-block-editor .mantine-FileInput-input:focus {
+  border-color: rgba(167, 139, 250, 0.45);
+}
+
+.mythra-blocknote.bn-root,
+.mythra-blocknote.bn-container,
+.mythra-blocknote.bn-mantine,
+.mythra-blocknote .bn-editor {
+  background: transparent !important;
+  color: rgba(248, 250, 252, 0.93);
+  font-family: inherit;
+}
+
+.mythra-blocknote.bn-container {
+  max-width: 100%;
+  line-height: 1.74;
+}
+
+.mythra-blocknote .bn-editor {
+  padding: 0 !important;
+  caret-color: #c4b5fd;
+}
+
+.mythra-blocknote .bn-block-content {
+  min-height: 30px;
+  padding-block: 4px;
+  border-radius: 7px;
+}
+
+.mythra-blocknote .bn-block-content,
+.mythra-blocknote .bn-inline-content {
+  color: rgba(248, 250, 252, 0.93) !important;
+}
+
+.mythra-blocknote .bn-block-content[data-is-empty-and-focused] .bn-inline-content::before,
+.mythra-blocknote .bn-block-content[data-is-empty-and-focused]::before {
+  color: rgba(148, 163, 184, 0.5) !important;
+  font-style: italic;
+}
+
+.mythra-blocknote .bn-default-styles h1,
+.mythra-blocknote .bn-default-styles h2,
+.mythra-blocknote .bn-default-styles h3 {
+  color: rgba(248, 250, 252, 0.97) !important;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.mythra-blocknote .bn-default-styles h1 {
+  font-size: 2rem;
+  line-height: 1.18;
+}
+
+.mythra-blocknote .bn-default-styles h2 {
+  font-size: 1.48rem;
+  line-height: 1.25;
+}
+
+.mythra-blocknote .bn-default-styles h3 {
+  font-size: 1.18rem;
+  line-height: 1.34;
+}
+
+.mythra-blocknote .bn-inline-content code {
+  padding: 0.12rem 0.32rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  color: #ddd6fe;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.mythra-blocknote .bn-block-content[data-content-type="codeBlock"] {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  color: rgba(226, 232, 240, 0.94);
+  background: rgba(2, 6, 23, 0.44) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.mythra-blocknote .bn-block-content[data-content-type="codeBlock"] > pre {
+  padding: 20px;
+}
+
+.mythra-blocknote .bn-toolbar,
+.mythra-blocknote .bn-panel,
+.mythra-blocknote .bn-form-popover,
+.mythra-blocknote .mantine-Menu-dropdown,
+.mythra-blocknote .bn-menu-dropdown,
+.mythra-blocknote .bn-suggestion-menu,
+.mythra-blocknote .bn-grid-suggestion-menu,
+.mythra-blocknote .bn-action-toolbar {
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  border-radius: 10px !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  background: rgba(9, 14, 27, 0.92) !important;
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(18px);
+}
+
+.mythra-blocknote .bn-toolbar {
+  padding: 4px !important;
+}
+
+.mythra-blocknote .bn-toolbar .mantine-Button-root,
+.mythra-blocknote .bn-toolbar .mantine-ActionIcon-root,
+.mythra-blocknote .bn-panel .mantine-Button-root,
+.mythra-blocknote .bn-action-toolbar .mantine-Button-root,
+.mythra-blocknote .bn-action-toolbar .mantine-ActionIcon-root,
+.mythra-blocknote .mantine-Menu-item,
+.mythra-blocknote .bn-suggestion-menu-item {
+  border-radius: 8px !important;
+  color: rgba(226, 232, 240, 0.9) !important;
+  background: transparent !important;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.mythra-blocknote .bn-toolbar .mantine-Button-root:hover,
+.mythra-blocknote .bn-toolbar .mantine-ActionIcon-root:hover,
+.mythra-blocknote .bn-panel .mantine-Button-root:hover,
+.mythra-blocknote .bn-action-toolbar .mantine-Button-root:hover,
+.mythra-blocknote .bn-action-toolbar .mantine-ActionIcon-root:hover,
+.mythra-blocknote .mantine-Menu-item:hover,
+.mythra-blocknote .mantine-Menu-item[aria-selected="true"],
+.mythra-blocknote .bn-suggestion-menu-item:hover,
+.mythra-blocknote .bn-suggestion-menu-item[aria-selected="true"] {
+  color: rgba(248, 250, 252, 0.98) !important;
+  background: rgba(124, 58, 237, 0.18) !important;
+}
+
+.mythra-blocknote .bn-toolbar .mantine-Button-root[data-selected],
+.mythra-blocknote .bn-toolbar .mantine-ActionIcon-root[data-selected],
+.mythra-blocknote .bn-action-toolbar .mantine-Button-root[data-selected],
+.mythra-blocknote .bn-action-toolbar .mantine-ActionIcon-root[data-selected] {
+  color: #f8fafc !important;
+  background: rgba(139, 92, 246, 0.3) !important;
+}
+
+.mythra-blocknote .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  color: #ddd6fe !important;
+  background: rgba(124, 58, 237, 0.2) !important;
+}
+
+.mythra-blocknote .bn-mt-suggestion-menu-item-title {
+  color: rgba(248, 250, 252, 0.96) !important;
+  font-weight: 660;
+}
+
+.mythra-blocknote .bn-mt-suggestion-menu-item-subtitle {
+  color: rgba(148, 163, 184, 0.82) !important;
+}
+
+.mythra-blocknote .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item) {
+  border-radius: 7px;
+}
+
+.mythra-blocknote .bn-side-menu .mantine-UnstyledButton-root:hover {
+  background: rgba(124, 58, 237, 0.16) !important;
+}
+
+.mythra-blocknote .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item) svg {
+  color: rgba(203, 213, 225, 0.64) !important;
+}
+
+.mythra-blocknote [data-file-block] .bn-add-file-button {
+  border: 1px dashed rgba(167, 139, 250, 0.32) !important;
+  border-radius: 10px;
+  color: rgba(226, 232, 240, 0.86) !important;
+  background: rgba(15, 23, 42, 0.28) !important;
+}
+
+.mythra-blocknote [data-file-block] .bn-visual-media {
+  border-radius: 10px;
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.22);
+}
+
+.mythra-blocknote [data-file-block] .bn-file-caption {
+  color: rgba(148, 163, 184, 0.86) !important;
 }
 
 .wiki-image-context-menu {

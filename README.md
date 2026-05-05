@@ -7,9 +7,15 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Beta-purple?style=for-the-badge" alt="Status" />
-  <img src="https://img.shields.io/badge/License-Polyform--Noncommercial-red?style=for-the-badge" alt="License" />
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-red?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/badge/Open--Source-Yes-green?style=for-the-badge" alt="Open Source" />
 </p>
+
+---
+
+## License
+
+Mysthra is licensed under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
 
 ---
 
@@ -132,7 +138,7 @@ Mysthra follows the **Nexus Aesthetic**:
 
 ## 📜 License
 
-Distributed under the **Polyform Noncommercial License 1.0.0**. This project is free to use and modify for personal and non-commercial purposes. **Commercial use or profiting from the platform is strictly prohibited.** See `LICENSE` for more information.
+Distributed under the **GNU Affero General Public License v3.0 only** (`AGPL-3.0-only`). See `LICENSE` for the full license text.
 
 <p align="center">
   <em>Forged with ❤️ by little old me.</em>
