@@ -37,7 +37,7 @@ test("session cookies use secure attributes in production", () => {
 
     assert.match(cookie, /HttpOnly/);
     assert.match(cookie, /SameSite=Strict/);
-    assert.match(cookie, /Max-Age=/);
+    assert.match(cookie, /Max-Age=86400/);
     assert.match(cookie, /Secure/);
   } finally {
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;

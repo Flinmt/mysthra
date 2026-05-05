@@ -313,17 +313,19 @@ function Dashboard({ onLogout, currentUser }) {
               />
             </div>
             
-            <LanguageSwitcher />
+            <div className="dashboard-action-group">
+              <LanguageSwitcher />
 
-            {isAdmin && (
-              <button className="nexus-icon-btn dashboard-users-button" onClick={() => setShowUsersModal(true)} title={t('dashboard.manage_users')}>
-                <Users size={18} />
+              {isAdmin && (
+                <button className="nexus-icon-btn dashboard-users-button" onClick={() => setShowUsersModal(true)} title={t('dashboard.manage_users')}>
+                  <Users size={18} />
+                </button>
+              )}
+
+              <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title={t('dashboard.logout_tooltip')}>
+                <LogOut size={18} />
               </button>
-            )}
-
-            <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title={t('dashboard.logout_tooltip')}>
-              <LogOut size={18} />
-            </button>
+            </div>
           </div>
         </header>
 
