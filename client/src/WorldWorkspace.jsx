@@ -152,6 +152,7 @@ function WikiBlockEditor({
   const initialContentRef = useRef(content);
   const isLoadingRef = useRef(true);
   const onChangeRef = useRef(onChange);
+  const emitFrameRef = useRef(null);
   const editor = useCreateBlockNote(
     {
       ...(initialBlocks ? { initialContent: initialBlocks } : {}),
@@ -212,14 +213,29 @@ function WikiBlockEditor({
     insertImageBlock(getAssetUrl(uploaded.path), uploaded.name || prepared.filename);
   }, [getAssetUrl, insertImageBlock, onRequestAssets, worldId]);
 
-  useEffect(() => {
-    isLoadingRef.current = true;
-    initialContentRef.current = content;
-  }, [contentKey, content]);
+  const emitEditorDocument = useCallback(() => {
+    if (isLoadingRef.current || !editable) return;
+    onChangeRef.current(JSON.stringify(editor.document));
+    if (emitFrameRef.current) {
+      window.cancelAnimationFrame(emitFrameRef.current);
+    }
+    emitFrameRef.current = window.requestAnimationFrame(() => {
+      emitFrameRef.current = null;
+      onChangeRef.current(JSON.stringify(editor.document));
+    });
+  }, [editable, editor]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(() => {
+    return () => {
+      if (emitFrameRef.current) {
+        window.cancelAnimationFrame(emitFrameRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!imageContextMenu.isOpen) return undefined;
@@ -255,7 +271,7 @@ function WikiBlockEditor({
         if (isCancelled) return;
         editor.replaceBlocks(editor.document, blocks);
         isLoadingRef.current = false;
-        onChangeRef.current(JSON.stringify(editor.document));
+        emitEditorDocument();
       } catch {
         isLoadingRef.current = false;
       }
@@ -266,7 +282,7 @@ function WikiBlockEditor({
     return () => {
       isCancelled = true;
     };
-  }, [contentKey, editor]);
+  }, [contentKey, editor, emitEditorDocument]);
 
   return (
     <div
@@ -338,10 +354,7 @@ function WikiBlockEditor({
         editor={editor}
         editable={editable}
         theme="dark"
-        onChange={(instance) => {
-          if (isLoadingRef.current) return;
-          onChangeRef.current(JSON.stringify(instance.document));
-        }}
+        onChange={emitEditorDocument}
       />
     </div>
   );
@@ -912,10 +925,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     latestTabPathRef.current = activeTab?.path || '';
   }, [activeTab, fileContent]);
 
+  const handleWikiContentChange = useCallback((nextContent) => {
+    latestContentRef.current = nextContent;
+    latestTabPathRef.current = activeTab?.path || '';
+    setFileContent(nextContent);
+    setIsDirty(true);
+  }, [activeTab?.path]);
+
   const saveDocument = useCallback(async (silent = true) => {
     if (!activeTab || isVisitor) return false;
     const savedPath = activeTab.path;
-    const savedContent = fileContent;
+    const savedContent = latestContentRef.current;
     setSaveStatus('saving');
 
     try {
@@ -945,7 +965,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (!silent) addToast(t('common.error'), 'error');
       return false;
     }
-  }, [activeTab, addToast, fileContent, isVisitor, t, worldId]);
+  }, [activeTab, addToast, isVisitor, t, worldId]);
 
   useEffect(() => {
     fetchTree();
@@ -1023,6 +1043,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const selectTab = async (tabNode) => {
     if (isDirty) {
+      await new Promise(resolve => window.requestAnimationFrame(resolve));
       const saved = await saveDocument(true);
       if (!saved) return;
     }
@@ -1129,6 +1150,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     const tabName = tabCreationPanel.name.trim();
     if (!tabName) return;
     if (isDirty) {
+      await new Promise(resolve => window.requestAnimationFrame(resolve));
       const saved = await saveDocument(true);
       if (!saved) return;
     }
@@ -2597,10 +2619,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           insertImage: t('workspace.insert_image'),
                           noAssetImages: t('workspace.no_asset_images')
                         }}
-                        onChange={(nextContent) => {
-                          setFileContent(nextContent);
-                          setIsDirty(true);
-                        }}
+                        onChange={handleWikiContentChange}
                       />
                     )
                   ) : (
