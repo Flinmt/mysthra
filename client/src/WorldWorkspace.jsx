@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLocation } from 'wouter';
 import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, Unlock, MoveVertical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { useCreateBlockNote } from '@blocknote/react';
+import { BlockNoteView } from '@blocknote/mantine';
+import '@blocknote/mantine/style.css';
 
 const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
@@ -52,6 +53,21 @@ function getAssetFolders(nodes = []) {
   return folders;
 }
 
+function getAssetImages(nodes = []) {
+  const images = [];
+  const walk = (items) => {
+    for (const item of items) {
+      if (item.type === 'folder') {
+        walk(item.children || []);
+        continue;
+      }
+      if (item.mediaType === 'image') images.push(item);
+    }
+  };
+  walk(nodes);
+  return images;
+}
+
 function isInvalidAssetMoveTarget(sourceNode, targetPath) {
   if (!sourceNode || sourceNode.type !== 'folder') return false;
   return targetPath === sourceNode.path || targetPath.startsWith(`${sourceNode.path}/`);
@@ -76,6 +92,228 @@ function formatAssetSize(size = 0) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function parseBlockNoteContent(content = '') {
+  if (!content.trim()) return null;
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function WikiBlockEditor({
+  content,
+  contentKey,
+  editable,
+  worldId,
+  assetImages = [],
+  getAssetUrl,
+  onRequestAssets,
+  labels,
+  onChange
+}) {
+  const [imageContextMenu, setImageContextMenu] = useState({ isOpen: false, x: 0, y: 0 });
+  const initialBlocks = useMemo(() => parseBlockNoteContent(content), [content]);
+  const initialContentRef = useRef(content);
+  const isLoadingRef = useRef(true);
+  const onChangeRef = useRef(onChange);
+  const editor = useCreateBlockNote(
+    {
+      ...(initialBlocks ? { initialContent: initialBlocks } : {}),
+      uploadFile: async (file) => {
+        const prepared = await prepareAssetUpload(file);
+        if (!prepared.contentType.startsWith('image/')) {
+          throw new Error('Only images can be uploaded to image blocks');
+        }
+        const query = new URLSearchParams({
+          path: '',
+          filename: prepared.filename
+        });
+        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': prepared.contentType },
+          body: prepared.blob
+        });
+        if (!res.ok) throw new Error('Failed to upload image');
+        const uploaded = await res.json();
+        await onRequestAssets?.();
+        return getAssetUrl(uploaded.path);
+      }
+    },
+    [contentKey]
+  );
+
+  const insertImageBlock = useCallback((url, name = '') => {
+    const cursorBlock = editor.getTextCursorPosition().block;
+    editor.insertBlocks(
+      [{
+        type: 'image',
+        props: {
+          url,
+          name
+        }
+      }],
+      cursorBlock,
+      'after'
+    );
+    editor.focus();
+  }, [editor]);
+
+  const uploadAndInsertImage = useCallback(async (file) => {
+    const prepared = await prepareAssetUpload(file);
+    if (!prepared.contentType.startsWith('image/')) return;
+    const query = new URLSearchParams({
+      path: '',
+      filename: prepared.filename
+    });
+    const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': prepared.contentType },
+      body: prepared.blob
+    });
+    if (!res.ok) throw new Error('Failed to upload image');
+    const uploaded = await res.json();
+    await onRequestAssets?.();
+    insertImageBlock(getAssetUrl(uploaded.path), uploaded.name || prepared.filename);
+  }, [getAssetUrl, insertImageBlock, onRequestAssets, worldId]);
+
+  useEffect(() => {
+    isLoadingRef.current = true;
+    initialContentRef.current = content;
+  }, [contentKey, content]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    if (!imageContextMenu.isOpen) return undefined;
+    const close = () => setImageContextMenu(prev => ({ ...prev, isOpen: false }));
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [imageContextMenu.isOpen]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadLegacyMarkdown = async () => {
+      const source = initialContentRef.current || '';
+      const nativeBlocks = parseBlockNoteContent(source);
+      if (nativeBlocks) {
+        isLoadingRef.current = false;
+        return;
+      }
+
+      if (!source.trim()) {
+        isLoadingRef.current = false;
+        return;
+      }
+
+      try {
+        const blocks = await editor.tryParseMarkdownToBlocks(source);
+        if (isCancelled) return;
+        editor.replaceBlocks(editor.document, blocks);
+        isLoadingRef.current = false;
+        onChangeRef.current(JSON.stringify(editor.document));
+      } catch {
+        isLoadingRef.current = false;
+      }
+    };
+
+    loadLegacyMarkdown();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [contentKey, editor]);
+
+  return (
+    <div
+      className="wiki-block-editor"
+      onContextMenu={async (event) => {
+        if (!editable) return;
+        event.preventDefault();
+        await onRequestAssets?.();
+        setImageContextMenu({ isOpen: true, x: event.clientX, y: event.clientY });
+      }}
+      onDragOver={(event) => {
+        if (!editable) return;
+        const hasImageAsset = event.dataTransfer.types.includes('application/x-mythra-asset-image');
+        const hasImageFile = Array.from(event.dataTransfer.items || []).some(item => item.kind === 'file' && item.type.startsWith('image/'));
+        if (hasImageAsset || hasImageFile) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+        }
+      }}
+      onDrop={async (event) => {
+        if (!editable) return;
+        const assetPayload = event.dataTransfer.getData('application/x-mythra-asset-image');
+        if (assetPayload) {
+          event.preventDefault();
+          try {
+            const asset = JSON.parse(assetPayload);
+            insertImageBlock(getAssetUrl(asset.path), asset.name);
+          } catch {
+            // Ignore invalid drag payloads from outside the app.
+          }
+          return;
+        }
+
+        const imageFiles = Array.from(event.dataTransfer.files || []).filter(file => file.type.startsWith('image/'));
+        if (imageFiles.length === 0) return;
+        event.preventDefault();
+        for (const file of imageFiles) {
+          await uploadAndInsertImage(file);
+        }
+      }}
+    >
+      {editable && imageContextMenu.isOpen && (
+        <div
+          className="context-menu glass-panel wiki-image-context-menu"
+          style={{ top: imageContextMenu.y, left: imageContextMenu.x }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="context-menu-section-label">{labels.insertImage}</div>
+          {assetImages.length === 0 ? (
+            <span className="context-menu-empty">{labels.noAssetImages}</span>
+          ) : (
+            assetImages.map(asset => (
+              <button
+                key={asset.path}
+                type="button"
+                onClick={() => {
+                  insertImageBlock(getAssetUrl(asset.path), asset.name);
+                  setImageContextMenu(prev => ({ ...prev, isOpen: false }));
+                }}
+              >
+                <img className="context-menu-thumb" src={getAssetUrl(asset.path)} alt="" />
+                <span>{asset.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      <BlockNoteView
+        editor={editor}
+        editable={editable}
+        theme="dark"
+        onChange={(instance) => {
+          if (isLoadingRef.current) return;
+          onChangeRef.current(JSON.stringify(instance.document));
+        }}
+      />
+    </div>
+  );
 }
 
 function convertImageToWebp(file) {
@@ -175,6 +413,16 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
     <li className="asset-tree-document">
       <div
         className={`asset-tree-node ${isSelected ? 'selected' : ''}`}
+        draggable={!isRenaming && !isFolder && node.mediaType === 'image'}
+        onDragStart={(event) => {
+          if (isRenaming || isFolder || node.mediaType !== 'image') return;
+          event.dataTransfer.effectAllowed = 'copy';
+          event.dataTransfer.setData('application/x-mythra-asset-image', JSON.stringify({
+            path: node.path,
+            name: node.name
+          }));
+          event.dataTransfer.setData('text/plain', node.name);
+        }}
         onContextMenu={(event) => {
           if (isVisitor || isRenaming) return;
           event.preventDefault();
@@ -694,6 +942,14 @@ export default function WorldWorkspace({ params }) {
       if (!saved) return;
     }
     setTabCreationPanel(prev => ({ ...prev, isOpen: false }));
+
+    if (tabNode.contentType === 'map') {
+      setActiveTab(tabNode);
+      setFileContent('');
+      setIsDirty(false);
+      setSaveStatus('saved');
+      return;
+    }
     
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabNode.path)}`);
@@ -1051,10 +1307,7 @@ export default function WorldWorkspace({ params }) {
       }))
     ];
   }, [assetMovePrompt.node, assetTree, t]);
-
-  const renderedContent = useMemo(() => {
-    return DOMPurify.sanitize(marked(fileContent));
-  }, [fileContent]);
+  const assetImages = useMemo(() => getAssetImages(assetTree), [assetTree]);
 
   const getUniqueDocumentName = (parentPath = '') => {
     const baseName = t('workspace.new_document_name');
@@ -2006,22 +2259,24 @@ export default function WorldWorkspace({ params }) {
                         <p>O visualizador de mapas interativos será implementado na próxima fase.</p>
                       </div>
                     ) : (
-                      isDocumentUnlocked ? (
-                        <div className="editor-draft-panel">
-                          <textarea
-                            className="raw-editor"
-                            value={fileContent}
-                            onChange={(event) => {
-                              setFileContent(event.target.value);
-                              setIsDirty(true);
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <div className="markdown-preview editor-preview">
-                          <div className="markdown-body" dangerouslySetInnerHTML={{ __html: renderedContent }} />
-                        </div>
-                      )
+                      <WikiBlockEditor
+                        key={activeTab.path}
+                        contentKey={activeTab.path}
+                        content={fileContent}
+                        editable={isDocumentUnlocked && !isVisitor}
+                        worldId={worldId}
+                        assetImages={assetImages}
+                        getAssetUrl={getAssetUrl}
+                        onRequestAssets={fetchAssets}
+                        labels={{
+                          insertImage: t('workspace.insert_image'),
+                          noAssetImages: t('workspace.no_asset_images')
+                        }}
+                        onChange={(nextContent) => {
+                          setFileContent(nextContent);
+                          setIsDirty(true);
+                        }}
+                      />
                     )
                   ) : (
                     <div className="editor-placeholder muted">

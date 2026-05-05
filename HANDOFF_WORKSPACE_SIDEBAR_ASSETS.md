@@ -103,7 +103,14 @@ Estado atual:
 - conteúdo wiki em modo edição usa autosave com debounce e indicador discreto de estado no topo direito do banner;
 - ao trocar de aba com alterações pendentes, o app tenta salvar antes de carregar a próxima aba;
 - modo visitante não mostra controles mutáveis;
-- BlockNote ainda não foi implementado, mas o espaço do editor ficou preparado para essa migração.
+- BlockNote foi integrado nas abas Wiki.
+- Abas Wiki agora salvam conteúdo como JSON nativo do BlockNote no endpoint atual de documentos.
+- Markdown legado em `index.md` é convertido no client ao abrir a aba, usando importação Markdown do BlockNote.
+- O cadeado fechado usa `BlockNoteView` em modo read-only, sem preview Markdown/HTML separado.
+- Blocos de imagem do BlockNote agora fazem upload para o asset manager do mundo.
+- O editor Wiki aceita imagens por drag-and-drop: arquivos locais são enviados aos assets e imagens já existentes podem ser arrastadas da sidebar de assets.
+- O editor Wiki tem menu de contexto com botão direito para inserir imagens já existentes nos assets do mundo.
+- Abas de mapa continuam fora do BlockNote.
 
 Arquivos tocados nesta fase não commitada:
 

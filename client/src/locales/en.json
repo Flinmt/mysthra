@@ -83,6 +83,8 @@
     "assets_uploaded": "Assets uploaded",
     "asset_upload_failed": "Failed to upload {{name}}",
     "asset_unsupported": "Use images, GIFs, or audio in MP3, OGG, WAV, M4A/MP4.",
+    "insert_image": "Insert image",
+    "no_asset_images": "No images available in assets.",
     "asset_folder_created": "Folder created",
     "duplicate_asset": "Duplicate asset",
     "duplicate_asset_hint": "How do you want to duplicate \"{{name}}\"?",
