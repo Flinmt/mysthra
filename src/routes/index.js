@@ -5,9 +5,11 @@ const {
   createExpiredSessionCookie,
   createSessionCookie,
   generateSessionToken,
+  getAdminUsername,
+  getAuthenticatedUser,
   getMasterPassword,
   clearSession,
-  isAuthenticated,
+  clearSessionsForUser,
   safeCompare
 } = require("../utils/auth");
 const path = require("node:path");
@@ -36,6 +38,19 @@ const {
   renameAsset,
   saveAssetFile,
   getWorldConfig,
+  getWorldThumbnail,
+  isWorldMember,
+  listWorldMembers,
+  addWorldMember,
+  removeWorldMember,
+  authenticateUser,
+  changeUserPassword,
+  createUser,
+  deleteUser,
+  listLoginUsers,
+  listUsers,
+  removeUserFromAllWorlds,
+  saveWorldThumbnail,
   setHomePage
 } = require("../services");
 
@@ -61,10 +76,14 @@ function getWorldIdFromPath(requestUrl) {
 
 function getErrorStatusCode(error) {
   if (error.code === "INVALID_PATH") return 400;
+  if (error.code === "INVALID_HOME_PAGE") return 400;
+  if (error.code === "INVALID_USER_INPUT") return 400;
   if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL") return 400;
+  if (error.code === "USER_ALREADY_EXISTS") return 409;
   if (error.code === "WORLD_ALREADY_EXISTS") return 409;
   if (error.code === "WORLD_NOT_FOUND") return 404;
   if (error.code === "DOCUMENT_NOT_FOUND") return 404;
+  if (error.code === "USER_NOT_FOUND") return 404;
   return 500;
 }
 
@@ -81,6 +100,42 @@ function isPublicReadEnabled() {
 
 function isPublicReadRequest(method, pathname) {
   return method === "GET" && pathname.startsWith("/api/worlds");
+}
+
+function getPublicUser(user) {
+  if (!user) return null;
+  return {
+    userId: user.userId,
+    username: user.username,
+    isAdmin: Boolean(user.isAdmin)
+  };
+}
+
+function sendForbidden(response) {
+  return sendJson(response, 403, { error: "Forbidden" });
+}
+
+function requireAdmin(response, user) {
+  if (user?.isAdmin) return true;
+  sendForbidden(response);
+  return false;
+}
+
+async function requireWorldMemberOrAdmin(response, worldId, user) {
+  if (user?.isAdmin) return true;
+  if (!user) {
+    sendJson(response, 401, { error: "Unauthorized" });
+    return false;
+  }
+  try {
+    if (await isWorldMember(worldId, user.userId)) return true;
+  } catch (error) {
+    const statusCode = getErrorStatusCode(error);
+    sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+    return false;
+  }
+  sendForbidden(response);
+  return false;
 }
 
 function readRequestBody(request) {
@@ -134,14 +189,38 @@ async function router(request, response) {
       try {
         const body = await parseJsonBody(request);
         const { password } = body;
+        const username = body.username || getAdminUsername();
         const masterPassword = getMasterPassword();
-        if (typeof password === "string" && safeCompare(password, masterPassword)) {
-          const token = generateSessionToken();
+        const isAdminLogin = String(username).trim().toLowerCase() === getAdminUsername().toLowerCase();
+
+        if (isAdminLogin && typeof password === "string" && safeCompare(password, masterPassword)) {
+          const token = generateSessionToken({
+            userId: "admin",
+            username: getAdminUsername(),
+            isAdmin: true
+          });
           response.setHeader("Set-Cookie", createSessionCookie(token, request));
-          sendJson(response, 200, { success: true });
-        } else {
-          sendJson(response, 401, { error: "Invalid password" });
+          return sendJson(response, 200, {
+            success: true,
+            user: { userId: "admin", username: getAdminUsername(), isAdmin: true }
+          });
         }
+
+        const user = await authenticateUser(username, password);
+        if (user) {
+          const token = generateSessionToken({
+            userId: user.id,
+            username: user.username,
+            isAdmin: false
+          });
+          response.setHeader("Set-Cookie", createSessionCookie(token, request));
+          return sendJson(response, 200, {
+            success: true,
+            user: { userId: user.id, username: user.username, isAdmin: false }
+          });
+        }
+
+        sendJson(response, 401, { error: "Invalid username or password" });
       } catch (e) {
         sendJson(response, 400, { error: "Invalid request" });
       }
@@ -163,17 +242,79 @@ async function router(request, response) {
     }
 
     if (request.method === "GET" && pathname === "/api/auth/verify") {
-      return sendJson(response, 200, { authenticated: isAuthenticated(request) });
+      const user = getAuthenticatedUser(request);
+      return sendJson(response, 200, { authenticated: Boolean(user), user: getPublicUser(user) });
+    }
+
+    if (request.method === "GET" && pathname === "/api/auth/users") {
+      try {
+        const users = await listLoginUsers();
+        return sendJson(response, 200, { items: users });
+      } catch {
+        return sendJson(response, 200, { items: [{ id: "admin", username: getAdminUsername(), isAdmin: true }] });
+      }
     }
 
     const isPublicGet = isPublicReadEnabled() && isPublicReadRequest(request.method, pathname);
-    if (!isPublicGet && !isAuthenticated(request)) {
+    const currentUser = getAuthenticatedUser(request);
+    if (!isPublicGet && !currentUser) {
       return sendJson(response, 401, { error: "Unauthorized" });
+    }
+
+    if (pathname === "/api/users") {
+      if (!requireAdmin(response, currentUser)) return;
+
+      if (request.method === "GET") {
+        try {
+          const users = await listUsers();
+          return sendJson(response, 200, { items: users });
+        } catch {
+          return sendJson(response, 500, { error: "Failed to list users" });
+        }
+      }
+
+      if (request.method === "POST") {
+        try {
+          const body = await parseJsonBody(request);
+          const user = await createUser(body);
+          return sendJson(response, 201, user);
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+    }
+
+    if (pathname.match(/^\/api\/users\/[^\/]+\/password$/) && request.method === "PATCH") {
+      if (!requireAdmin(response, currentUser)) return;
+      try {
+        const userId = decodeURIComponent(pathname.split("/")[3]);
+        const body = await parseJsonBody(request);
+        const user = await changeUserPassword(userId, body.password);
+        return sendJson(response, 200, user);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (pathname.match(/^\/api\/users\/[^\/]+$/) && request.method === "DELETE") {
+      if (!requireAdmin(response, currentUser)) return;
+      try {
+        const userId = decodeURIComponent(pathname.split("/")[3]);
+        const user = await deleteUser(userId);
+        await removeUserFromAllWorlds(userId);
+        clearSessionsForUser(userId);
+        return sendJson(response, 200, user);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
     }
 
     if (request.method === "GET" && pathname === "/api/worlds") {
       try {
-        const worlds = await listWorlds();
+        const worlds = await listWorlds(currentUser);
         return sendJson(response, 200, { items: worlds });
       } catch (error) {
         return sendJson(response, 500, { error: "Failed to list worlds" });
@@ -181,6 +322,7 @@ async function router(request, response) {
     }
 
     if (request.method === "POST" && pathname === "/api/worlds") {
+      if (!requireAdmin(response, currentUser)) return;
       try {
         const body = await parseJsonBody(request);
         const world = await createWorld(body);
@@ -191,11 +333,84 @@ async function router(request, response) {
       }
     }
 
+    if (pathname.match(/^\/api\/worlds\/[^\/]+\/members(\/[^\/]+)?$/)) {
+      const worldId = getWorldIdFromPath(request.url);
+      if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+      if (!requireAdmin(response, currentUser)) return;
+
+      if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/members$/)) {
+        try {
+          const members = await listWorldMembers(worldId);
+          return sendJson(response, 200, { items: members });
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+
+      if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/members$/)) {
+        try {
+          const body = await parseJsonBody(request);
+          const user = body.userId ? null : await createUser(body);
+          const members = await addWorldMember(worldId, body.userId || user.id);
+          return sendJson(response, 201, { items: members });
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+
+      if (request.method === "DELETE") {
+        try {
+          const userId = decodeURIComponent(pathname.split("/")[5]);
+          const members = await removeWorldMember(worldId, userId);
+          return sendJson(response, 200, { items: members });
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+    }
+
+    if (pathname.match(/^\/api\/worlds\/[^\/]+\/thumbnail$/)) {
+      const worldId = getWorldIdFromPath(request.url);
+      if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+
+      if (request.method === "GET") {
+        try {
+          if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
+          const thumbnail = await getWorldThumbnail(worldId);
+          response.writeHead(200, { "Content-Type": thumbnail.contentType });
+          fs.createReadStream(thumbnail.fullPath).pipe(response);
+          return;
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+
+      if (request.method === "POST") {
+        if (!requireAdmin(response, currentUser)) return;
+        try {
+          const queryParams = getQueryParams(request.url);
+          const filename = queryParams.get("filename");
+          if (!filename) return sendJson(response, 400, { error: "Missing filename" });
+          const buffer = await readRequestBuffer(request);
+          const world = await saveWorldThumbnail(worldId, filename, buffer);
+          return sendJson(response, 200, world);
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+    }
+
     if (pathname.match(/^\/api\/worlds\/[^\/]+$/)) {
       const worldId = getWorldIdFromPath(request.url);
       if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
 
       if (request.method === "PUT") {
+        if (!requireAdmin(response, currentUser)) return;
         try {
           const body = await parseJsonBody(request);
           const world = await updateWorld(worldId, body);
@@ -207,6 +422,7 @@ async function router(request, response) {
       }
 
       if (request.method === "DELETE") {
+        if (!requireAdmin(response, currentUser)) return;
         try {
           const result = await deleteWorld(worldId);
           return sendJson(response, 200, result);
@@ -221,6 +437,7 @@ async function router(request, response) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const tree = await getFileTree(worldId);
         return sendJson(response, 200, { items: tree });
       } catch (error) {
@@ -232,6 +449,7 @@ async function router(request, response) {
     if (pathname.match(/^\/api\/worlds\/[^\/]+\/assets(\/.*)?$/)) {
       const worldId = getWorldIdFromPath(request.url);
       if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+      if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
 
       if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets$/)) {
         try {
@@ -341,12 +559,18 @@ async function router(request, response) {
     if (pathname.match(/^\/api\/worlds\/[^\/]+\/documents$/)) {
       const worldId = getWorldIdFromPath(request.url);
       if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+      if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
 
       if (request.method === "POST") {
         try {
           const body = await parseJsonBody(request);
           if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
-          const result = await createDocument(worldId, body.path, body.content || "", body.metadata || {});
+          const result = await createDocument(worldId, body.path, body.content || "", {
+            ...body.metadata,
+            createdBy: currentUser?.userId || body.metadata?.createdBy,
+            ownerUserId: currentUser?.userId || body.metadata?.ownerUserId,
+            visibility: body.metadata?.visibility || "world"
+          });
           return sendJson(response, 201, result);
         } catch (error) {
           const statusCode = getErrorStatusCode(error);
@@ -397,9 +621,15 @@ async function router(request, response) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
-        const result = await createDocumentPlaceholder(worldId, body.path, body.metadata || {});
+        const result = await createDocumentPlaceholder(worldId, body.path, {
+          ...body.metadata,
+          createdBy: currentUser?.userId || body.metadata?.createdBy,
+          ownerUserId: currentUser?.userId || body.metadata?.ownerUserId,
+          visibility: body.metadata?.visibility || "world"
+        });
         return sendJson(response, 201, result);
       } catch (error) {
         const statusCode = getErrorStatusCode(error);
@@ -411,6 +641,7 @@ async function router(request, response) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path || !body.newName) return sendJson(response, 400, { error: "Missing path or newName" });
         const result = await renameDocument(worldId, body.path, body.newName);
@@ -425,6 +656,7 @@ async function router(request, response) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing sourcePath or targetPath" });
         const result = await moveDocument(worldId, body.sourcePath, body.targetPath);
@@ -439,11 +671,17 @@ async function router(request, response) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
         const result = await duplicateDocument(worldId, body.path, {
           includeChildren: Boolean(body.includeChildren),
-          name: body.name
+          name: body.name,
+          metadataOverrides: {
+            createdBy: currentUser?.userId,
+            ownerUserId: currentUser?.userId,
+            visibility: "world"
+          }
         });
         return sendJson(response, 201, result);
       } catch (error) {
@@ -456,6 +694,7 @@ async function router(request, response) {
       try {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path || !body.metadata) return sendJson(response, 400, { error: "Missing path or metadata" });
         const result = await updateDocumentMetadata(worldId, body.path, body.metadata);
@@ -469,6 +708,7 @@ async function router(request, response) {
     if (request.method === "PUT" && pathname.endsWith("/homepage")) {
       try {
         const worldId = getWorldIdFromPath(request.url);
+        if (!requireAdmin(response, currentUser)) return;
         const body = await parseJsonBody(request);
         const data = await setHomePage(worldId, body.homePage);
         return sendJson(response, 200, data);
@@ -481,6 +721,7 @@ async function router(request, response) {
     if (request.method === "GET" && pathname.endsWith("/config")) {
       try {
         const worldId = getWorldIdFromPath(request.url);
+        if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const data = await getWorldConfig(worldId);
         return sendJson(response, 200, data);
       } catch (error) {

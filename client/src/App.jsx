@@ -1,19 +1,41 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
-import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Languages } from 'lucide-react'
+import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Share2, ChevronDown, ChevronUp, Users, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!copied) throw new Error('Copy failed')
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const { t } = useTranslation()
 
   useEffect(() => {
     fetch('/api/auth/verify')
-      .then(res => {
-        if (res.ok) setIsAuthenticated(true)
+      .then(async res => {
+        if (!res.ok) return
+        const data = await res.json()
+        setIsAuthenticated(Boolean(data.authenticated))
+        setCurrentUser(data.user || null)
       })
       .catch(console.error)
       .finally(() => setIsLoading(false))
@@ -31,21 +53,28 @@ function App() {
           if (isAuthenticated || isVisitor) {
             return (
               <>
-                <WorldWorkspace params={params} />
+                <WorldWorkspace params={params} isVisitor={isVisitor && !isAuthenticated} currentUser={currentUser} />
                 <div className="workspace-language-wrapper">
+                  <WorldShareButton worldId={params.id} />
                   <LanguageSwitcher variant="floating" />
                 </div>
               </>
             );
           }
-          return <Login onLogin={() => setIsAuthenticated(true)} />;
+          return <Login onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />;
         }}
       </Route>
       <Route path="/">
         {isAuthenticated ? (
-          <Dashboard onLogout={() => setIsAuthenticated(false)} />
+          <Dashboard
+            currentUser={currentUser}
+            onLogout={() => {
+              setIsAuthenticated(false)
+              setCurrentUser(null)
+            }}
+          />
         ) : (
-          <Login onLogin={() => setIsAuthenticated(true)} />
+          <Login onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />
         )}
       </Route>
     </Switch>
@@ -54,24 +83,58 @@ function App() {
 
 function Login({ onLogin }) {
   const { t } = useTranslation()
+  const [username, setUsername] = useState('')
+  const [userQuery, setUserQuery] = useState('')
+  const [loginUsers, setLoginUsers] = useState([{ id: 'admin', username: 'admin', isAdmin: true }])
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    fetch('/api/auth/users')
+      .then(async res => {
+        if (!res.ok) return
+        const data = await res.json()
+        const users = data.items?.length ? data.items : [{ id: 'admin', username: 'admin', isAdmin: true }]
+        setLoginUsers(users)
+      })
+      .catch(() => {})
+  }, [])
+
+  const filteredLoginUsers = useMemo(() => {
+    const query = userQuery.trim().toLowerCase()
+    if (!query) return loginUsers
+    return loginUsers.filter(user => user.username.toLowerCase().includes(query))
+  }, [loginUsers, userQuery])
+
+  const selectLoginUser = (user) => {
+    setUsername(user.username)
+    setUserQuery(user.username)
+    setIsUserMenuOpen(false)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    const selectedUser = loginUsers.find(user => user.username.toLowerCase() === userQuery.trim().toLowerCase())
+    if (!selectedUser) {
+      setError(t('login.select_user_first'))
+      return
+    }
+    setUsername(selectedUser.username)
     setLoading(true)
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ username: selectedUser.username, password })
       })
 
       if (res.ok) {
-        onLogin()
+        const data = await res.json()
+        onLogin(data.user)
       } else {
         const data = await res.json()
         setError(data.error || t('login.failed'))
@@ -84,16 +147,76 @@ function Login({ onLogin }) {
   }
 
   return (
-    <div className="login-container">
+    <div className="login-container login-nexus">
       <div className="login-language-wrapper">
         <LanguageSwitcher />
       </div>
-      <div className="login-card glass-panel">
-        <Sparkles size={40} color="var(--accent-color)" style={{ marginBottom: 16 }} />
+      <div className="login-card login-nexus-panel">
+        <div className="login-nexus-glow" aria-hidden="true" />
+        <div className="login-brand-mark">
+          <Sparkles size={22} />
+        </div>
         <h1>Mysthra</h1>
         <p>{t('login.subtitle')}</p>
         
         <form onSubmit={handleSubmit}>
+          <div className="input-group">
+            <label htmlFor="username">
+              <ShieldCheck size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              {t('login.username')}
+            </label>
+            <div className="login-user-combobox">
+              <input
+                id="username"
+                type="text"
+                value={userQuery}
+                onChange={(e) => {
+                  setUserQuery(e.target.value)
+                  setUsername('')
+                  setIsUserMenuOpen(true)
+                }}
+                onFocus={() => setIsUserMenuOpen(true)}
+                onBlur={() => setTimeout(() => setIsUserMenuOpen(false), 120)}
+                placeholder={t('login.username_placeholder')}
+                autoComplete="off"
+                autoFocus
+              />
+              <button
+                type="button"
+                className="login-user-menu-toggle"
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  setIsUserMenuOpen(prev => !prev)
+                }}
+                aria-label={isUserMenuOpen ? t('login.close_user_dropdown') : t('login.open_user_dropdown')}
+              >
+                {isUserMenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              {isUserMenuOpen && (
+                <div className="login-user-menu">
+                  {filteredLoginUsers.length === 0 ? (
+                    <div className="login-user-empty">{t('login.no_users_found')}</div>
+                  ) : (
+                    filteredLoginUsers.map(user => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        className={`login-user-option ${user.username === username ? 'active' : ''}`}
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          selectLoginUser(user)
+                        }}
+                      >
+                        <span>{user.username}</span>
+                        {user.isAdmin && <small>{t('login.admin_user')}</small>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="input-group">
             <label htmlFor="password">
               <Key size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
@@ -105,17 +228,19 @@ function Login({ onLogin }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t('login.password_placeholder')}
-              autoFocus
             />
           </div>
           
           {error && <div className="error-msg">{error}</div>}
           
-          <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', marginTop: 8 }}>
+          <button type="submit" className="login-submit-button" disabled={loading}>
             {loading ? (
-              t('login.authenticating')
+              <span>{t('login.authenticating')}</span>
             ) : (
-              <><ShieldCheck size={18} style={{ marginRight: 8 }} /> {t('login.enter_nexus')}</>
+              <>
+                <ShieldCheck size={18} />
+                <span>{t('login.enter_nexus')}</span>
+              </>
             )}
           </button>
         </form>
@@ -124,7 +249,7 @@ function Login({ onLogin }) {
   )
 }
 
-function Dashboard({ onLogout }) {
+function Dashboard({ onLogout, currentUser }) {
   const { t } = useTranslation()
   const [, setLocation] = useLocation()
   const [worlds, setWorlds] = useState([])
@@ -132,7 +257,9 @@ function Dashboard({ onLogout }) {
   const [showModal, setShowModal] = useState(false)
   const [editingWorld, setEditingWorld] = useState(null)
   const [deletingWorld, setDeletingWorld] = useState(null)
+  const [showUsersModal, setShowUsersModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const isAdmin = Boolean(currentUser?.isAdmin)
 
   const loadWorlds = async () => {
     try {
@@ -188,6 +315,12 @@ function Dashboard({ onLogout }) {
             
             <LanguageSwitcher />
 
+            {isAdmin && (
+              <button className="nexus-icon-btn dashboard-users-button" onClick={() => setShowUsersModal(true)} title={t('dashboard.manage_users')}>
+                <Users size={18} />
+              </button>
+            )}
+
             <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title={t('dashboard.logout_tooltip')}>
               <LogOut size={18} />
             </button>
@@ -203,15 +336,20 @@ function Dashboard({ onLogout }) {
           <div className="nexus-grid">
             {filteredWorlds.map(world => (
               <div key={world.id} className="nexus-card" onClick={() => setLocation(`/world/${world.id}`)}>
-                <div className="nexus-card-bg"></div>
-                <div className="nexus-card-actions">
-                  <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>
-                    <Settings size={14} />
-                  </button>
-                  <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setDeletingWorld(world); }}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                <div
+                  className={`nexus-card-bg ${world.thumbnail?.filename ? 'has-thumbnail' : ''}`}
+                  style={world.thumbnail?.filename ? { backgroundImage: `url(/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0})` } : undefined}
+                ></div>
+                {isAdmin && (
+                  <div className="nexus-card-actions">
+                    <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>
+                      <Settings size={14} />
+                    </button>
+                    <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setDeletingWorld(world); }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
                 <div className="nexus-card-content">
                   <h3>{world.displayName || world.name}</h3>
                   <p>{world.description || t('dashboard.default_world_description')}</p>
@@ -220,7 +358,7 @@ function Dashboard({ onLogout }) {
             ))}
             
             {/* Create Card */}
-            {!searchQuery && (
+            {!searchQuery && isAdmin && (
               <div className="nexus-card nexus-create-btn" onClick={() => setShowModal(true)}>
                 <div className="plus-circle-nexus">
                   <Plus size={24} />
@@ -264,16 +402,311 @@ function Dashboard({ onLogout }) {
           }} 
         />
       )}
+
+      {showUsersModal && (
+        <UserSettingsModal
+          onClose={() => setShowUsersModal(false)}
+        />
+      )}
     </div>
   )
 }
 
 
 
+function UserSettingsModal({ onClose }) {
+  const { t } = useTranslation()
+  const [users, setUsers] = useState([])
+  const [worlds, setWorlds] = useState([])
+  const [memberships, setMemberships] = useState({})
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [resetPasswords, setResetPasswords] = useState({})
+  const [accessUser, setAccessUser] = useState(null)
+  const [deleteUserPrompt, setDeleteUserPrompt] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [usersRes, worldsRes] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/worlds')
+      ])
+      if (usersRes.ok) {
+        const data = await usersRes.json()
+        setUsers(data.items || [])
+      }
+      let loadedWorlds = []
+      if (worldsRes.ok) {
+        const data = await worldsRes.json()
+        loadedWorlds = data.items || []
+        setWorlds(loadedWorlds)
+      }
+      const memberPairs = await Promise.all(
+        loadedWorlds.map(async world => {
+          const res = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/members`)
+          if (!res.ok) return [world.id, []]
+          const data = await res.json()
+          return [world.id, data.items || []]
+        })
+      )
+      const nextMemberships = {}
+      for (const [worldId, members] of memberPairs) {
+        for (const member of members) {
+          if (!nextMemberships[member.userId]) nextMemberships[member.userId] = new Set()
+          nextMemberships[member.userId].add(worldId)
+        }
+      }
+      setMemberships(Object.fromEntries(
+        Object.entries(nextMemberships).map(([userId, worldSet]) => [userId, [...worldSet]])
+      ))
+    } catch {
+      setError(t('common.error_connection'))
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
+
+  useEffect(() => {
+    loadUsers()
+  }, [loadUsers])
+
+  const createUser = async (event) => {
+    event.preventDefault()
+    setError('')
+    setSaving(true)
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+      if (res.ok) {
+        setUsername('')
+        setPassword('')
+        await loadUsers()
+      } else {
+        const data = await res.json()
+        setError(data.error || t('dashboard.user_create_error'))
+      }
+    } catch {
+      setError(t('common.error_connection'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleWorldAccess = async (userId, worldId, hasAccess) => {
+    setError('')
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members${hasAccess ? `/${encodeURIComponent(userId)}` : ''}`, {
+        method: hasAccess ? 'DELETE' : 'POST',
+        headers: hasAccess ? undefined : { 'Content-Type': 'application/json' },
+        body: hasAccess ? undefined : JSON.stringify({ userId })
+      })
+      if (res.ok) {
+        setMemberships(prev => {
+          const current = new Set(prev[userId] || [])
+          if (hasAccess) current.delete(worldId)
+          else current.add(worldId)
+          return { ...prev, [userId]: [...current] }
+        })
+      } else {
+        const data = await res.json()
+        setError(data.error || t('dashboard.user_update_error'))
+      }
+    } catch {
+      setError(t('common.error_connection'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const changePassword = async (userId) => {
+    const nextPassword = resetPasswords[userId]
+    if (!nextPassword) return
+    setError('')
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(userId)}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: nextPassword })
+      })
+      if (res.ok) {
+        setResetPasswords(prev => ({ ...prev, [userId]: '' }))
+      } else {
+        const data = await res.json()
+        setError(data.error || t('dashboard.user_update_error'))
+      }
+    } catch {
+      setError(t('common.error_connection'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteUser = async (user) => {
+    if (!user) return
+    setError('')
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' })
+      if (res.ok) {
+        setDeleteUserPrompt(null)
+        if (accessUser?.id === user.id) setAccessUser(null)
+        await loadUsers()
+      } else {
+        const data = await res.json()
+        setError(data.error || t('dashboard.user_update_error'))
+      }
+    } catch {
+      setError(t('common.error_connection'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="user-admin-modal" role="dialog" aria-modal="true" aria-labelledby="user-admin-title">
+        <div className="user-admin-modal-header">
+          <div>
+            <h2 id="user-admin-title">{t('dashboard.manage_users')}</h2>
+            <p>{t('dashboard.manage_users_hint')}</p>
+          </div>
+          <button type="button" className="user-admin-close" onClick={onClose} disabled={saving} aria-label={t('common.cancel')}>
+            ×
+          </button>
+        </div>
+
+        <div className="user-admin-modal-body">
+          {!accessUser && (
+            <form className="user-admin-create-card" onSubmit={createUser}>
+              <div className="user-admin-section-title">{t('dashboard.create_user')}</div>
+              <div className="user-admin-form-grid">
+                <label>
+                  <span>{t('login.username')}</span>
+                  <input value={username} onChange={event => setUsername(event.target.value)} placeholder={t('login.username_placeholder')} required />
+                </label>
+                <label>
+                  <span>{t('login.master_password')}</span>
+                  <input type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder={t('login.password_placeholder')} required />
+                </label>
+                <button type="submit" className="user-admin-primary" disabled={saving}>
+                  {saving ? t('common.saving') : t('dashboard.create_user')}
+                </button>
+              </div>
+            </form>
+          )}
+
+          <section className="user-admin-list-card">
+            <div className="user-admin-section-title">
+              {accessUser ? t('dashboard.world_access') : t('dashboard.manage_users')}
+            </div>
+            <div className="user-admin-list">
+              {loading ? (
+                <div className="user-admin-empty">{t('common.loading')}</div>
+              ) : users.length === 0 ? (
+                <div className="user-admin-empty">{t('dashboard.no_users')}</div>
+              ) : accessUser ? (
+                <div className="user-admin-access-view">
+                  <button type="button" className="user-admin-back" onClick={() => setAccessUser(null)}>
+                    {t('common.back')}
+                  </button>
+                  <div className="user-admin-access-header">
+                    <span>{t('dashboard.configuring_access_for')}</span>
+                    <strong>{accessUser.username}</strong>
+                  </div>
+                  <div className="user-admin-world-list">
+                    {worlds.length === 0 ? (
+                      <div className="user-admin-empty">{t('dashboard.no_worlds')}</div>
+                    ) : (
+                      worlds.map(world => {
+                        const hasAccess = (memberships[accessUser.id] || []).includes(world.id)
+                        return (
+                          <button
+                            key={world.id}
+                            type="button"
+                            className={`user-admin-world-access-row ${hasAccess ? 'active' : ''}`}
+                            onClick={() => toggleWorldAccess(accessUser.id, world.id, hasAccess)}
+                            disabled={saving}
+                          >
+                            <span>{world.displayName || world.name}</span>
+                            <strong>{hasAccess ? t('dashboard.has_access') : t('dashboard.no_access')}</strong>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : (
+                users.map(user => (
+                  <div key={user.id} className="user-admin-row">
+                    <div className="user-admin-identity">
+                      <strong>{user.username}</strong>
+                      <span>{t('dashboard.active_user')}</span>
+                    </div>
+                    <div className="user-admin-controls">
+                      <div className="user-admin-password">
+                        <input
+                          type="password"
+                          value={resetPasswords[user.id] || ''}
+                          onChange={event => setResetPasswords(prev => ({ ...prev, [user.id]: event.target.value }))}
+                          placeholder={t('dashboard.new_password')}
+                          disabled={saving}
+                        />
+                        <button type="button" className="user-admin-secondary" onClick={() => changePassword(user.id)} disabled={saving || !resetPasswords[user.id]}>
+                          {t('dashboard.update_password')}
+                        </button>
+                      </div>
+                      <button type="button" className="user-admin-secondary" onClick={() => setAccessUser(user)} disabled={saving}>
+                        {t('dashboard.manage_access')}
+                      </button>
+                      <button type="button" className="user-admin-danger" onClick={() => setDeleteUserPrompt(user)} disabled={saving}>
+                        {t('dashboard.delete_user')}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          {error && <div className="user-admin-error">{error}</div>}
+        </div>
+
+        {deleteUserPrompt && (
+          <div className="user-admin-confirm">
+            <div className="user-admin-confirm-card">
+              <h3>{t('dashboard.delete_user')}</h3>
+              <p>{t('dashboard.delete_user_confirm', { name: deleteUserPrompt.username })}</p>
+              <div>
+                <button type="button" className="user-admin-secondary" onClick={() => setDeleteUserPrompt(null)} disabled={saving}>
+                  {t('common.cancel')}
+                </button>
+                <button type="button" className="user-admin-danger" onClick={() => deleteUser(deleteUserPrompt)} disabled={saving}>
+                  {t('dashboard.delete_user')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CreateWorldModal({ onClose, onCreated }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [thumbnailPreview, setThumbnailPreview] = useState('')
+  const [thumbnailFile, setThumbnailFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -293,6 +726,21 @@ function CreateWorldModal({ onClose, onCreated }) {
       })
 
       if (res.ok) {
+        const world = await res.json()
+        if (thumbnailFile) {
+          const query = new URLSearchParams({ filename: thumbnailFile.name })
+          const thumbRes = await fetch(`/api/worlds/${encodeURIComponent(world.name)}/thumbnail?${query.toString()}`, {
+            method: 'POST',
+            headers: { 'Content-Type': thumbnailFile.type || 'application/octet-stream' },
+            body: await thumbnailFile.arrayBuffer()
+          })
+          if (!thumbRes.ok) {
+            const data = await thumbRes.json()
+            setError(data.error || t('dashboard.thumbnail_error'))
+            setSaving(false)
+            return
+          }
+        }
         onCreated()
       } else {
         const data = await res.json()
@@ -303,6 +751,13 @@ function CreateWorldModal({ onClose, onCreated }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleThumbnailChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setThumbnailFile(file)
+    setThumbnailPreview(URL.createObjectURL(file))
   }
 
   return (
@@ -332,6 +787,18 @@ function CreateWorldModal({ onClose, onCreated }) {
             />
           </div>
 
+          <div className="input-group">
+            <label>{t('dashboard.world_thumbnail')}</label>
+            <label className="world-thumbnail-picker">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} />
+              {thumbnailPreview ? (
+                <img src={thumbnailPreview} alt="" />
+              ) : (
+                <span><Upload size={18} /> {t('dashboard.choose_thumbnail')}</span>
+              )}
+            </label>
+          </div>
+
           {error && <div className="error-msg">{error}</div>}
 
           <div className="modal-actions">
@@ -352,6 +819,8 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const { t } = useTranslation()
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
+  const [thumbnailPreview, setThumbnailPreview] = useState(world.thumbnail?.filename ? `/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0}` : '')
+  const [thumbnailFile, setThumbnailFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -371,6 +840,20 @@ function EditWorldModal({ world, onClose, onUpdated }) {
       })
 
       if (res.ok) {
+        if (thumbnailFile) {
+          const query = new URLSearchParams({ filename: thumbnailFile.name });
+          const thumbRes = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/thumbnail?${query.toString()}`, {
+            method: 'POST',
+            headers: { 'Content-Type': thumbnailFile.type || 'application/octet-stream' },
+            body: await thumbnailFile.arrayBuffer()
+          })
+          if (!thumbRes.ok) {
+            const data = await thumbRes.json()
+            setError(data.error || t('dashboard.thumbnail_error'))
+            setSaving(false)
+            return
+          }
+        }
         onUpdated()
       } else {
         const data = await res.json()
@@ -381,6 +864,13 @@ function EditWorldModal({ world, onClose, onUpdated }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleThumbnailChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setThumbnailFile(file)
+    setThumbnailPreview(URL.createObjectURL(file))
   }
 
   return (
@@ -405,6 +895,18 @@ function EditWorldModal({ world, onClose, onUpdated }) {
               value={description} 
               onChange={e => setDescription(e.target.value)} 
             />
+          </div>
+
+          <div className="input-group">
+            <label>{t('dashboard.world_thumbnail')}</label>
+            <label className="world-thumbnail-picker">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} />
+              {thumbnailPreview ? (
+                <img src={thumbnailPreview} alt="" />
+              ) : (
+                <span><Upload size={18} /> {t('dashboard.choose_thumbnail')}</span>
+              )}
+            </label>
           </div>
 
           {error && <div className="error-msg">{error}</div>}
@@ -495,11 +997,33 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
   )
 }
 
+function WorldShareButton({ worldId }) {
+  const { t } = useTranslation()
+
+  const shareWorld = async () => {
+    const shareUrl = new URL(`/world/${encodeURIComponent(worldId)}`, window.location.origin)
+    shareUrl.searchParams.set('view', 'true')
+    await copyTextToClipboard(shareUrl.toString())
+  }
+
+  return (
+    <button
+      className="nexus-icon-btn workspace-share-floating"
+      onClick={shareWorld}
+      title={t('workspace.share_world')}
+    >
+      <Share2 size={18} />
+    </button>
+  )
+}
+
 function LanguageSwitcher({ variant = 'default' }) {
   const { i18n } = useTranslation();
+  const currentLanguage = String(i18n.language || 'pt').slice(0, 2).toLowerCase();
+  const languageLabel = currentLanguage === 'en' ? 'en' : 'pt';
 
   const toggleLanguage = () => {
-    const nextLng = i18n.language === 'pt' ? 'en' : 'pt';
+    const nextLng = languageLabel === 'pt' ? 'en' : 'pt';
     i18n.changeLanguage(nextLng);
   };
 
@@ -507,11 +1031,10 @@ function LanguageSwitcher({ variant = 'default' }) {
     <button 
       className={`nexus-icon-btn language-switcher language-switcher-${variant}`}
       onClick={toggleLanguage} 
-      title={i18n.language === 'pt' ? 'Switch to English' : 'Mudar para Português'}
+      title={languageLabel === 'pt' ? 'Switch to English' : 'Mudar para Português'}
     >
-      <Languages size={18} />
       <span>
-        {i18n.language}
+        {languageLabel}
       </span>
     </button>
   );

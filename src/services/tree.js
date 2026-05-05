@@ -277,6 +277,7 @@ async function copyDocumentDirectory(safeName, pagesDir, sourcePath, targetPath,
   const uid = path.basename(targetPath);
   const metadata = {
     ...sourceMetadata,
+    ...(options.metadataOverrides || {}),
     uid,
     name: options.name || sourceMetadata.name || path.basename(targetPath)
   };
@@ -295,7 +296,8 @@ async function copyDocumentDirectory(safeName, pagesDir, sourcePath, targetPath,
     if (entry.isDirectory()) {
       if (!options.includeChildren) continue;
       await copyDocumentDirectory(safeName, pagesDir, childSource, childTarget, {
-        includeChildren: true
+        includeChildren: true,
+        metadataOverrides: options.metadataOverrides
       });
       continue;
     }
@@ -336,7 +338,8 @@ async function duplicateDocument(worldName, docPath, options = {}) {
   const targetPath = parentPath ? `${parentPath}/${targetUid}` : targetUid;
   const copied = await copyDocumentDirectory(safeName, pagesDir, safePath, targetPath, {
     includeChildren: Boolean(options.includeChildren),
-    name: copyName
+    name: copyName,
+    metadataOverrides: options.metadataOverrides
   });
 
   return { success: true, ...copied };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, Unlock, MoveVertical } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, Unlock, MoveVertical, MoreVertical, Share2, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
@@ -20,6 +20,19 @@ function getTreeChildren(node) {
 function getTabsForNode(node) {
   // Retorna apenas filhos que são tabs para o Workspace
   return (node?.children || []).filter(child => child.type === 'tab');
+}
+
+function isRootContainer(node) {
+  return node?.type === 'container' && !String(node.path || '').includes('/');
+}
+
+function orderTreeWithHome(nodes = [], homePagePath = '') {
+  if (!homePagePath) return nodes;
+  const homeIndex = nodes.findIndex(node => isRootContainer(node) && node.path === homePagePath);
+  if (homeIndex <= 0) return nodes;
+  const nextNodes = [...nodes];
+  const [homeNode] = nextNodes.splice(homeIndex, 1);
+  return [homeNode, ...nextNodes];
 }
 
 function findNodeByPath(nodes = [], targetPath = '') {
@@ -105,50 +118,23 @@ function parseBlockNoteContent(content = '') {
   return null;
 }
 
-const MYTHRA_BLOCKNOTE_THEME = {
-  colors: {
-    editor: {
-      text: 'rgba(248, 250, 252, 0.93)',
-      background: 'transparent'
-    },
-    menu: {
-      text: 'rgba(226, 232, 240, 0.92)',
-      background: 'rgba(9, 14, 27, 0.94)'
-    },
-    tooltip: {
-      text: 'rgba(226, 232, 240, 0.92)',
-      background: 'rgba(30, 41, 59, 0.96)'
-    },
-    hovered: {
-      text: 'rgba(248, 250, 252, 0.98)',
-      background: 'rgba(124, 58, 237, 0.18)'
-    },
-    selected: {
-      text: '#f8fafc',
-      background: 'rgba(139, 92, 246, 0.3)'
-    },
-    disabled: {
-      text: 'rgba(100, 116, 139, 0.82)',
-      background: 'rgba(15, 23, 42, 0.56)'
-    },
-    shadow: 'rgba(2, 6, 23, 0.42)',
-    border: 'rgba(148, 163, 184, 0.18)',
-    sideMenu: 'rgba(203, 213, 225, 0.58)',
-    highlights: {
-      gray: { text: '#cbd5e1', background: 'rgba(100, 116, 139, 0.18)' },
-      brown: { text: '#d6d3d1', background: 'rgba(120, 113, 108, 0.18)' },
-      red: { text: '#fecaca', background: 'rgba(239, 68, 68, 0.18)' },
-      orange: { text: '#fed7aa', background: 'rgba(249, 115, 22, 0.18)' },
-      yellow: { text: '#fef08a', background: 'rgba(234, 179, 8, 0.16)' },
-      green: { text: '#bbf7d0', background: 'rgba(34, 197, 94, 0.16)' },
-      blue: { text: '#bfdbfe', background: 'rgba(59, 130, 246, 0.18)' },
-      purple: { text: '#ddd6fe', background: 'rgba(139, 92, 246, 0.22)' },
-      pink: { text: '#fbcfe8', background: 'rgba(236, 72, 153, 0.18)' }
-    }
-  },
-  borderRadius: 8,
-  fontFamily: 'inherit'
-};
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!copied) throw new Error('Copy failed');
+}
 
 function WikiBlockEditor({
   content,
@@ -351,8 +337,7 @@ function WikiBlockEditor({
       <BlockNoteView
         editor={editor}
         editable={editable}
-        theme={MYTHRA_BLOCKNOTE_THEME}
-        className="mythra-blocknote"
+        theme="dark"
         onChange={(instance) => {
           if (isLoadingRef.current) return;
           onChangeRef.current(JSON.stringify(instance.document));
@@ -789,7 +774,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onIconS
   );
 }
 
-export default function WorldWorkspace({ params }) {
+export default function WorldWorkspace({ params, isVisitor = false, currentUser = null }) {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const worldId = decodeURIComponent(params.id);
@@ -799,7 +784,7 @@ export default function WorldWorkspace({ params }) {
   const [activeTab, setActiveTab] = useState(null);
   const [fileContent, setFileContent] = useState('');
   const [isDirty, setIsDirty] = useState(false);
-  const [viewMode, setViewMode] = useState('view'); // 'view' or 'edit'
+  const [viewMode, setViewMode] = useState('edit'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
@@ -809,7 +794,7 @@ export default function WorldWorkspace({ params }) {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [selectedAssetFolderPath, setSelectedAssetFolderPath] = useState('');
   const [worldData, setWorldData] = useState(null);
-  const [isVisitor, setIsVisitor] = useState(false);
+  const [worldDataLoaded, setWorldDataLoaded] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [saveStatus, setSaveStatus] = useState('saved');
   const assetFileInputRef = useRef(null);
@@ -820,6 +805,8 @@ export default function WorldWorkspace({ params }) {
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [tabContextMenu, setTabContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
+  const [worldActionsMenu, setWorldActionsMenu] = useState(false);
+  const [membersPanel, setMembersPanel] = useState({ isOpen: false, loading: false, members: [], users: [], userId: '', username: '', password: '', error: '' });
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
@@ -836,6 +823,7 @@ export default function WorldWorkspace({ params }) {
   const latestContentRef = useRef('');
   const latestTabPathRef = useRef('');
   const skipTitleRenameRef = useRef(false);
+  const initialSharedSelectionRef = useRef(false);
   const coverDragRef = useRef({ isDragging: false, startY: 0, startPosition: 50, currentPosition: 50, frame: null });
   const [coverUploading, setCoverUploading] = useState(false);
 
@@ -858,17 +846,17 @@ export default function WorldWorkspace({ params }) {
   }, [addToast, t, worldId]);
 
   const fetchWorldData = useCallback(async () => {
+    setWorldDataLoaded(false);
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/config`);
       if (res.ok) {
         const data = await res.json();
         setWorldData(data);
-        if (data.isPublic && !window.localStorage.getItem('mysthra_session')) {
-          setIsVisitor(true);
-        }
       }
     } catch {
       setWorldData(null);
+    } finally {
+      setWorldDataLoaded(true);
     }
   }, [worldId]);
 
@@ -886,6 +874,38 @@ export default function WorldWorkspace({ params }) {
       setAssetLoading(false);
     }
   }, [addToast, t, worldId]);
+
+  const fetchMembersPanelData = useCallback(async () => {
+    if (!currentUser?.isAdmin) return;
+    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const [membersRes, usersRes] = await Promise.all([
+        fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`),
+        fetch('/api/users')
+      ]);
+      if (!membersRes.ok || !usersRes.ok) {
+        setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
+        return;
+      }
+      const membersData = await membersRes.json();
+      const usersData = await usersRes.json();
+      setMembersPanel(prev => ({
+        ...prev,
+        loading: false,
+        members: membersData.items || [],
+        users: usersData.items || [],
+        error: ''
+      }));
+    } catch {
+      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  }, [currentUser?.isAdmin, t, worldId]);
+
+  const openMembersPanel = () => {
+    if (!currentUser?.isAdmin) return;
+    setMembersPanel(prev => ({ ...prev, isOpen: true, error: '' }));
+    fetchMembersPanelData();
+  };
 
   useEffect(() => {
     latestContentRef.current = fileContent;
@@ -935,8 +955,8 @@ export default function WorldWorkspace({ params }) {
   useEffect(() => {
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
     setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
-    setViewMode('view');
-  }, [selectedContainer?.uid, selectedContainer?.name]);
+    setViewMode(selectedContainer?.metadata?.isLocked ? 'view' : 'edit');
+  }, [selectedContainer?.uid, selectedContainer?.name, selectedContainer?.metadata?.isLocked]);
 
   useEffect(() => {
     if (!activeTab || isVisitor || !isDirty) return;
@@ -950,10 +970,29 @@ export default function WorldWorkspace({ params }) {
   }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
 
   useEffect(() => {
-    if (activeSidebarTab === 'assets') {
+    if (!isVisitor && activeSidebarTab === 'assets') {
       fetchAssets();
     }
-  }, [activeSidebarTab, fetchAssets]);
+  }, [activeSidebarTab, fetchAssets, isVisitor]);
+
+  useEffect(() => {
+    if (isVisitor && activeSidebarTab !== 'wiki') {
+      setActiveSidebarTab('wiki');
+    }
+  }, [activeSidebarTab, isVisitor]);
+
+  useEffect(() => {
+    if (!worldActionsMenu) return undefined;
+    const close = () => setWorldActionsMenu(false);
+    window.addEventListener('click', close);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [worldActionsMenu]);
 
   // Sincroniza o container selecionado quando a árvore muda (para refletir novas abas)
   useEffect(() => {
@@ -1010,6 +1049,63 @@ export default function WorldWorkspace({ params }) {
       addToast(t('common.error'), 'error');
     }
   };
+
+  useEffect(() => {
+    if (initialSharedSelectionRef.current || !worldDataLoaded || tree.length === 0 || selectedContainer) return;
+
+    const queryParams = new URLSearchParams(window.location.search);
+    const documentPath = queryParams.get('document');
+    const tabPath = queryParams.get('tab');
+    const sharedContainerPath = documentPath || pathParent(tabPath);
+    const sharedContainer = sharedContainerPath ? findNodeByPath(tree, sharedContainerPath) : null;
+    const homeContainer = tree.find(node => isRootContainer(node) && node.path === worldData?.homePage);
+    const fallbackContainer = tree.find(node => isRootContainer(node));
+    const targetContainer = sharedContainer?.type === 'container'
+      ? sharedContainer
+      : homeContainer || fallbackContainer;
+
+    if (!targetContainer) return;
+
+    initialSharedSelectionRef.current = true;
+    setSelectedContainer(targetContainer);
+
+    const sharedTab = tabPath ? findNodeByPath(tree, tabPath) : null;
+    const tabToOpen = sharedContainer?.type === 'container' && sharedTab?.type === 'tab'
+      ? sharedTab
+      : getTabsForNode(targetContainer)[0];
+    if (!tabToOpen) {
+      setActiveTab(null);
+      setFileContent('');
+      setIsDirty(false);
+      setSaveStatus('saved');
+      return;
+    }
+
+    const openInitialTab = async () => {
+      if (tabToOpen.contentType === 'map') {
+        setActiveTab(tabToOpen);
+        setFileContent('');
+        setIsDirty(false);
+        setSaveStatus('saved');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabToOpen.path)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setActiveTab(tabToOpen);
+          setFileContent(data.content);
+          setIsDirty(false);
+          setSaveStatus('saved');
+        }
+      } catch {
+        addToast(t('common.error'), 'error');
+      }
+    };
+
+    openInitialTab();
+  }, [addToast, selectedContainer, t, tree, worldData?.homePage, worldDataLoaded, worldId]);
 
   const getUniqueTabName = () => {
     const baseName = t('workspace.new_tab_name');
@@ -1165,9 +1261,103 @@ export default function WorldWorkspace({ params }) {
     setDeletePrompt({ isOpen: true, node });
   };
 
+  const updateHomePage = async (node) => {
+    if (isVisitor) return;
+    const nextHomePage = node ? node.path : null;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/homepage`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ homePage: nextHomePage })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWorldData(data);
+        addToast(nextHomePage ? t('workspace.home_page_set') : t('workspace.home_page_unset'), 'success');
+      } else {
+        addToast(t('workspace.home_page_failed'), 'error');
+      }
+    } catch {
+      addToast(t('workspace.home_page_failed'), 'error');
+    }
+  };
+
+  const addExistingMember = async () => {
+    if (!currentUser?.isAdmin || !membersPanel.userId) return;
+    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: membersPanel.userId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [], userId: '' }));
+      } else {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
+      }
+    } catch {
+      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const createAndAddMember = async () => {
+    if (!currentUser?.isAdmin || !membersPanel.username.trim() || !membersPanel.password) return;
+    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: membersPanel.username.trim(),
+          password: membersPanel.password
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembersPanel(prev => ({
+          ...prev,
+          loading: false,
+          members: data.items || [],
+          username: '',
+          password: ''
+        }));
+        await fetchMembersPanelData();
+      } else {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
+      }
+    } catch {
+      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const removeMember = async (userId) => {
+    if (!currentUser?.isAdmin) return;
+    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
+      } else {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
+      }
+    } catch {
+      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
   const confirmDelete = async () => {
     const node = deletePrompt.node;
     if (isVisitor || !node) return;
+    const deletedHomePage = worldData?.homePage === node.path;
 
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(node.path)}`, {
@@ -1188,6 +1378,25 @@ export default function WorldWorkspace({ params }) {
           setSelectedContainer(null);
           setActiveTab(null);
           setFileContent('');
+          initialSharedSelectionRef.current = false;
+        }
+        if (deletedHomePage) {
+          try {
+            const homeRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/homepage`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ homePage: null })
+            });
+            if (homeRes.ok) {
+              const data = await homeRes.json();
+              setWorldData(data);
+            } else {
+              setWorldData(prev => prev ? { ...prev, homePage: null } : prev);
+            }
+          } catch {
+            setWorldData(prev => prev ? { ...prev, homePage: null } : prev);
+          }
+          initialSharedSelectionRef.current = false;
         }
         setDeletePrompt({ isOpen: false, node: null });
         await fetchTree();
@@ -1304,8 +1513,12 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  const displayTree = useMemo(() => {
+    return orderTreeWithHome(tree, worldData?.homePage);
+  }, [tree, worldData?.homePage]);
+
   const filteredTree = useMemo(() => {
-    if (!searchQuery) return tree;
+    if (!searchQuery) return displayTree;
     const search = (nodes) => {
       return nodes.map(node => {
         const matches = node.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -1316,8 +1529,8 @@ export default function WorldWorkspace({ params }) {
         return null;
       }).filter(Boolean);
     };
-    return search(tree);
-  }, [tree, searchQuery]);
+    return search(displayTree);
+  }, [displayTree, searchQuery]);
 
   const filteredAssetTree = useMemo(() => {
     if (!assetSearchQuery) return assetTree;
@@ -1728,6 +1941,41 @@ export default function WorldWorkspace({ params }) {
     }
   };
 
+  const toggleDocumentLock = async () => {
+    if (isVisitor || !selectedContainer) return;
+
+    const previousMode = viewMode;
+    const nextIsLocked = viewMode === 'edit';
+    const nextMode = nextIsLocked ? 'view' : 'edit';
+    setViewMode(nextMode);
+    updateSelectedContainerMetadata({ isLocked: nextIsLocked });
+
+    const saved = await saveSelectedContainerMetadata({ isLocked: nextIsLocked });
+    if (!saved) {
+      setViewMode(previousMode);
+      updateSelectedContainerMetadata({ isLocked: previousMode !== 'edit' });
+    }
+  };
+
+  const shareWorld = async () => {
+    const shareUrl = new URL(`/world/${encodeURIComponent(worldId)}`, window.location.origin);
+    shareUrl.searchParams.set('view', 'true');
+    if (selectedContainer?.path) {
+      shareUrl.searchParams.set('document', selectedContainer.path);
+    }
+    if (activeTab?.path) {
+      shareUrl.searchParams.set('tab', activeTab.path);
+    }
+    setWorldActionsMenu(false);
+
+    try {
+      await copyTextToClipboard(shareUrl.toString());
+      addToast(t('workspace.share_world_copied'), 'success');
+    } catch {
+      addToast(t('workspace.share_world_failed'), 'error');
+    }
+  };
+
   const removeCover = async () => {
     if (isVisitor || !selectedContainer || !activeCoverPath) return;
     updateSelectedContainerMetadata({ coverAssetPath: null, coverPositionY: 50 });
@@ -1797,13 +2045,16 @@ export default function WorldWorkspace({ params }) {
     { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
     { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image },
     { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
-  ];
+  ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
   const ActiveDisplayIcon = ICON_MAP[selectedContainer?.icon] || Folder;
   const activeCoverPath = selectedContainer?.metadata?.coverAssetPath;
   const coverPositionY = Number(selectedContainer?.metadata?.coverPositionY ?? 50);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
-  const isDocumentUnlocked = viewMode === 'edit';
+  const isAdmin = Boolean(currentUser?.isAdmin);
+  const isDocumentUnlocked = !isVisitor && viewMode === 'edit';
+  const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
+  const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
     : saveStatus === 'error'
@@ -1818,32 +2069,41 @@ export default function WorldWorkspace({ params }) {
         <div className="sidebar-header sidebar-nexus-header">
           <div className="sidebar-nexus-glow" aria-hidden="true" />
           <div className="sidebar-topline">
-            <button className="sidebar-icon-button" onClick={() => setLocation('/')} title={t('common.back')}>
-              <ArrowLeft size={18} />
-            </button>
             <h1 className="sidebar-world-title">{worldData?.displayName || worldId}</h1>
+            {!isVisitor && (
+              <button className="sidebar-icon-button" onClick={() => setLocation('/')} title={t('common.back')}>
+                <ArrowLeft size={18} />
+              </button>
+            )}
+            {isAdmin && (
+              <button className="sidebar-icon-button" onClick={openMembersPanel} title={t('workspace.manage_members')}>
+                <Users size={18} />
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="sidebar-nexus-tabs" role="tablist" aria-label={t('workspace.sidebar_tabs_label')}>
-          {sidebarTabs.map(tab => {
-            const TabIcon = tab.icon;
-            const isActive = activeSidebarTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                className={`sidebar-nexus-tab ${isActive ? 'active' : ''}`}
-                onClick={() => setActiveSidebarTab(tab.id)}
-                role="tab"
-                aria-selected={isActive}
-              >
-                <TabIcon size={14} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        {!isVisitor && (
+          <div className="sidebar-nexus-tabs" role="tablist" aria-label={t('workspace.sidebar_tabs_label')}>
+            {sidebarTabs.map(tab => {
+              const TabIcon = tab.icon;
+              const isActive = activeSidebarTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`sidebar-nexus-tab ${isActive ? 'active' : ''}`}
+                  onClick={() => setActiveSidebarTab(tab.id)}
+                  role="tab"
+                  aria-selected={isActive}
+                >
+                  <TabIcon size={14} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {activeSidebarTab === 'wiki' ? (
           <>
@@ -2065,24 +2325,43 @@ export default function WorldWorkspace({ params }) {
                   onPointerCancel={handleCoverPointerUp}
                 >
                   <div className="editor-page-cover-shade" aria-hidden="true" />
-                  <div className="editor-cover-controls">
-                    {activeTab && (
-                      <span className={`editor-save-status ${saveStatus}`}>
-                        {saveStatusLabel}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
-                      onClick={() => {
-                        if (!isVisitor && activeTab) setViewMode(isDocumentUnlocked ? 'view' : 'edit');
-                      }}
-                      disabled={isVisitor || !activeTab}
-                      title={isDocumentUnlocked ? t('workspace.lock_document') : t('workspace.unlock_document')}
-                    >
-                      {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
-                    </button>
-                  </div>
+                  {!isVisitor && (
+                    <div className="editor-cover-controls">
+                      {activeTab && (
+                        <span className={`editor-save-status ${saveStatus}`}>
+                          {saveStatusLabel}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
+                        onClick={toggleDocumentLock}
+                        disabled={!selectedContainer}
+                        title={isDocumentUnlocked ? t('workspace.lock_document') : t('workspace.unlock_document')}
+                      >
+                        {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
+                      </button>
+                      <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
+                          onClick={() => setWorldActionsMenu(prev => !prev)}
+                          disabled={!selectedContainer}
+                          title={t('workspace.world_actions')}
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {worldActionsMenu && (
+                          <div className="editor-world-actions-menu glass-panel">
+                            <button type="button" onClick={shareWorld}>
+                              <Share2 size={14} />
+                              <span>{t('workspace.share_world')}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {!isVisitor && selectedContainer && (
                     <>
@@ -2642,6 +2921,92 @@ export default function WorldWorkspace({ params }) {
         </div>
       )}
 
+      {membersPanel.isOpen && (
+        <div className="duplicate-modal-overlay" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}>
+          <div className="modal-content glass-panel duplicate-modal" onClick={event => event.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}
+              aria-label={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon">
+                <Users size={22} />
+              </div>
+              <div>
+                <h3>{t('workspace.world_members')}</h3>
+                <p>{t('workspace.world_members_hint')}</p>
+              </div>
+            </div>
+
+            <div className="members-panel-section">
+              <div className="context-menu-section-label">{t('workspace.current_members')}</div>
+              {membersPanel.members.length === 0 ? (
+                <span className="context-menu-empty">{t('workspace.no_members')}</span>
+              ) : (
+                <div className="members-list">
+                  {membersPanel.members.map(member => (
+                    <div key={member.userId} className="member-row">
+                      <span>{member.user?.username || member.userId}</span>
+                      <button type="button" className="node-action-btn danger" onClick={() => removeMember(member.userId)} disabled={membersPanel.loading}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="members-panel-section">
+              <div className="context-menu-section-label">{t('workspace.add_existing_member')}</div>
+              <div className="member-form-row">
+                <select
+                  value={membersPanel.userId}
+                  onChange={event => setMembersPanel(prev => ({ ...prev, userId: event.target.value }))}
+                  disabled={membersPanel.loading || availableUsers.length === 0}
+                >
+                  <option value="">{t('workspace.select_user')}</option>
+                  {availableUsers.map(user => (
+                    <option key={user.id} value={user.id}>{user.username}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn-secondary" onClick={addExistingMember} disabled={membersPanel.loading || !membersPanel.userId}>
+                  {t('common.add')}
+                </button>
+              </div>
+            </div>
+
+            <div className="members-panel-section">
+              <div className="context-menu-section-label">{t('workspace.create_member_user')}</div>
+              <div className="member-form-stack">
+                <input
+                  type="text"
+                  value={membersPanel.username}
+                  onChange={event => setMembersPanel(prev => ({ ...prev, username: event.target.value }))}
+                  placeholder={t('login.username_placeholder')}
+                  disabled={membersPanel.loading}
+                />
+                <input
+                  type="password"
+                  value={membersPanel.password}
+                  onChange={event => setMembersPanel(prev => ({ ...prev, password: event.target.value }))}
+                  placeholder={t('login.password_placeholder')}
+                  disabled={membersPanel.loading}
+                />
+                <button type="button" className="btn-primary" onClick={createAndAddMember} disabled={membersPanel.loading || !membersPanel.username.trim() || !membersPanel.password}>
+                  {t('workspace.create_and_add_member')}
+                </button>
+              </div>
+            </div>
+
+            {membersPanel.error && <div className="error-msg">{membersPanel.error}</div>}
+          </div>
+        </div>
+      )}
+
       {contextMenu.isOpen && (
         <div className="context-menu-overlay" onClick={() => setContextMenu(prev => ({ ...prev, isOpen: false }))}>
           <div 
@@ -2654,6 +3019,16 @@ export default function WorldWorkspace({ params }) {
                 <button onClick={() => { createDocumentInline(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Plus size={14} /> {t('workspace.create_document')}
                 </button>
+                {isAdmin && isRootContainer(contextMenu.node) && worldData?.homePage !== contextMenu.node.path && (
+                  <button onClick={() => { updateHomePage(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                    <Home size={14} /> {t('workspace.set_home_page')}
+                  </button>
+                )}
+                {isAdmin && isRootContainer(contextMenu.node) && worldData?.homePage === contextMenu.node.path && (
+                  <button onClick={() => { updateHomePage(null); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                    <Home size={14} /> {t('workspace.unset_home_page')}
+                  </button>
+                )}
                 <button onClick={() => { openDuplicatePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Copy size={14} /> {t('workspace.duplicate_document')}
                 </button>

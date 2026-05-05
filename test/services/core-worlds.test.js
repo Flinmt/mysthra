@@ -5,8 +5,11 @@ const test = require("node:test");
 
 const { ensureWorldStructure, getWorldPaths, resolveWorldRoot } = require("../../src/data");
 const {
+  addWorldMember,
+  authenticateUser,
   createDocument,
   createAssetFolder,
+  createUser,
   createWorld,
   deleteAsset,
   deleteDocument,
@@ -14,12 +17,15 @@ const {
   duplicateAsset,
   duplicateDocument,
   listAssets,
+  listWorlds,
   getFileTree,
   moveAsset,
   readDocument,
   renameAsset,
   renameDocument,
   saveAssetFile,
+  saveWorldThumbnail,
+  setHomePage,
   updateDocumentContent,
   updateDocumentMetadata,
   updateWorld
@@ -73,6 +79,86 @@ test("updateWorld only updates world profile fields", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, "Renamed World");
   assert.equal(world.description, "Updated");
+});
+
+test("saveWorldThumbnail stores thumbnail metadata", async () => {
+  const worldName = "core-world-thumbnail";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const world = await saveWorldThumbnail(worldName, "cover.webp", Buffer.from("image"));
+  assert.equal(world.thumbnail.filename, "thumbnail.webp");
+  assert.equal(typeof world.thumbnail.updatedAt, "number");
+
+  const config = JSON.parse(
+    await fs.readFile(path.join(resolveWorldRoot(worldName), "world.json"), "utf-8")
+  );
+  assert.equal(config.thumbnail.filename, "thumbnail.webp");
+
+  await assert.rejects(
+    () => saveWorldThumbnail(worldName, "cover.txt", Buffer.from("nope")),
+    { code: "INVALID_THUMBNAIL" }
+  );
+});
+
+test("setHomePage only accepts root container documents", async () => {
+  const worldName = "core-world-homepage";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const rootDocument = await createDocument(worldName, "Characters", "", {
+    type: "container"
+  });
+  const childDocument = await createDocument(worldName, `${rootDocument.path}/Allies`, "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${rootDocument.path}/Overview`, "# Notes", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  let config = await setHomePage(worldName, rootDocument.path);
+  assert.equal(config.homePage, rootDocument.path);
+
+  config = await setHomePage(worldName, null);
+  assert.equal(config.homePage, null);
+
+  await assert.rejects(
+    () => setHomePage(worldName, childDocument.path),
+    { code: "INVALID_HOME_PAGE" }
+  );
+  await assert.rejects(
+    () => setHomePage(worldName, tab.path),
+    { code: "INVALID_HOME_PAGE" }
+  );
+  await assert.rejects(
+    () => setHomePage(worldName, "missing-root"),
+    { code: "INVALID_HOME_PAGE" }
+  );
+});
+
+test("world members filter common user world access", async () => {
+  const worldA = "core-members-a";
+  const worldB = "core-members-b";
+  await resetWorld(worldA);
+  await resetWorld(worldB);
+  await createWorld({ name: worldA });
+  await createWorld({ name: worldB });
+
+  const username = `member-${Date.now()}`;
+  const user = await createUser({ username, password: "secret-pass" });
+  await addWorldMember(worldA, user.id);
+
+  const authenticated = await authenticateUser(username, "secret-pass");
+  assert.equal(authenticated.username, username);
+
+  const visibleWorlds = await listWorlds({ userId: user.id, username, isAdmin: false });
+  assert.equal(visibleWorlds.some((world) => world.id === worldA), true);
+  assert.equal(visibleWorlds.some((world) => world.id === worldB), false);
+
+  const adminWorlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  assert.equal(adminWorlds.some((world) => world.id === worldA), true);
+  assert.equal(adminWorlds.some((world) => world.id === worldB), true);
 });
 
 test("document tree supports containers and editable tabs", async () => {
