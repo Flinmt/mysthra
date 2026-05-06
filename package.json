@@ -11,7 +11,11 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@hocuspocus/server": "^4.0.0",
+    "ws": "^8.20.0",
+    "yjs": "^13.6.30"
+  }
 }

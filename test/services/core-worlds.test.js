@@ -396,33 +396,41 @@ test("asset service migrates legacy Assets directory into lowercase assets", asy
   await resetWorld(worldName);
 
   const worldRoot = resolveWorldRoot(worldName);
-  await fs.mkdir(path.join(worldRoot, "Assets", "Folder"), { recursive: true });
-  await fs.mkdir(path.join(worldRoot, "assets", "Folder"), { recursive: true });
-  await fs.writeFile(path.join(worldRoot, "Assets", "Folder", "map.webp"), "legacy", "utf-8");
-  await fs.writeFile(path.join(worldRoot, "assets", "Folder", "map.webp"), "current", "utf-8");
+  const legacyAssetsPath = path.join(worldRoot, "Assets");
+  const currentAssetsPath = path.join(worldRoot, "assets");
+  await fs.mkdir(path.join(legacyAssetsPath, "Folder"), { recursive: true });
+  await fs.mkdir(path.join(currentAssetsPath, "Folder"), { recursive: true });
+  const [legacyRealPath, currentRealPath] = await Promise.all([
+    fs.realpath(legacyAssetsPath),
+    fs.realpath(currentAssetsPath)
+  ]);
+  const isCaseInsensitiveAssetsPath = legacyRealPath.toLowerCase() === currentRealPath.toLowerCase();
+
+  await fs.writeFile(path.join(legacyAssetsPath, "Folder", "map.webp"), "legacy", "utf-8");
+  if (!isCaseInsensitiveAssetsPath) {
+    await fs.writeFile(path.join(currentAssetsPath, "Folder", "map.webp"), "current", "utf-8");
+  }
 
   await ensureWorldStructure(worldName);
 
-  await assert.rejects(
-    () => fs.stat(path.join(worldRoot, "Assets")),
-    { code: "ENOENT" }
-  );
+  if (!isCaseInsensitiveAssetsPath) {
+    await assert.rejects(
+      () => fs.stat(legacyAssetsPath),
+      { code: "ENOENT" }
+    );
+  }
 
   const tree = await listAssets(worldName);
   assert.equal(tree.items.length, 1);
   assert.equal(tree.items[0].path, "Folder");
-  assert.deepEqual(
-    tree.items[0].children.map((item) => item.name),
-    ["map 2.webp", "map.webp"]
-  );
-  assert.equal(
-    await fs.readFile(path.join(worldRoot, "assets", "Folder", "map.webp"), "utf-8"),
-    "current"
-  );
-  assert.equal(
-    await fs.readFile(path.join(worldRoot, "assets", "Folder", "map 2.webp"), "utf-8"),
-    "legacy"
-  );
+  if (isCaseInsensitiveAssetsPath) {
+    assert.deepEqual(tree.items[0].children.map((item) => item.name), ["map.webp"]);
+    assert.equal(await fs.readFile(path.join(currentAssetsPath, "Folder", "map.webp"), "utf-8"), "legacy");
+  } else {
+    assert.deepEqual(tree.items[0].children.map((item) => item.name), ["map 2.webp", "map.webp"]);
+    assert.equal(await fs.readFile(path.join(currentAssetsPath, "Folder", "map.webp"), "utf-8"), "current");
+    assert.equal(await fs.readFile(path.join(currentAssetsPath, "Folder", "map 2.webp"), "utf-8"), "legacy");
+  }
 });
 
 test("asset service rejects traversal outside assets", async () => {

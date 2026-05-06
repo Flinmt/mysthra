@@ -1,5 +1,5 @@
 # Estágio 1: Build do Frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm install
@@ -7,12 +7,12 @@ COPY client/ ./
 RUN npm run build
 
 # Estágio 2: Runtime do Backend
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 
 # Copia as dependências do backend
 COPY package*.json ./
-RUN npm install --production
+RUN npm install --omit=dev
 
 # Copia o código do servidor
 COPY . .

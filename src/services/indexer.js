@@ -72,6 +72,7 @@ async function indexWorld(worldName) {
 async function initializeIndex() {
   const worldsRoot = getWorldsRoot();
   try {
+    await fs.mkdir(worldsRoot, { recursive: true });
     const entries = await fs.readdir(worldsRoot, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {

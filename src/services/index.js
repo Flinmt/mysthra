@@ -2,6 +2,7 @@ const worlds = require("./worlds");
 const indexer = require("./indexer");
 const assets = require("./assets");
 const users = require("./users");
+const collaboration = require("./collaboration");
 const {
   getFileTree,
   createDocument,
@@ -20,6 +21,7 @@ module.exports = {
   ...indexer,
   ...assets,
   ...users,
+  ...collaboration,
   getFileTree,
   createDocument,
   createDocumentPlaceholder,

@@ -88,7 +88,7 @@ Wiki content is saved as native BlockNote JSON serialized into the existing docu
 
 ## Requirements
 
-- Node.js `>=20`
+- Node.js `>=22`
 - npm
 - Docker, optional but recommended for self-hosting
 

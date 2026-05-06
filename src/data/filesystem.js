@@ -186,6 +186,14 @@ async function migrateLegacyAssetsDirectory(worldRoot, assetsDir) {
   if (!legacyExists) return;
 
   const assetsExists = await pathExists(assetsDir);
+  if (assetsExists) {
+    const [legacyRealPath, assetsRealPath] = await Promise.all([
+      fs.realpath(legacyAssetsDir),
+      fs.realpath(assetsDir)
+    ]);
+    if (legacyRealPath.toLowerCase() === assetsRealPath.toLowerCase()) return;
+  }
+
   if (!assetsExists) {
     await fs.rename(legacyAssetsDir, assetsDir);
     return;

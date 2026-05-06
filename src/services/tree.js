@@ -2,6 +2,13 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { getWorldPaths, validateRelativePath, ensureWorldStructure, validateWorldName } = require("../data/filesystem");
+const {
+  broadcastWorldLockUpdate,
+  broadcastWorldTreeUpdate,
+  closeCollaborationRoom,
+  copyCollaborationState,
+  removeCollaborationState
+} = require("./collaboration");
 const { updateIndex, removeFromIndex } = require("./indexer");
 
 async function getFileTree(worldName) {
@@ -135,6 +142,7 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
   await writeDocumentMetadata(pagesDir, safePath, nextMeta);
   
   updateIndex(safeName, uid, safePath);
+  await broadcastWorldTreeUpdate(safeName, { action: "create", path: safePath });
   
   return { success: true, path: safePath, uid, name: nextMeta.name };
 }
@@ -184,8 +192,55 @@ async function updateDocumentMetadata(worldName, docPath, metadata) {
   const currentMeta = await readDocumentMetadata(pagesDir, safePath);
   const newMeta = { ...currentMeta, ...metadata };
   await writeDocumentMetadata(pagesDir, safePath, newMeta);
+
+  if (Object.prototype.hasOwnProperty.call(metadata, "isLocked") && Boolean(currentMeta.isLocked) !== Boolean(newMeta.isLocked)) {
+    await closeCollaborativeTabsForPath(safeName, pagesDir, safePath);
+    await broadcastWorldLockUpdate(safeName, safePath, newMeta.isLocked);
+  }
+  await broadcastWorldTreeUpdate(safeName, { action: "metadata", path: safePath });
   
   return { success: true, metadata: newMeta };
+}
+
+async function collectDocumentMetadata(pagesDir, safePath) {
+  const fullPath = path.join(pagesDir, safePath);
+  const metadataEntries = [];
+
+  async function walk(currentPath) {
+    const metadata = await readDocumentMetadata(pagesDir, currentPath);
+    metadataEntries.push(metadata);
+
+    const currentFullPath = path.join(pagesDir, currentPath);
+    const entries = await fs.readdir(currentFullPath, { withFileTypes: true }).catch((error) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      await walk(`${currentPath}/${entry.name}`);
+    }
+  }
+
+  await fs.stat(fullPath);
+  await walk(safePath);
+  return metadataEntries;
+}
+
+async function collectWikiTabMetadata(pagesDir, safePath) {
+  const entries = await collectDocumentMetadata(pagesDir, safePath);
+  return entries.filter((metadata) =>
+    metadata?.uid &&
+    metadata.type === "tab" &&
+    (!metadata.contentType || metadata.contentType === "wiki")
+  );
+}
+
+async function closeCollaborativeTabsForPath(worldName, pagesDir, safePath) {
+  const tabs = await collectWikiTabMetadata(pagesDir, safePath).catch(() => []);
+  for (const tab of tabs) {
+    closeCollaborationRoom(worldName, tab.uid);
+  }
 }
 
 async function deleteDocument(worldName, docPath) {
@@ -196,13 +251,23 @@ async function deleteDocument(worldName, docPath) {
   const fullDirPath = path.join(pagesDir, safePath);
   
   try {
-    const metadata = await readDocumentMetadata(pagesDir, safePath);
-    await fs.rm(fullDirPath, { recursive: true, force: true });
-    
-    if (metadata.uid) {
-      removeFromIndex(safeName, metadata.uid);
+    const metadataEntries = await collectDocumentMetadata(pagesDir, safePath);
+    for (const metadata of metadataEntries) {
+      if (metadata?.uid && metadata.type === "tab" && (!metadata.contentType || metadata.contentType === "wiki")) {
+        closeCollaborationRoom(safeName, metadata.uid);
+      }
     }
 
+    await fs.rm(fullDirPath, { recursive: true, force: true });
+    
+    for (const metadata of metadataEntries) {
+      if (metadata.uid) {
+        removeFromIndex(safeName, metadata.uid);
+      }
+      await removeCollaborationState(safeName, metadata);
+    }
+
+    await broadcastWorldTreeUpdate(safeName, { action: "delete", path: safePath });
     return { success: true };
   } catch (e) {
     throw new Error("Failed to delete document");
@@ -217,6 +282,7 @@ async function renameDocument(worldName, docPath, newName) {
   const metadata = await readDocumentMetadata(pagesDir, safePath);
   metadata.name = newName;
   await writeDocumentMetadata(pagesDir, safePath, metadata);
+  await broadcastWorldTreeUpdate(safeName, { action: "rename", path: safePath });
   
   return { success: true, path: safePath, name: newName, uid: metadata.uid };
 }
@@ -238,6 +304,7 @@ async function moveDocument(worldName, sourcePath, targetPath) {
     if (metadata.uid) {
       updateIndex(safeName, metadata.uid, safeTarget);
     }
+    await broadcastWorldTreeUpdate(safeName, { action: "move", path: safeTarget, previousPath: safeSource });
     
     return { success: true, targetPath: safeTarget };
   } catch (e) {
@@ -284,6 +351,7 @@ async function copyDocumentDirectory(safeName, pagesDir, sourcePath, targetPath,
 
   await fs.mkdir(targetDir, { recursive: true });
   await writeDocumentMetadata(pagesDir, targetPath, metadata);
+  await copyCollaborationState(safeName, sourceMetadata, metadata);
   updateIndex(safeName, uid, targetPath);
 
   const entries = await fs.readdir(sourceDir, { withFileTypes: true });
@@ -341,6 +409,7 @@ async function duplicateDocument(worldName, docPath, options = {}) {
     name: copyName,
     metadataOverrides: options.metadataOverrides
   });
+  await broadcastWorldTreeUpdate(safeName, { action: "duplicate", path: targetPath, sourcePath: safePath });
 
   return { success: true, ...copied };
 }

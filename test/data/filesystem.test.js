@@ -80,10 +80,14 @@ test("ensureWorldStructure creates all standard world directories", async () => 
   );
 
   assert.equal(path.basename(worldPaths.assets), "assets");
-  await assert.rejects(
-    () => fs.stat(path.join(worldPaths.worldRoot, "Assets")),
-    { code: "ENOENT" }
-  );
+  const legacyAssetsPath = path.join(worldPaths.worldRoot, "Assets");
+  const legacyAssetsStats = await fs.stat(legacyAssetsPath).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (legacyAssetsStats) {
+    assert.equal((await fs.realpath(legacyAssetsPath)).toLowerCase(), (await fs.realpath(worldPaths.assets)).toLowerCase());
+  }
 
   assert.deepEqual(getWorldPaths(worldName), worldPaths);
 });

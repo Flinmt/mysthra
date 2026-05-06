@@ -4,6 +4,8 @@ import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sw
 import { useTranslation } from 'react-i18next';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
+import { HocuspocusProvider } from '@hocuspocus/provider';
+import * as Y from 'yjs';
 import '@blocknote/mantine/style.css';
 
 const ICON_MAP = {
@@ -20,6 +22,15 @@ function getTreeChildren(node) {
 function getTabsForNode(node) {
   // Retorna apenas filhos que são tabs para o Workspace
   return (node?.children || []).filter(child => child.type === 'tab');
+}
+
+function getFirstOrderedTab(node) {
+  return [...getTabsForNode(node)].sort((left, right) => {
+    const leftOrder = left.metadata?.order ?? 999;
+    const rightOrder = right.metadata?.order ?? 999;
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+    return left.name.localeCompare(right.name);
+  })[0] || null;
 }
 
 function isRootContainer(node) {
@@ -118,6 +129,47 @@ function parseBlockNoteContent(content = '') {
   return null;
 }
 
+function getCollaborationUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/collaboration`;
+}
+
+function getCollaborationColor(seed = '') {
+  const colors = ['#4cc9f0', '#f72585', '#ffd166', '#06d6a0', '#b5179e', '#f77f00', '#8ecae6', '#e63946'];
+  const value = String(seed || 'mysthra').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return colors[value % colors.length];
+}
+
+function getCollaborationUser(currentUser) {
+  const name = currentUser?.username || 'Mysthra user';
+  return {
+    name,
+    color: getCollaborationColor(currentUser?.userId || name)
+  };
+}
+
+function getCollaborationStatusLabel(status, labels = {}) {
+  if (status === 'readonly') return labels.readonly || 'Read only';
+  if (status === 'connected') return labels.connected || 'Connected';
+  if (status === 'error') return labels.error || 'Connection error';
+  if (status === 'disconnected') return labels.disconnected || 'Disconnected';
+  return labels.connecting || 'Connecting';
+}
+
+function updateTreeNodeMetadata(nodes = [], targetPath = '', metadata = {}) {
+  return nodes.map(node => {
+    const nextChildren = node.children ? updateTreeNodeMetadata(node.children, targetPath, metadata) : node.children;
+    if (node.path !== targetPath) {
+      return nextChildren === node.children ? node : { ...node, children: nextChildren };
+    }
+    return {
+      ...node,
+      metadata: { ...node.metadata, ...metadata },
+      children: nextChildren
+    };
+  });
+}
+
 async function copyTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -140,22 +192,65 @@ function WikiBlockEditor({
   content,
   contentKey,
   editable,
+  locked,
   worldId,
+  collaborationRoom,
+  currentUser,
+  isVisitor = false,
   assetImages = [],
   getAssetUrl,
   onRequestAssets,
   labels,
+  onVisitorCountChange,
   onChange
 }) {
   const [imageContextMenu, setImageContextMenu] = useState({ isOpen: false, x: 0, y: 0 });
-  const initialBlocks = useMemo(() => parseBlockNoteContent(content), [content]);
+  const collaborationIdentity = useMemo(
+    () => currentUser || (isVisitor ? { userId: 'visitor', username: 'Visitor' } : null),
+    [currentUser, isVisitor]
+  );
+  const collaborationUser = useMemo(() => getCollaborationUser(collaborationIdentity), [collaborationIdentity]);
+  const collaborationState = useMemo(() => {
+    if (!collaborationRoom || !collaborationIdentity) return null;
+    const doc = new Y.Doc();
+    const provider = new HocuspocusProvider({
+      url: getCollaborationUrl(),
+      name: collaborationRoom,
+      document: doc
+    });
+    if (!isVisitor) {
+      provider.awareness.setLocalStateField('user', collaborationUser);
+    }
+    return {
+      doc,
+      provider,
+      fragment: doc.getXmlFragment('blocknote')
+    };
+  }, [collaborationIdentity, collaborationRoom, collaborationUser, isVisitor, locked]);
+  const [collaborationStatus, setCollaborationStatus] = useState(collaborationState ? 'connecting' : 'disabled');
+  const [serverReadOnly, setServerReadOnly] = useState(false);
+  const collaborationReadOnly = Boolean(locked || serverReadOnly);
+  const initialBlocks = useMemo(() => collaborationState ? null : parseBlockNoteContent(content), [collaborationState, content]);
   const initialContentRef = useRef(content);
   const isLoadingRef = useRef(true);
   const onChangeRef = useRef(onChange);
   const emitFrameRef = useRef(null);
   const editor = useCreateBlockNote(
     {
-      ...(initialBlocks ? { initialContent: initialBlocks } : {}),
+      ...(collaborationState
+        ? {
+          collaboration: {
+            fragment: collaborationState.fragment,
+            user: collaborationUser,
+            ...(!isVisitor
+              ? {
+                provider: collaborationState.provider,
+                showCursorLabels: 'activity'
+              }
+              : {})
+          }
+        }
+        : initialBlocks ? { initialContent: initialBlocks } : {}),
       uploadFile: async (file) => {
         const prepared = await prepareAssetUpload(file);
         if (!prepared.contentType.startsWith('image/')) {
@@ -176,8 +271,62 @@ function WikiBlockEditor({
         return getAssetUrl(uploaded.path);
       }
     },
-    [contentKey]
+    [contentKey, collaborationRoom]
   );
+
+  useEffect(() => {
+    if (!collaborationState) {
+      setCollaborationStatus('disabled');
+      setServerReadOnly(false);
+      onVisitorCountChange?.(0);
+      return undefined;
+    }
+
+    setCollaborationStatus('connecting');
+    setServerReadOnly(false);
+    const provider = collaborationState.provider;
+    if (isVisitor) {
+      provider.awareness.setLocalStateField('visitor', { viewing: true });
+    }
+    const updateVisitorCount = ({ states } = {}) => {
+      const awarenessStates = states || Array.from(provider.awareness.getStates?.().values?.() || []);
+      const count = awarenessStates.filter(state => state?.visitor?.viewing).length;
+      onVisitorCountChange?.(count);
+    };
+    const handleStatus = ({ status }) => {
+      setCollaborationStatus(prev => (prev === 'readonly' && status === 'connected') ? 'readonly' : status);
+    };
+    const handleAuthenticated = ({ scope }) => {
+      const isReadOnly = scope === 'readonly';
+      setServerReadOnly(isReadOnly);
+      setCollaborationStatus(isReadOnly ? 'readonly' : 'connected');
+    };
+    const handleAuthenticationFailed = () => setCollaborationStatus('error');
+    provider.on('status', handleStatus);
+    provider.on('authenticated', handleAuthenticated);
+    provider.on('authenticationFailed', handleAuthenticationFailed);
+    provider.on('awarenessChange', updateVisitorCount);
+    updateVisitorCount();
+
+    return () => {
+      provider.off('status', handleStatus);
+      provider.off('authenticated', handleAuthenticated);
+      provider.off('authenticationFailed', handleAuthenticationFailed);
+      provider.off('awarenessChange', updateVisitorCount);
+      onVisitorCountChange?.(0);
+      provider.destroy();
+      collaborationState.doc.destroy();
+    };
+  }, [collaborationState, isVisitor, onVisitorCountChange]);
+
+  useEffect(() => {
+    if (!locked) {
+      setServerReadOnly(false);
+      if (collaborationStatus === 'readonly') {
+        setCollaborationStatus('connecting');
+      }
+    }
+  }, [collaborationStatus, locked]);
 
   const insertImageBlock = useCallback((url, name = '') => {
     const cursorBlock = editor.getTextCursorPosition().block;
@@ -214,6 +363,7 @@ function WikiBlockEditor({
   }, [getAssetUrl, insertImageBlock, onRequestAssets, worldId]);
 
   const emitEditorDocument = useCallback(() => {
+    if (collaborationState) return;
     if (isLoadingRef.current || !editable) return;
     onChangeRef.current(JSON.stringify(editor.document));
     if (emitFrameRef.current) {
@@ -223,7 +373,7 @@ function WikiBlockEditor({
       emitFrameRef.current = null;
       onChangeRef.current(JSON.stringify(editor.document));
     });
-  }, [editable, editor]);
+  }, [collaborationState, editable, editor]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -254,6 +404,10 @@ function WikiBlockEditor({
     let isCancelled = false;
 
     const loadLegacyMarkdown = async () => {
+      if (collaborationState) {
+        isLoadingRef.current = false;
+        return;
+      }
       const source = initialContentRef.current || '';
       const nativeBlocks = parseBlockNoteContent(source);
       if (nativeBlocks) {
@@ -282,7 +436,7 @@ function WikiBlockEditor({
     return () => {
       isCancelled = true;
     };
-  }, [contentKey, editor, emitEditorDocument]);
+  }, [collaborationState, contentKey, editor, emitEditorDocument]);
 
   return (
     <div
@@ -350,9 +504,14 @@ function WikiBlockEditor({
           )}
         </div>
       )}
+      {collaborationState && !isVisitor && (
+        <div className={`collaboration-status ${collaborationStatus}`}>
+          {getCollaborationStatusLabel(collaborationStatus, labels.collaboration)}
+        </div>
+      )}
       <BlockNoteView
         editor={editor}
-        editable={editable}
+        editable={editable && !collaborationReadOnly}
         theme="dark"
         onChange={emitEditorDocument}
       />
@@ -820,6 +979,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [worldActionsMenu, setWorldActionsMenu] = useState(false);
   const [membersPanel, setMembersPanel] = useState({ isOpen: false, loading: false, members: [], users: [], userId: '', username: '', password: '', error: '' });
+  const [worldPresenceUsers, setWorldPresenceUsers] = useState([]);
+  const [activeTabVisitorCount, setActiveTabVisitorCount] = useState(0);
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
@@ -835,6 +996,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const assetUploadTargetPathRef = useRef('');
   const latestContentRef = useRef('');
   const latestTabPathRef = useRef('');
+  const selectedContainerPathRef = useRef('');
+  const worldPresenceProviderRef = useRef(null);
   const skipTitleRenameRef = useRef(false);
   const initialSharedSelectionRef = useRef(false);
   const coverDragRef = useRef({ isDragging: false, startY: 0, startPosition: 50, currentPosition: 50, frame: null });
@@ -921,9 +1084,92 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   useEffect(() => {
+    if (isVisitor || !currentUser) {
+      setWorldPresenceUsers([]);
+      return undefined;
+    }
+
+    const doc = new Y.Doc();
+    const provider = new HocuspocusProvider({
+      url: getCollaborationUrl(),
+      name: `world:${worldId}:presence`,
+      document: doc
+    });
+    const currentUserInfo = getCollaborationUser(currentUser);
+
+    const updateUsers = ({ states } = {}) => {
+      const nextUsers = (states || [])
+        .map(state => state.user)
+        .filter(Boolean)
+        .filter((user, index, users) => users.findIndex(item => item.id === user.id) === index);
+      setWorldPresenceUsers(nextUsers);
+    };
+    const handleStateless = ({ payload }) => {
+      try {
+        const message = JSON.parse(payload);
+        if (message.worldId !== worldId) return;
+        if (message.type === 'document-tree') {
+          fetchTree();
+          return;
+        }
+        if (message.type !== 'document-lock') return;
+        const metadata = { isLocked: Boolean(message.isLocked) };
+        setTree(prev => updateTreeNodeMetadata(prev, message.path, metadata));
+        setSelectedContainer(prev => {
+          if (!prev || prev.path !== message.path) return prev;
+          return { ...prev, metadata: { ...prev.metadata, ...metadata } };
+        });
+        if (selectedContainerPathRef.current === message.path) {
+          setViewMode(message.isLocked ? 'view' : 'edit');
+        }
+      } catch {
+        // Ignore stateless messages not produced by Mysthra.
+      }
+    };
+
+    provider.awareness.setLocalStateField('user', {
+      id: currentUser.userId,
+      name: currentUserInfo.name,
+      color: currentUserInfo.color
+    });
+    provider.on('awarenessChange', updateUsers);
+    provider.on('stateless', handleStateless);
+    worldPresenceProviderRef.current = provider;
+
+    return () => {
+      provider.off('awarenessChange', updateUsers);
+      provider.off('stateless', handleStateless);
+      provider.destroy();
+      doc.destroy();
+      if (worldPresenceProviderRef.current === provider) {
+        worldPresenceProviderRef.current = null;
+      }
+    };
+  }, [currentUser, fetchTree, isVisitor, worldId]);
+
+  useEffect(() => {
+    const provider = worldPresenceProviderRef.current;
+    if (!provider || isVisitor || !currentUser) return;
+    provider.awareness.setLocalStateField('location', {
+      containerPath: selectedContainer?.path || '',
+      containerName: selectedContainer?.name || '',
+      tabPath: activeTab?.path || '',
+      tabName: activeTab?.name || ''
+    });
+  }, [activeTab?.name, activeTab?.path, currentUser, isVisitor, selectedContainer?.name, selectedContainer?.path]);
+
+  useEffect(() => {
     latestContentRef.current = fileContent;
     latestTabPathRef.current = activeTab?.path || '';
   }, [activeTab, fileContent]);
+
+  useEffect(() => {
+    setActiveTabVisitorCount(0);
+  }, [activeTab?.path]);
+
+  useEffect(() => {
+    selectedContainerPathRef.current = selectedContainer?.path || '';
+  }, [selectedContainer?.path]);
 
   const handleWikiContentChange = useCallback((nextContent) => {
     latestContentRef.current = nextContent;
@@ -1016,25 +1262,85 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   // Sincroniza o container selecionado quando a árvore muda (para refletir novas abas)
   useEffect(() => {
+    let isCancelled = false;
+
+    const clearActiveTab = () => {
+      setActiveTab(null);
+      setFileContent('');
+      setIsDirty(false);
+    };
+
+    const openReplacementTab = async (tabNode) => {
+      if (!tabNode || isCancelled) {
+        clearActiveTab();
+        return;
+      }
+
+      if (tabNode.contentType === 'map') {
+        setActiveTab(tabNode);
+        setFileContent('');
+        setIsDirty(false);
+        setSaveStatus('saved');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabNode.path)}`);
+        if (!res.ok || isCancelled) return;
+        const data = await res.json();
+        setActiveTab(tabNode);
+        setFileContent(data.content);
+        setIsDirty(false);
+        setSaveStatus('saved');
+      } catch {
+        if (!isCancelled) addToast(t('common.error'), 'error');
+      }
+    };
+
+    if (selectedContainer && tree.length === 0) {
+      setSelectedContainer(null);
+      clearActiveTab();
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    let updatedContainer = selectedContainer;
     if (selectedContainer && tree.length > 0) {
       const updatedNode = findNodeByPath(tree, selectedContainer.path);
       if (updatedNode) {
+        updatedContainer = updatedNode;
         setSelectedContainer(updatedNode);
+      } else {
+        setSelectedContainer(null);
+        clearActiveTab();
+        return () => {
+          isCancelled = true;
+        };
       }
     }
+
     if (activeTab && tree.length > 0) {
       const updatedTab = findNodeByPath(tree, activeTab.path);
       if (updatedTab) {
         setActiveTab(updatedTab);
+      } else {
+        openReplacementTab(getFirstOrderedTab(updatedContainer));
       }
+    } else if (!activeTab && updatedContainer && tree.length > 0) {
+      openReplacementTab(getFirstOrderedTab(updatedContainer));
     }
-  }, [activeTab, selectedContainer, tree]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTab, addToast, selectedContainer, t, tree, worldId]);
 
   const selectContainer = async (node) => {
     setSelectedContainer(node);
-    const tabs = getTabsForNode(node);
-    if (tabs.length > 0) {
-      selectTab(tabs[0]);
+    const firstTab = getFirstOrderedTab(node);
+    if (firstTab) {
+      selectTab(firstTab);
     } else {
       setActiveTab(null);
       setFileContent('');
@@ -1093,7 +1399,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     const sharedTab = tabPath ? findNodeByPath(tree, tabPath) : null;
     const tabToOpen = sharedContainer?.type === 'container' && sharedTab?.type === 'tab'
       ? sharedTab
-      : getTabsForNode(targetContainer)[0];
+      : getFirstOrderedTab(targetContainer);
     if (!tabToOpen) {
       setActiveTab(null);
       setFileContent('');
@@ -2354,6 +2660,31 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           {saveStatusLabel}
                         </span>
                       )}
+                      {activeTab && activeTabVisitorCount > 0 && (
+                        <span className="editor-visitor-count" title={t('workspace.visitors_viewing_file')}>
+                          <Users size={14} />
+                          <span>
+                            {activeTabVisitorCount} {activeTabVisitorCount === 1 ? t('workspace.visitor_count_singular') : t('workspace.visitor_count_plural')}
+                          </span>
+                        </span>
+                      )}
+                      {worldPresenceUsers.length > 0 && (
+                        <div className="world-presence" title={t('workspace.online_users')}>
+                          {worldPresenceUsers.slice(0, 5).map(user => (
+                            <span
+                              key={user.id}
+                              className="world-presence-avatar"
+                              style={{ '--presence-color': user.color }}
+                              title={user.name}
+                            >
+                              {String(user.name || '?').slice(0, 1).toUpperCase()}
+                            </span>
+                          ))}
+                          {worldPresenceUsers.length > 5 && (
+                            <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
+                          )}
+                        </div>
+                      )}
                       <button
                         type="button"
                         className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
@@ -2607,18 +2938,30 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                       </div>
                     ) : (
                       <WikiBlockEditor
-                        key={activeTab.path}
+                        key={`${activeTab.path}:${selectedContainer?.metadata?.isLocked ? 'locked' : 'unlocked'}`}
                         contentKey={activeTab.path}
                         content={fileContent}
                         editable={isDocumentUnlocked && !isVisitor}
+                        locked={Boolean(selectedContainer?.metadata?.isLocked)}
                         worldId={worldId}
+                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
+                        currentUser={currentUser}
+                        isVisitor={isVisitor}
                         assetImages={assetImages}
                         getAssetUrl={getAssetUrl}
                         onRequestAssets={fetchAssets}
                         labels={{
                           insertImage: t('workspace.insert_image'),
-                          noAssetImages: t('workspace.no_asset_images')
+                          noAssetImages: t('workspace.no_asset_images'),
+                          collaboration: {
+                            connecting: t('workspace.collaboration_connecting'),
+                            connected: t('workspace.collaboration_connected'),
+                            readonly: t('workspace.collaboration_readonly'),
+                            disconnected: t('workspace.collaboration_disconnected'),
+                            error: t('workspace.collaboration_error')
+                          }
                         }}
+                        onVisitorCountChange={setActiveTabVisitorCount}
                         onChange={handleWikiContentChange}
                       />
                     )

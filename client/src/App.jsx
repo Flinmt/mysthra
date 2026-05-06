@@ -968,7 +968,7 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
       <div className="modal-content glass-panel" style={{ borderColor: 'var(--error-color)' }}>
         <h2 style={{ color: 'var(--error-color)' }}>{t('dashboard.delete_world_title')}</h2>
         <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-          {t('dashboard.delete_confirm_msg', { name: world.displayName || world.name })}
+          {t('dashboard.delete_confirm_prefix')} <strong>{world.displayName || world.name}</strong>{t('dashboard.delete_confirm_suffix')}
         </p>
         <form onSubmit={handleDelete}>
           <div className="input-group">
