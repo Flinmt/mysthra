@@ -10,9 +10,6 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
-# Instala o FFmpeg para processamento de mídia
-RUN apk add --no-cache ffmpeg
-
 # Copia as dependências do backend
 COPY package*.json ./
 RUN npm install --production

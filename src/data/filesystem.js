@@ -2,13 +2,11 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const WORLD_DIRECTORY_NAMES = Object.freeze({
-  pages: "pages",
-  entities: "entities",
-  relations: "relations",
-  themes: "themes",
-  maps: "maps",
-  media: "media"
+  assets: "assets",
+  pages: "pages"
 });
+
+const LEGACY_ASSETS_DIRECTORY_NAME = "Assets";
 
 const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 _.-]*[A-Za-z0-9]$|^[A-Za-z0-9]$/;
 
@@ -81,10 +79,6 @@ function getWorldsRoot() {
   return path.join(getDataRoot(), "worlds");
 }
 
-function getTemplatesRoot() {
-  return path.join(getDataRoot(), "templates");
-}
-
 function assertPathInsideRoot(rootPath, targetPath) {
   const relativePath = path.relative(rootPath, targetPath);
 
@@ -121,12 +115,8 @@ function getWorldPaths(worldName) {
 
   return {
     worldRoot,
-    pages: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.pages),
-    entities: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.entities),
-    relations: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.relations),
-    themes: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.themes),
-    maps: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.maps),
-    media: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.media)
+    assets: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.assets),
+    pages: resolveWorldPath(worldName, WORLD_DIRECTORY_NAMES.pages)
   };
 }
 
@@ -135,14 +125,83 @@ async function ensureDirectory(directoryPath) {
   return directoryPath;
 }
 
+async function pathExists(targetPath) {
+  try {
+    await fs.stat(targetPath);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function getUniqueDestinationPath(directoryPath, entryName) {
+  const ext = path.extname(entryName);
+  const base = ext ? path.basename(entryName, ext) : entryName;
+  let candidate = entryName;
+  let suffix = 2;
+
+  while (await pathExists(path.join(directoryPath, candidate))) {
+    candidate = `${base} ${suffix}${ext}`;
+    suffix += 1;
+  }
+
+  return path.join(directoryPath, candidate);
+}
+
+async function mergeDirectories(sourceDir, targetDir) {
+  await fs.mkdir(targetDir, { recursive: true });
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    const targetStat = await fs.stat(targetPath).catch((error) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+
+    if (!targetStat) {
+      await fs.rename(sourcePath, targetPath);
+      continue;
+    }
+
+    if (entry.isDirectory() && targetStat.isDirectory()) {
+      await mergeDirectories(sourcePath, targetPath);
+      continue;
+    }
+
+    const uniqueTargetPath = await getUniqueDestinationPath(targetDir, entry.name);
+    await fs.rename(sourcePath, uniqueTargetPath);
+  }
+
+  await fs.rm(sourceDir, { recursive: true, force: true });
+}
+
+async function migrateLegacyAssetsDirectory(worldRoot, assetsDir) {
+  const legacyAssetsDir = path.join(worldRoot, LEGACY_ASSETS_DIRECTORY_NAME);
+  if (legacyAssetsDir === assetsDir) return;
+
+  const legacyExists = await pathExists(legacyAssetsDir);
+  if (!legacyExists) return;
+
+  const assetsExists = await pathExists(assetsDir);
+  if (!assetsExists) {
+    await fs.rename(legacyAssetsDir, assetsDir);
+    return;
+  }
+
+  await mergeDirectories(legacyAssetsDir, assetsDir);
+}
+
 async function ensureWorldStructure(worldName) {
   await ensureDirectory(getWorldsRoot());
-  await ensureDirectory(getTemplatesRoot());
 
   const worldPaths = getWorldPaths(worldName);
-  const directories = Object.values(worldPaths);
+  await ensureDirectory(worldPaths.worldRoot);
+  await migrateLegacyAssetsDirectory(worldPaths.worldRoot, worldPaths.assets);
 
-  await Promise.all(directories.map(ensureDirectory));
+  await Promise.all([worldPaths.assets, worldPaths.pages].map(ensureDirectory));
 
   return worldPaths;
 }
@@ -156,7 +215,6 @@ module.exports = {
   getDataRoot,
   getWorldPaths,
   getWorldsRoot,
-  getTemplatesRoot,
   resolveWorldPath,
   resolveWorldRoot,
   validateFileName,

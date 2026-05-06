@@ -3,7 +3,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SESSION_FILE = process.env.SESSION_FILE || path.join(process.cwd(), "data", "sessions.json");
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24;
+const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_SECONDS * 1000;
+
+function getAdminUsername() {
+  return process.env.ADMIN_USERNAME || "admin";
+}
 
 function getMasterPassword() {
   const configuredPassword = process.env.MASTER_PASSWORD;
@@ -37,12 +42,50 @@ function loadSessions() {
   try {
     if (fs.existsSync(SESSION_FILE)) {
       const data = fs.readFileSync(SESSION_FILE, 'utf-8');
-      return new Set(JSON.parse(data));
+      const parsed = JSON.parse(data);
+      const now = Date.now();
+      if (Array.isArray(parsed)) {
+        const migrated = {};
+        for (const token of parsed) {
+          migrated[token] = {
+            userId: "admin",
+            username: getAdminUsername(),
+            isAdmin: true,
+            expiresAt: now + SESSION_MAX_AGE_MS
+          };
+        }
+        saveSessions(migrated);
+        return migrated;
+      }
+      if (!parsed || typeof parsed !== "object") return {};
+
+      const migrated = {};
+      let changed = false;
+      for (const [token, session] of Object.entries(parsed)) {
+        if (!session || typeof session !== "object") {
+          changed = true;
+          continue;
+        }
+        const expiresAt = Number(session.expiresAt) || now + SESSION_MAX_AGE_MS;
+        if (expiresAt <= now) {
+          changed = true;
+          continue;
+        }
+        migrated[token] = {
+          userId: session.userId || "admin",
+          username: session.username || getAdminUsername(),
+          isAdmin: Boolean(session.isAdmin),
+          expiresAt
+        };
+        if (!session.expiresAt) changed = true;
+      }
+      if (changed) saveSessions(migrated);
+      return migrated;
     }
   } catch (e) {
     console.error("Failed to load sessions:", e);
   }
-  return new Set();
+  return {};
 }
 
 // Helper to save sessions to disk
@@ -50,7 +93,7 @@ function saveSessions(sessions) {
   try {
     const dir = path.dirname(SESSION_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(SESSION_FILE, JSON.stringify([...sessions]), 'utf-8');
+    fs.writeFileSync(SESSION_FILE, JSON.stringify(sessions, null, 2), 'utf-8');
   } catch (e) {
     console.error("Failed to save sessions:", e);
   }
@@ -58,9 +101,14 @@ function saveSessions(sessions) {
 
 let activeSessions = loadSessions();
 
-function generateSessionToken() {
+function generateSessionToken(user) {
   const token = crypto.randomBytes(32).toString("hex");
-  activeSessions.add(token);
+  activeSessions[token] = {
+    userId: user.userId || user.id,
+    username: user.username,
+    isAdmin: Boolean(user.isAdmin),
+    expiresAt: Date.now() + SESSION_MAX_AGE_MS
+  };
   saveSessions(activeSessions);
   return token;
 }
@@ -79,13 +127,34 @@ function createExpiredSessionCookie(request) {
   return `mysthra_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Strict${secure}`;
 }
 
+function getActiveSession(token) {
+  const session = activeSessions[token];
+  if (!session) return null;
+  if (Number(session.expiresAt) <= Date.now()) {
+    clearSession(token);
+    return null;
+  }
+  return session;
+}
+
 function isValidSession(token) {
-  return activeSessions.has(token);
+  return Boolean(getActiveSession(token));
 }
 
 function clearSession(token) {
-  activeSessions.delete(token);
+  delete activeSessions[token];
   saveSessions(activeSessions);
+}
+
+function clearSessionsForUser(userId) {
+  let changed = false;
+  for (const [token, session] of Object.entries(activeSessions)) {
+    if (session?.userId === userId) {
+      delete activeSessions[token];
+      changed = true;
+    }
+  }
+  if (changed) saveSessions(activeSessions);
 }
 
 // Helper to extract session cookie
@@ -107,13 +176,22 @@ function isAuthenticated(request) {
   return token ? isValidSession(token) : false;
 }
 
+function getAuthenticatedUser(request) {
+  const token = getSessionCookie(request);
+  if (!token) return null;
+  return getActiveSession(token);
+}
+
 module.exports = {
   createExpiredSessionCookie,
   createSessionCookie,
   generateSessionToken,
+  getAdminUsername,
+  getAuthenticatedUser,
   getMasterPassword,
   isValidSession,
   clearSession,
+  clearSessionsForUser,
   getSessionCookie,
   isAuthenticated,
   safeCompare

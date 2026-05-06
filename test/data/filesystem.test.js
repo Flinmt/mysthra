@@ -79,5 +79,11 @@ test("ensureWorldStructure creates all standard world directories", async () => 
     })
   );
 
+  assert.equal(path.basename(worldPaths.assets), "assets");
+  await assert.rejects(
+    () => fs.stat(path.join(worldPaths.worldRoot, "Assets")),
+    { code: "ENOENT" }
+  );
+
   assert.deepEqual(getWorldPaths(worldName), worldPaths);
 });

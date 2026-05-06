@@ -1,45 +1,33 @@
-const entities = require("./entities");
-const linkResolver = require("./link-resolver");
-const maps = require("./maps");
-const pages = require("./pages");
-const pageOutput = require("./page-output");
-const relations = require("./relations");
-const rendering = require("./rendering");
-const templates = require("./templates");
-const themes = require("./themes");
-const wikilinks = require("./wikilinks");
 const worlds = require("./worlds");
-const media = require("./media");
+const indexer = require("./indexer");
+const assets = require("./assets");
+const users = require("./users");
 const {
   getFileTree,
   createDocument,
   createDocumentPlaceholder,
   readDocument,
-  updateDocumentMetadata,
-  deleteDocument,
-  renameDocument,
-  moveDocument
-} = require("./tree");
-
-module.exports = {
-  ...entities,
-  ...linkResolver,
-  ...maps,
-  ...pages,
-  ...pageOutput,
-  ...relations,
-  ...rendering,
-  ...templates,
-  ...themes,
-  ...wikilinks,
-  ...worlds,
-  getFileTree,
-  createDocument,
-  createDocumentPlaceholder,
-  readDocument,
+  updateDocumentContent,
   updateDocumentMetadata,
   deleteDocument,
   renameDocument,
   moveDocument,
-  ...media
+  duplicateDocument
+} = require("./tree");
+
+module.exports = {
+  ...worlds,
+  ...indexer,
+  ...assets,
+  ...users,
+  getFileTree,
+  createDocument,
+  createDocumentPlaceholder,
+  readDocument,
+  updateDocumentContent,
+  updateDocumentMetadata,
+  deleteDocument,
+  renameDocument,
+  moveDocument,
+  duplicateDocument
 };

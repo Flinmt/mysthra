@@ -1,83 +1,55 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const sharp = require("sharp");
 const {
   ensureWorldStructure,
   getWorldsRoot,
   resolveWorldRoot,
+  validateRelativePath,
   validateWorldName
 } = require("../data/filesystem");
+const { indexWorld, removeWorldFromIndex } = require("./indexer");
+const { getFileTree } = require("./tree");
+const { getUserById } = require("./users");
 
-const SUPPORTED_THUMBNAIL_TYPES = new Set(["gif", "jpeg", "jpg", "png", "webp"]);
-const THUMBNAIL_FILE_NAME = "thumbnail.webp";
+const THUMBNAIL_TYPES = {
+  ".gif": "image/gif",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp"
+};
 
-function createThumbnailError(message) {
-  const error = new Error(message);
-  error.code = "INVALID_THUMBNAIL";
-  return error;
+function isWorldMemberConfig(worldData, userId) {
+  return Array.isArray(worldData?.members) && worldData.members.some((member) => member.userId === userId);
 }
 
-function getThumbnailUrl(worldName, thumbnailUpdatedAt) {
-  return `/api/worlds/${encodeURIComponent(worldName)}/thumbnail?v=${encodeURIComponent(thumbnailUpdatedAt)}`;
-}
+async function readWorldConfigById(worldId) {
+  const safeId = validateWorldName(worldId);
+  const worldRoot = resolveWorldRoot(safeId);
+  const configPath = path.join(worldRoot, "world.json");
 
-function getNextThumbnailTimestamp(currentTimestamp) {
-  const current = Number(currentTimestamp) || 0;
-  const now = Date.now();
-  return now > current ? now : current + 1;
-}
-
-function parseThumbnailBase64(thumbnailBase64) {
-  if (typeof thumbnailBase64 !== "string" || thumbnailBase64.trim() === "") {
-    return null;
-  }
-
-  const match = thumbnailBase64.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
-  if (!match) {
-    throw createThumbnailError("Thumbnail must be a base64 image data URL");
-  }
-
-  const imageType = match[1].toLowerCase();
-  if (!SUPPORTED_THUMBNAIL_TYPES.has(imageType)) {
-    throw createThumbnailError("Thumbnail image type is not supported");
-  }
-
-  const base64Data = match[2].replace(/\s/g, "");
-  const buffer = Buffer.from(base64Data, "base64");
-  if (buffer.length === 0) {
-    throw createThumbnailError("Thumbnail image is empty");
-  }
-  return buffer;
-}
-
-async function writeThumbnail(worldPaths, thumbnailBase64) {
-  const input = parseThumbnailBase64(thumbnailBase64);
-  if (!input) {
-    return null;
-  }
-
-  const filePath = path.join(worldPaths.media, THUMBNAIL_FILE_NAME);
   try {
-    await sharp(input, { animated: false, limitInputPixels: 20_000_000 })
-      .webp({ quality: 82 })
-      .toFile(filePath);
-  } catch (error) {
-    throw createThumbnailError("Thumbnail image could not be processed");
+    const configContent = await fs.readFile(configPath, "utf-8");
+    return JSON.parse(configContent);
+  } catch {
+    const error = new Error("World not found");
+    error.code = "WORLD_NOT_FOUND";
+    throw error;
   }
-
-  return filePath;
 }
 
-async function deleteExistingThumbnails(worldPaths) {
-  const extensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
-  await Promise.all(
-    extensions.map((ext) =>
-      fs.unlink(path.join(worldPaths.media, `thumbnail${ext}`)).catch(() => {})
-    )
-  );
+async function writeWorldConfig(worldId, worldData) {
+  const safeId = validateWorldName(worldId);
+  const worldRoot = resolveWorldRoot(safeId);
+  const configPath = path.join(worldRoot, "world.json");
+  await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
 }
 
-async function listWorlds() {
+function getThumbnailContentType(filename = "") {
+  return THUMBNAIL_TYPES[path.extname(filename).toLowerCase()] || "application/octet-stream";
+}
+
+async function listWorlds(user = null) {
   const worldsRoot = getWorldsRoot();
   try {
     await fs.mkdir(worldsRoot, { recursive: true });
@@ -96,7 +68,7 @@ async function listWorlds() {
             const configContent = await fs.readFile(configPath, "utf-8");
             metadata = JSON.parse(configContent);
           } catch (e) {
-            // No world.json found, use fallback
+            // No world.json found
           }
           
           worlds.push({
@@ -104,25 +76,28 @@ async function listWorlds() {
             ...metadata
           });
         } catch (e) {
-          // Invalid world folder, ignore
+          // Invalid world folder
         }
       }
     }
     
-    // Sort by creation date descending (newest first)
-    worlds.sort((a, b) => {
+    const visibleWorlds = user && !user.isAdmin
+      ? worlds.filter((world) => isWorldMemberConfig(world, user.userId))
+      : worlds;
+
+    visibleWorlds.sort((a, b) => {
       const timeA = Number(a.createdAt) || 0;
       const timeB = Number(b.createdAt) || 0;
       return timeB - timeA;
     });
-    return worlds;
+    return visibleWorlds;
   } catch (error) {
     return [];
   }
 }
 
 async function createWorld(data) {
-  const { name, description, thumbnailBase64 } = data;
+  const { name, description } = data;
   
   if (!name || typeof name !== "string") {
     const error = new Error("World name is required");
@@ -147,48 +122,17 @@ async function createWorld(data) {
     throw error;
   }
 
-  let thumbnailUrl = null;
-  let thumbnailUpdatedAt = null;
-  if (thumbnailBase64) {
-    await writeThumbnail(worldPaths, thumbnailBase64);
-    thumbnailUpdatedAt = getNextThumbnailTimestamp();
-    thumbnailUrl = getThumbnailUrl(safeName, thumbnailUpdatedAt);
-  }
-
   const worldData = {
     name: safeName,
     displayName: name,
     description: description || "",
-    thumbnailUrl,
-    thumbnailUpdatedAt,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    members: []
   };
 
   await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
+  await indexWorld(safeName);
   return worldData;
-}
-
-async function getWorldThumbnail(worldName) {
-  const safeName = validateWorldName(worldName);
-  const worldPaths = await ensureWorldStructure(safeName);
-  
-  const extensions = [".webp", ".png", ".jpg", ".jpeg", ".gif"];
-  for (const ext of extensions) {
-    const filePath = path.join(worldPaths.media, `thumbnail${ext}`);
-    try {
-      await fs.stat(filePath);
-      return {
-        path: filePath,
-        mimeType: `image/${ext === ".jpg" ? "jpeg" : ext.substring(1)}`
-      };
-    } catch (e) {
-      // try next
-    }
-  }
-  
-  const error = new Error("Thumbnail not found");
-  error.code = "THUMBNAIL_NOT_FOUND";
-  throw error;
 }
 
 async function updateWorld(worldId, data) {
@@ -206,25 +150,53 @@ async function updateWorld(worldId, data) {
     throw error;
   }
 
-  const { name, description, thumbnailBase64 } = data;
+  const { name, description } = data;
 
-  if (name) {
-    worldData.displayName = name;
-  }
-  if (description !== undefined) {
-    worldData.description = description;
-  }
-
-  if (thumbnailBase64) {
-    const worldPaths = await ensureWorldStructure(safeId);
-    await deleteExistingThumbnails(worldPaths);
-    await writeThumbnail(worldPaths, thumbnailBase64);
-    worldData.thumbnailUpdatedAt = getNextThumbnailTimestamp(worldData.thumbnailUpdatedAt);
-    worldData.thumbnailUrl = getThumbnailUrl(safeId, worldData.thumbnailUpdatedAt);
-  }
+  if (name) worldData.displayName = name;
+  if (description !== undefined) worldData.description = description;
 
   await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
   return worldData;
+}
+
+async function saveWorldThumbnail(worldId, filename, buffer) {
+  const safeId = validateWorldName(worldId);
+  const worldRoot = resolveWorldRoot(safeId);
+  const ext = path.extname(String(filename || "")).toLowerCase();
+  if (!THUMBNAIL_TYPES[ext]) {
+    const error = new Error("Unsupported thumbnail file type");
+    error.code = "INVALID_THUMBNAIL";
+    throw error;
+  }
+
+  const worldData = await readWorldConfigById(safeId);
+  const thumbnailFile = `thumbnail${ext}`;
+  await fs.writeFile(path.join(worldRoot, thumbnailFile), buffer);
+  worldData.thumbnail = {
+    filename: thumbnailFile,
+    updatedAt: Date.now()
+  };
+  await writeWorldConfig(safeId, worldData);
+  return worldData;
+}
+
+async function getWorldThumbnail(worldId) {
+  const safeId = validateWorldName(worldId);
+  const worldRoot = resolveWorldRoot(safeId);
+  const worldData = await readWorldConfigById(safeId);
+  const filename = worldData.thumbnail?.filename;
+  if (!filename) {
+    const error = new Error("Thumbnail not found");
+    error.code = "DOCUMENT_NOT_FOUND";
+    throw error;
+  }
+
+  const fullPath = path.join(worldRoot, filename);
+  await fs.stat(fullPath);
+  return {
+    fullPath,
+    contentType: getThumbnailContentType(filename)
+  };
 }
 
 async function deleteWorld(worldId) {
@@ -234,6 +206,7 @@ async function deleteWorld(worldId) {
   try {
     await fs.stat(worldRoot);
     await fs.rm(worldRoot, { recursive: true, force: true });
+    removeWorldFromIndex(safeId);
     return { success: true };
   } catch (e) {
     const error = new Error("World not found");
@@ -257,6 +230,65 @@ async function getWorldConfig(worldId) {
   }
 }
 
+async function isWorldMember(worldId, userId) {
+  const worldData = await getWorldConfig(worldId);
+  return isWorldMemberConfig(worldData, userId);
+}
+
+async function listWorldMembers(worldId) {
+  const worldData = await getWorldConfig(worldId);
+  const members = Array.isArray(worldData.members) ? worldData.members : [];
+  const detailedMembers = await Promise.all(
+    members.map(async (member) => {
+      const user = await getUserById(member.userId);
+      return user ? { ...member, user } : null;
+    })
+  );
+  return detailedMembers.filter(Boolean);
+}
+
+async function addWorldMember(worldId, userId) {
+  const user = await getUserById(userId);
+  if (!user || user.disabled) {
+    const error = new Error("User not found");
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  const worldData = await readWorldConfigById(worldId);
+  const members = Array.isArray(worldData.members) ? worldData.members : [];
+  if (!members.some((member) => member.userId === userId)) {
+    members.push({ userId, addedAt: Date.now() });
+  }
+  worldData.members = members;
+  await writeWorldConfig(worldId, worldData);
+  return listWorldMembers(worldId);
+}
+
+async function removeWorldMember(worldId, userId) {
+  const worldData = await readWorldConfigById(worldId);
+  const members = Array.isArray(worldData.members) ? worldData.members : [];
+  worldData.members = members.filter((member) => member.userId !== userId);
+  await writeWorldConfig(worldId, worldData);
+  return listWorldMembers(worldId);
+}
+
+async function removeUserFromAllWorlds(userId) {
+  const worlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  await Promise.all(
+    worlds.map(async (world) => {
+      const worldData = await readWorldConfigById(world.id);
+      const members = Array.isArray(worldData.members) ? worldData.members : [];
+      const nextMembers = members.filter((member) => member.userId !== userId);
+      if (nextMembers.length !== members.length) {
+        worldData.members = nextMembers;
+        await writeWorldConfig(world.id, worldData);
+      }
+    })
+  );
+  return { success: true };
+}
+
 async function setHomePage(worldId, homePagePath) {
   const safeId = validateWorldName(worldId);
   const worldRoot = resolveWorldRoot(safeId);
@@ -272,7 +304,28 @@ async function setHomePage(worldId, homePagePath) {
     throw error;
   }
 
-  worldData.homePage = homePagePath;
+  if (homePagePath === null || homePagePath === undefined || homePagePath === "") {
+    worldData.homePage = null;
+    await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
+    return worldData;
+  }
+
+  const safeHomePagePath = validateRelativePath(homePagePath);
+  if (safeHomePagePath.includes("/")) {
+    const error = new Error("Home page must be a root document");
+    error.code = "INVALID_HOME_PAGE";
+    throw error;
+  }
+
+  const tree = await getFileTree(safeId);
+  const homeNode = tree.find((node) => node.path === safeHomePagePath);
+  if (!homeNode || homeNode.type !== "container") {
+    const error = new Error("Home page must be an existing root document");
+    error.code = "INVALID_HOME_PAGE";
+    throw error;
+  }
+
+  worldData.homePage = safeHomePagePath;
   await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
   return worldData;
 }
@@ -280,13 +333,15 @@ async function setHomePage(worldId, homePagePath) {
 module.exports = {
   listWorlds,
   createWorld,
-  getNextThumbnailTimestamp,
-  getThumbnailUrl,
-  parseThumbnailBase64,
   updateWorld,
   deleteWorld,
   getWorldThumbnail,
-  writeThumbnail,
   getWorldConfig,
+  isWorldMember,
+  listWorldMembers,
+  addWorldMember,
+  removeWorldMember,
+  removeUserFromAllWorlds,
+  saveWorldThumbnail,
   setHomePage
 };

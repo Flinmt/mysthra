@@ -1,142 +1,242 @@
 # <p align="center"><img src="client/public/favicon.png" width="80" height="80" alt="Mysthra Logo" /><br/>Mysthra</p>
 
 <p align="center">
-  <strong>The Ultimate Self-Hosted Worldbuilding Forge</strong><br/>
-  <em>A professional, minimalist, and high-fidelity platform for creators, writers, and world-builders.</em>
+  <strong>Self-hosted worldbuilding workspace</strong><br/>
+  <em>Worlds, wiki documents, media assets, and shared editing in a dark Nexus-style interface.</em>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Beta-purple?style=for-the-badge" alt="Status" />
-  <img src="https://img.shields.io/badge/License-Polyform--Noncommercial-red?style=for-the-badge" alt="License" />
-  <img src="https://img.shields.io/badge/Open--Source-Yes-green?style=for-the-badge" alt="Open Source" />
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-red?style=for-the-badge" alt="License" />
+  <img src="https://img.shields.io/badge/Self--Hosted-Yes-green?style=for-the-badge" alt="Self Hosted" />
 </p>
 
 ---
 
-## 🌌 What is Mysthra?
+## What Is Mysthra?
 
-**Mysthra** is an open-source, self-hosted workspace designed specifically for world-building. It combines the simplicity of **Markdown** with the limitless flexibility of **HTML/CSS**, allowing you to forge immersive lore, detailed maps, and complex character databases with a premium, focused interface.
+**Mysthra** is a self-hosted app for building fictional worlds. It is designed around a private "Nexus" dashboard where you manage worlds, then enter each world as a workspace with a wiki tree, rich wiki tabs, assets, covers, thumbnails, and document-level editing controls.
 
-Unlike general-purpose note apps, Mysthra is built for **atmosphere**. Every pixel of the "Nexus" dashboard and the editor was designed to keep you in the creative flow.
-
----
-
-## ✨ Key Features
-
-### 🏰 The Nexus Dashboard
-Your gateway to all your universes. A high-fidelity, horizontal gallery that presents your worlds as cinematic posters. Minimalist, clean, and blazingly fast.
-
-### ✍️ Pro Writing Workspace
-- **Monaco-Powered Editor**: The same engine that powers VS Code, now optimized for world-building.
-- **Live Hybrid Preview**: See your Markdown and HTML come to life instantly with a high-fidelity rendering engine.
-- **Intelligent Autosave**: Never lose a single word. Mysthra saves your progress every 2 seconds in the background and supports `Ctrl + S`.
-- **Media Management**: Drag and drop support for images and audio, automatically converted into clean HTML tags for total control over your layout.
-
-### 🛠️ Total Customization
-- **HTML & CSS First**: Use standard web technologies to create custom layouts, embedded music players, or interactive lore pieces.
-- **Global Template System**: Save your best structures (stat blocks, locations, timelines) as templates and reuse them across any world or file.
-- **Wiki-style Linking**: Connect your ideas with easy internal linking (`[[page-name]]`).
+The project is in beta and moving fast. The current focus is a solid writing/workspace foundation: worlds, root documents, tabs, BlockNote wiki editing, asset uploads, multiuser access per world, and read-only visitor sharing.
 
 ---
 
-## 🚀 Getting Started
+## Current Features
 
-Mysthra is designed to be **Self-Hosted**. You own your data.
+### Nexus Dashboard
 
-### ⚡ One-Command Install (No Clone Required)
-If you have Docker installed, you can launch Mysthra without even cloning the repository. Just create a `docker-compose.yml` with the following content and run `docker-compose up -d`:
+- Create, edit, delete, and search worlds.
+- Add thumbnails to worlds.
+- Configure internal Mysthra users as the global admin.
+- Manage which worlds each user can access.
+- Switch language between `pt` and `en`.
 
-```yaml
-services:
-  mysthra:
-    build: https://github.com/Flinmt/mysthra.git
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./mysthra-data:/app/data
-    environment:
-      - MASTER_PASSWORD=change-this-password
+### World Workspace
+
+- Wiki tree in the left sidebar.
+- Root documents/containers with child documents.
+- Tabs inside each document.
+- Wiki tabs powered by **BlockNote**.
+- Map tabs are preserved as a separate tab type.
+- Inline tab creation, without modal prompts.
+- Context menus for documents, tabs, and assets.
+- Document cover image, repositioning, icon, and inline title rename.
+- Home page support: a root document can be marked as the default page for the world.
+- Document lock/unlock state stored in document metadata.
+
+### Assets
+
+- Asset sidebar for authenticated users.
+- Upload images, GIFs, and audio files.
+- Create folders, move, duplicate, and delete assets.
+- Insert images into Wiki content through drag/drop or editor context menu.
+- Assets can still be served to visitors when needed for covers and wiki rendering.
+
+### Users And Access
+
+- Login uses `username + password`.
+- The global admin is defined by environment variables.
+- Admin can create/delete users and reset passwords.
+- Admin can grant or revoke access to worlds per user.
+- A normal logged-in user can edit worlds where they are a member.
+- There is no viewer role: read-only access is handled by visitor mode.
+- Sessions expire after 24 hours in both the browser cookie and the server-side session store.
+
+### Visitor Mode
+
+- Public visitor links use `/world/:id?view=true`.
+- Visitor mode requires `PUBLIC_READ=true` on the server.
+- Visitors are read-only.
+- Visitors see only the Wiki tree, not Assets or Templates UI.
+- Visitors cannot create, edit, upload, rename, delete, change covers, or unlock documents.
+
+---
+
+## Data Model
+
+Mysthra stores data on disk under `data/` by default.
+
+- `data/users.json`: internal non-admin users.
+- `data/sessions.json`: active sessions with server-side expiration.
+- `data/worlds/<world>/world.json`: world metadata, members, thumbnail info, and home page.
+- `data/worlds/<world>/documents`: document/container/tab content and metadata.
+- `data/worlds/<world>/assets`: uploaded media files.
+
+Wiki content is saved as native BlockNote JSON serialized into the existing document content storage. Older Markdown content is converted client-side when opened.
+
+---
+
+## Requirements
+
+- Node.js `>=20`
+- npm
+- Docker, optional but recommended for self-hosting
+
+---
+
+## Environment
+
+Create a `.env` file in the repository root:
+
+```env
+PORT=3000
+ADMIN_USERNAME=admin
+MASTER_PASSWORD=change-this-password
+PUBLIC_READ=false
+```
+
+Important variables:
+
+- `PORT`: HTTP port used by the Node server.
+- `ADMIN_USERNAME`: global admin username. Defaults to `admin`.
+- `MASTER_PASSWORD`: password for the global admin. Required in production.
+- `PUBLIC_READ`: enables unauthenticated visitor access when set to `true`.
+
+Optional advanced variables:
+
+- `USERS_FILE`: custom path for the users JSON file.
+- `SESSION_FILE`: custom path for the sessions JSON file.
+
+---
+
+## Running Locally
+
+Install backend dependencies:
+
+```bash
+npm install
+```
+
+Install frontend dependencies:
+
+```bash
+cd client
+npm install
+```
+
+Start the backend from the repository root:
+
+```bash
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+The backend serves the built client in production. During frontend development, you can also run Vite from `client/` if needed:
+
+```bash
+npm run dev
 ```
 
 ---
 
-### 🛠️ Manual Installation
+## Docker Compose
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/mysthra.git
-   cd mysthra
-   ```
+The repository includes a `docker-compose.yml` for self-hosting:
 
-2. **Install dependencies**:
-   ```bash
-   # Install server dependencies
-   npm install
-   
-   # Install client dependencies
-   cd client
-   npm install
-   ```
+```bash
+export MASTER_PASSWORD=change-this-password
+export PUBLIC_READ=false
+docker-compose up -d
+```
 
-3. **Set up environment variables**:
-   Create a `.env` file in the root directory:
-   ```env
-   PORT=3000
-   MASTER_PASSWORD=change-this-password
-   PUBLIC_READ=false
-   ```
+Mysthra will be available at:
 
-4. **Run the forge**:
-   ```bash
-   # From the root directory
-   npm run dev
-   ```
-   Open `http://localhost:3000` in your browser.
+```text
+http://localhost:3000
+```
 
-### Running with Docker (Recommended for Self-Hosting)
+Persistent data is mounted at:
 
-The easiest way to run Mysthra is using Docker Compose:
+```text
+./data:/app/data
+```
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/mysthra.git
-   cd mysthra
-   ```
-
-2. **Launch the forge**:
-   ```bash
-   export MASTER_PASSWORD=change-this-password
-   export PUBLIC_READ=false
-   docker-compose up -d
-   ```
-   The app will be available at `http://localhost:3000`. All your worlds and media will be persisted in the `./data` folder.
-
-   Set `PUBLIC_READ=true` only when you want unauthenticated visitor/share access to worlds, pages, themes, documents, and media.
+Set `PUBLIC_READ=true` only if you want visitor links to work without login.
 
 ---
 
-## 🎨 Design Philosophy
+## Scripts
 
-Mysthra follows the **Nexus Aesthetic**:
-- **Glassmorphism**: Deep blurs and frosted glass panels for a modern, tactile feel.
-- **Dark-First**: Optimized for long creative sessions without eye strain.
-- **Zero Scroll Navigation**: The core interface stays fixed while your content flows, providing a stable "station" for creation.
+Backend:
+
+```bash
+npm run dev
+npm run start
+npm test
+```
+
+Frontend:
+
+```bash
+cd client
+npm run dev
+npm run lint
+npm run build
+npm run preview
+```
+
+Recommended verification before committing:
+
+```bash
+npm test
+cd client
+npm run lint
+npm run build
+```
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Frontend**: [React 19](https://reactjs.org/), [Vite](https://vitejs.dev/), [Lucide Icons](https://lucide.dev/)
-- **Editor**: [Monaco Editor](https://microsoft.github.io/monaco-editor/)
-- **Backend**: [Node.js](https://nodejs.org/)
-- **Media Processing**: [Sharp](https://sharp.pixelplumbing.com/), [FFmpeg](https://www.ffmpeg.org/)
+- Frontend: React 19, Vite, Wouter, i18next, Lucide React
+- Wiki editor: BlockNote, Mantine
+- Backend: Node.js HTTP server
+- Storage: filesystem JSON/files
+- License: AGPL-3.0-only
 
 ---
 
-## 📜 License
+## Roadmap Notes
 
-Distributed under the **Polyform Noncommercial License 1.0.0**. This project is free to use and modify for personal and non-commercial purposes. **Commercial use or profiting from the platform is strictly prohibited.** See `LICENSE` for more information.
+Planned or intended areas include:
+
+- More complete map tab implementation.
+- Per-file visibility such as `world` vs `private`.
+- Better conflict handling for simultaneous editing.
+- More document and world configuration actions.
+- Templates returning as a fuller workspace feature.
+
+---
+
+## License
+
+Mysthra is licensed under the **GNU Affero General Public License v3.0 only** (`AGPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
 
 <p align="center">
-  <em>Forged with ❤️ by little old me.</em>
+  <em>Forged for worlds that refuse to stay small.</em>
 </p>
