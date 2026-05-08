@@ -6,7 +6,10 @@
   "description": "Self-hosted collaborative worldbuilding platform backend",
   "main": "src/server.js",
   "scripts": {
-    "dev": "node --env-file=.env --watch src/server.js",
+    "dev": "npm --prefix client run build && node --env-file=.env --watch src/server.js",
+    "dev:api": "node --env-file=.env --watch src/server.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
     "start": "node --env-file=.env src/server.js",
     "test": "node --test"
   },

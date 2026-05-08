@@ -4,9 +4,12 @@ import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sw
 import { useTranslation } from 'react-i18next';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
-import { HocuspocusProvider } from '@hocuspocus/provider';
-import * as Y from 'yjs';
+import { blocksToYXmlFragment } from '@blocknote/core/yjs';
+import Cropper from 'react-easy-crop';
 import '@blocknote/mantine/style.css';
+import 'react-easy-crop/react-easy-crop.css';
+import MapEditor from './MapEditor';
+import { useCollaborationRoom } from './useCollaborationRoom';
 
 const ICON_MAP = {
   FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
@@ -31,6 +34,10 @@ function getFirstOrderedTab(node) {
     if (leftOrder !== rightOrder) return leftOrder - rightOrder;
     return left.name.localeCompare(right.name);
   })[0] || null;
+}
+
+function isCollaborativeContentType(contentType) {
+  return contentType === 'wiki' || contentType === 'map';
 }
 
 function isRootContainer(node) {
@@ -129,31 +136,43 @@ function parseBlockNoteContent(content = '') {
   return null;
 }
 
-function getCollaborationUrl() {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/collaboration`;
+function clampCoverPosition(value) {
+  const position = Number(value);
+  if (!Number.isFinite(position)) return 50;
+  return Math.min(100, Math.max(0, position));
 }
 
-function getCollaborationColor(seed = '') {
-  const colors = ['#4cc9f0', '#f72585', '#ffd166', '#06d6a0', '#b5179e', '#f77f00', '#8ecae6', '#e63946'];
-  const value = String(seed || 'mysthra').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return colors[value % colors.length];
-}
-
-function getCollaborationUser(currentUser) {
-  const name = currentUser?.username || 'Mysthra user';
+function normalizeCoverArea(area) {
+  if (!area || typeof area !== 'object') return null;
+  const x = Number(area.x);
+  const y = Number(area.y);
+  const width = Number(area.width);
+  const height = Number(area.height);
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
   return {
-    name,
-    color: getCollaborationColor(currentUser?.userId || name)
+    x: Math.min(100, Math.max(0, x)),
+    y: Math.min(100, Math.max(0, y)),
+    width: Math.min(100, Math.max(1, width)),
+    height: Math.min(100, Math.max(1, height))
   };
 }
 
-function getCollaborationStatusLabel(status, labels = {}) {
-  if (status === 'readonly') return labels.readonly || 'Read only';
-  if (status === 'connected') return labels.connected || 'Connected';
-  if (status === 'error') return labels.error || 'Connection error';
-  if (status === 'disconnected') return labels.disconnected || 'Disconnected';
-  return labels.connecting || 'Connecting';
+function getCoverBackgroundVars(area, fallbackPositionY = 50) {
+  const normalized = normalizeCoverArea(area);
+  if (!normalized) {
+    return {
+      '--editor-cover-bg-position': `center ${clampCoverPosition(fallbackPositionY)}%`,
+      '--editor-cover-bg-size': 'cover'
+    };
+  }
+  const maxX = Math.max(0, 100 - normalized.width);
+  const maxY = Math.max(0, 100 - normalized.height);
+  const positionX = maxX > 0 ? (normalized.x / maxX) * 100 : 50;
+  const positionY = maxY > 0 ? (normalized.y / maxY) * 100 : 50;
+  return {
+    '--editor-cover-bg-position': `${Math.min(100, Math.max(0, positionX))}% ${Math.min(100, Math.max(0, positionY))}%`,
+    '--editor-cover-bg-size': `${10000 / normalized.width}% ${10000 / normalized.height}%`
+  };
 }
 
 function updateTreeNodeMetadata(nodes = [], targetPath = '', metadata = {}) {
@@ -202,39 +221,46 @@ function WikiBlockEditor({
   onRequestAssets,
   labels,
   onVisitorCountChange,
+  onCollaborationSaveState,
   onChange
 }) {
   const [imageContextMenu, setImageContextMenu] = useState({ isOpen: false, x: 0, y: 0 });
-  const collaborationIdentity = useMemo(
-    () => currentUser || (isVisitor ? { userId: 'visitor', username: 'Visitor' } : null),
-    [currentUser, isVisitor]
+  const collaborationRoomState = useCollaborationRoom({
+    roomName: collaborationRoom,
+    currentUser,
+    isVisitor,
+    locked
+  });
+  const {
+    doc: collaborationDoc,
+    provider: collaborationProvider,
+    user: collaborationUser,
+    readOnly: collaborationServerReadOnly,
+    synced: collaborationSynced,
+    saveStatus: collaborationSaveStatus,
+    dirty: collaborationDirty,
+    awarenessStates: collaborationAwarenessStates,
+    setAwarenessField: setCollaborationAwarenessField
+  } = collaborationRoomState;
+  const collaborationFragment = useMemo(
+    () => collaborationDoc?.getXmlFragment('blocknote') || null,
+    [collaborationDoc]
   );
-  const collaborationUser = useMemo(() => getCollaborationUser(collaborationIdentity), [collaborationIdentity]);
   const collaborationState = useMemo(() => {
-    if (!collaborationRoom || !collaborationIdentity) return null;
-    const doc = new Y.Doc();
-    const provider = new HocuspocusProvider({
-      url: getCollaborationUrl(),
-      name: collaborationRoom,
-      document: doc
-    });
-    if (!isVisitor) {
-      provider.awareness.setLocalStateField('user', collaborationUser);
-    }
+    if (!collaborationFragment || !collaborationDoc || !collaborationProvider) return null;
     return {
-      doc,
-      provider,
-      fragment: doc.getXmlFragment('blocknote')
+      doc: collaborationDoc,
+      provider: collaborationProvider,
+      fragment: collaborationFragment
     };
-  }, [collaborationIdentity, collaborationRoom, collaborationUser, isVisitor, locked]);
-  const [collaborationStatus, setCollaborationStatus] = useState(collaborationState ? 'connecting' : 'disabled');
-  const [serverReadOnly, setServerReadOnly] = useState(false);
-  const collaborationReadOnly = Boolean(locked || serverReadOnly);
+  }, [collaborationDoc, collaborationFragment, collaborationProvider]);
+  const collaborationReadOnly = Boolean(locked || collaborationServerReadOnly);
   const initialBlocks = useMemo(() => collaborationState ? null : parseBlockNoteContent(content), [collaborationState, content]);
   const initialContentRef = useRef(content);
   const isLoadingRef = useRef(true);
   const onChangeRef = useRef(onChange);
   const emitFrameRef = useRef(null);
+  const legacyMigrationRef = useRef('');
   const editor = useCreateBlockNote(
     {
       ...(collaborationState
@@ -242,12 +268,8 @@ function WikiBlockEditor({
           collaboration: {
             fragment: collaborationState.fragment,
             user: collaborationUser,
-            ...(!isVisitor
-              ? {
-                provider: collaborationState.provider,
-                showCursorLabels: 'activity'
-              }
-              : {})
+            provider: collaborationState.provider,
+            showCursorLabels: 'activity'
           }
         }
         : initialBlocks ? { initialContent: initialBlocks } : {}),
@@ -271,62 +293,34 @@ function WikiBlockEditor({
         return getAssetUrl(uploaded.path);
       }
     },
-    [contentKey, collaborationRoom]
+    [contentKey, collaborationRoom, collaborationProvider]
   );
 
   useEffect(() => {
     if (!collaborationState) {
-      setCollaborationStatus('disabled');
-      setServerReadOnly(false);
       onVisitorCountChange?.(0);
-      return undefined;
+      onCollaborationSaveState?.({ status: 'saved', dirty: false });
+      return;
     }
-
-    setCollaborationStatus('connecting');
-    setServerReadOnly(false);
-    const provider = collaborationState.provider;
     if (isVisitor) {
-      provider.awareness.setLocalStateField('visitor', { viewing: true });
+      setCollaborationAwarenessField('visitor', { viewing: true });
     }
-    const updateVisitorCount = ({ states } = {}) => {
-      const awarenessStates = states || Array.from(provider.awareness.getStates?.().values?.() || []);
-      const count = awarenessStates.filter(state => state?.visitor?.viewing).length;
-      onVisitorCountChange?.(count);
-    };
-    const handleStatus = ({ status }) => {
-      setCollaborationStatus(prev => (prev === 'readonly' && status === 'connected') ? 'readonly' : status);
-    };
-    const handleAuthenticated = ({ scope }) => {
-      const isReadOnly = scope === 'readonly';
-      setServerReadOnly(isReadOnly);
-      setCollaborationStatus(isReadOnly ? 'readonly' : 'connected');
-    };
-    const handleAuthenticationFailed = () => setCollaborationStatus('error');
-    provider.on('status', handleStatus);
-    provider.on('authenticated', handleAuthenticated);
-    provider.on('authenticationFailed', handleAuthenticationFailed);
-    provider.on('awarenessChange', updateVisitorCount);
-    updateVisitorCount();
-
-    return () => {
-      provider.off('status', handleStatus);
-      provider.off('authenticated', handleAuthenticated);
-      provider.off('authenticationFailed', handleAuthenticationFailed);
-      provider.off('awarenessChange', updateVisitorCount);
-      onVisitorCountChange?.(0);
-      provider.destroy();
-      collaborationState.doc.destroy();
-    };
-  }, [collaborationState, isVisitor, onVisitorCountChange]);
-
-  useEffect(() => {
-    if (!locked) {
-      setServerReadOnly(false);
-      if (collaborationStatus === 'readonly') {
-        setCollaborationStatus('connecting');
-      }
-    }
-  }, [collaborationStatus, locked]);
+    const count = collaborationAwarenessStates.filter(state => state?.visitor?.viewing).length;
+    onVisitorCountChange?.(count);
+    onCollaborationSaveState?.({
+      status: collaborationSaveStatus,
+      dirty: collaborationDirty
+    });
+  }, [
+    collaborationAwarenessStates,
+    collaborationDirty,
+    collaborationSaveStatus,
+    collaborationState,
+    isVisitor,
+    onCollaborationSaveState,
+    onVisitorCountChange,
+    setCollaborationAwarenessField
+  ]);
 
   const insertImageBlock = useCallback((url, name = '') => {
     const cursorBlock = editor.getTextCursorPosition().block;
@@ -438,6 +432,42 @@ function WikiBlockEditor({
     };
   }, [collaborationState, contentKey, editor, emitEditorDocument]);
 
+  useEffect(() => {
+    if (!collaborationState || !collaborationSynced || collaborationServerReadOnly) return;
+    if (legacyMigrationRef.current === contentKey) return;
+    if (collaborationState.fragment.length > 0) return;
+    const source = initialContentRef.current || '';
+    if (!source.trim()) return;
+
+    let isCancelled = false;
+    const migrateLegacyContent = async () => {
+      try {
+        const nativeBlocks = parseBlockNoteContent(source);
+        const blocks = nativeBlocks || await editor.tryParseMarkdownToBlocks(source);
+        if (isCancelled || !Array.isArray(blocks) || blocks.length === 0 || collaborationState.fragment.length > 0) return;
+        collaborationState.doc.transact(() => {
+          if (collaborationState.fragment.length === 0) {
+            blocksToYXmlFragment(editor, blocks, collaborationState.fragment);
+          }
+        });
+        legacyMigrationRef.current = contentKey;
+      } catch {
+        legacyMigrationRef.current = contentKey;
+      }
+    };
+
+    migrateLegacyContent();
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    collaborationServerReadOnly,
+    collaborationSynced,
+    collaborationState,
+    contentKey,
+    editor
+  ]);
+
   return (
     <div
       className="wiki-block-editor"
@@ -502,11 +532,6 @@ function WikiBlockEditor({
               </button>
             ))
           )}
-        </div>
-      )}
-      {collaborationState && !isVisitor && (
-        <div className={`collaboration-status ${collaborationStatus}`}>
-          {getCollaborationStatusLabel(collaborationStatus, labels.collaboration)}
         </div>
       )}
       <BlockNoteView
@@ -991,16 +1016,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetRenamingPath, setAssetRenamingPath] = useState(null);
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
   const [pageTitleEdit, setPageTitleEdit] = useState({ isEditing: false, value: '' });
-  const [tabCreationPanel, setTabCreationPanel] = useState({ isOpen: false, name: '', contentType: 'wiki' });
-  const [isRepositioningCover, setIsRepositioningCover] = useState(false);
+  const [tabCreationPanel, setTabCreationPanel] = useState({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
+  const [coverCropEditor, setCoverCropEditor] = useState({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
   const assetUploadTargetPathRef = useRef('');
   const latestContentRef = useRef('');
   const latestTabPathRef = useRef('');
   const selectedContainerPathRef = useRef('');
-  const worldPresenceProviderRef = useRef(null);
   const skipTitleRenameRef = useRef(false);
   const initialSharedSelectionRef = useRef(false);
-  const coverDragRef = useRef({ isDragging: false, startY: 0, startPosition: 50, currentPosition: 50, frame: null });
   const [coverUploading, setCoverUploading] = useState(false);
 
   const addToast = useCallback((message, type = 'info') => {
@@ -1083,80 +1106,68 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     fetchMembersPanelData();
   };
 
-  useEffect(() => {
-    if (isVisitor || !currentUser) {
-      setWorldPresenceUsers([]);
-      return undefined;
+  const handleWorldPresenceStateless = useCallback(({ payload }) => {
+    try {
+      const message = JSON.parse(payload);
+      if (message.worldId !== worldId) return;
+      if (message.type === 'document-tree') {
+        fetchTree();
+        return;
+      }
+      if (message.type !== 'document-lock') return;
+      const metadata = { isLocked: Boolean(message.isLocked) };
+      setTree(prev => updateTreeNodeMetadata(prev, message.path, metadata));
+      setSelectedContainer(prev => {
+        if (!prev || prev.path !== message.path) return prev;
+        return { ...prev, metadata: { ...prev.metadata, ...metadata } };
+      });
+      if (selectedContainerPathRef.current === message.path) {
+        setViewMode(message.isLocked ? 'view' : 'edit');
+      }
+    } catch {
+      // Ignore stateless messages not produced by Mysthra.
     }
+  }, [fetchTree, worldId]);
 
-    const doc = new Y.Doc();
-    const provider = new HocuspocusProvider({
-      url: getCollaborationUrl(),
-      name: `world:${worldId}:presence`,
-      document: doc
-    });
-    const currentUserInfo = getCollaborationUser(currentUser);
-
-    const updateUsers = ({ states } = {}) => {
-      const nextUsers = (states || [])
-        .map(state => state.user)
-        .filter(Boolean)
-        .filter((user, index, users) => users.findIndex(item => item.id === user.id) === index);
-      setWorldPresenceUsers(nextUsers);
-    };
-    const handleStateless = ({ payload }) => {
-      try {
-        const message = JSON.parse(payload);
-        if (message.worldId !== worldId) return;
-        if (message.type === 'document-tree') {
-          fetchTree();
-          return;
-        }
-        if (message.type !== 'document-lock') return;
-        const metadata = { isLocked: Boolean(message.isLocked) };
-        setTree(prev => updateTreeNodeMetadata(prev, message.path, metadata));
-        setSelectedContainer(prev => {
-          if (!prev || prev.path !== message.path) return prev;
-          return { ...prev, metadata: { ...prev.metadata, ...metadata } };
-        });
-        if (selectedContainerPathRef.current === message.path) {
-          setViewMode(message.isLocked ? 'view' : 'edit');
-        }
-      } catch {
-        // Ignore stateless messages not produced by Mysthra.
-      }
-    };
-
-    provider.awareness.setLocalStateField('user', {
-      id: currentUser.userId,
-      name: currentUserInfo.name,
-      color: currentUserInfo.color
-    });
-    provider.on('awarenessChange', updateUsers);
-    provider.on('stateless', handleStateless);
-    worldPresenceProviderRef.current = provider;
-
-    return () => {
-      provider.off('awarenessChange', updateUsers);
-      provider.off('stateless', handleStateless);
-      provider.destroy();
-      doc.destroy();
-      if (worldPresenceProviderRef.current === provider) {
-        worldPresenceProviderRef.current = null;
-      }
-    };
-  }, [currentUser, fetchTree, isVisitor, worldId]);
+  const worldPresenceRoomName = (currentUser || isVisitor) ? `world:${worldId}:presence` : '';
+  const worldPresence = useCollaborationRoom({
+    roomName: worldPresenceRoomName,
+    currentUser,
+    isVisitor,
+    onStateless: handleWorldPresenceStateless
+  });
+  const {
+    provider: worldPresenceProvider,
+    awarenessStates: worldPresenceAwarenessStates,
+    setAwarenessField: setWorldPresenceAwarenessField
+  } = worldPresence;
 
   useEffect(() => {
-    const provider = worldPresenceProviderRef.current;
-    if (!provider || isVisitor || !currentUser) return;
-    provider.awareness.setLocalStateField('location', {
+    const nextUsers = worldPresenceAwarenessStates
+      .map(state => state.user)
+      .filter(Boolean)
+      .filter((user, index, users) => users.findIndex(item => item.id === user.id) === index);
+    setWorldPresenceUsers(nextUsers);
+  }, [worldPresenceAwarenessStates]);
+
+  useEffect(() => {
+    if (!worldPresenceProvider || (!currentUser && !isVisitor)) return;
+    setWorldPresenceAwarenessField('location', {
       containerPath: selectedContainer?.path || '',
       containerName: selectedContainer?.name || '',
       tabPath: activeTab?.path || '',
       tabName: activeTab?.name || ''
     });
-  }, [activeTab?.name, activeTab?.path, currentUser, isVisitor, selectedContainer?.name, selectedContainer?.path]);
+  }, [
+    activeTab?.name,
+    activeTab?.path,
+    currentUser,
+    isVisitor,
+    selectedContainer?.name,
+    selectedContainer?.path,
+    setWorldPresenceAwarenessField,
+    worldPresenceProvider
+  ]);
 
   useEffect(() => {
     latestContentRef.current = fileContent;
@@ -1177,6 +1188,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setFileContent(nextContent);
     setIsDirty(true);
   }, [activeTab?.path]);
+
+  const handleCollaborationSaveState = useCallback(({ status, dirty }) => {
+    if (typeof dirty === 'boolean') {
+      setIsDirty(dirty);
+    }
+    if (status) {
+      setSaveStatus(status);
+    }
+  }, []);
 
   const saveDocument = useCallback(async (silent = true) => {
     if (!activeTab || isVisitor) return false;
@@ -1220,12 +1240,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   useEffect(() => {
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
-    setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
+    setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
+    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
     setViewMode(selectedContainer?.metadata?.isLocked ? 'view' : 'edit');
   }, [selectedContainer?.uid, selectedContainer?.name, selectedContainer?.metadata?.isLocked]);
 
   useEffect(() => {
-    if (!activeTab || isVisitor || !isDirty) return;
+    if (!activeTab || isVisitor || !isDirty || isCollaborativeContentType(activeTab.contentType)) return;
 
     setSaveStatus('idle');
     const timer = setTimeout(() => {
@@ -1240,6 +1261,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       fetchAssets();
     }
   }, [activeSidebarTab, fetchAssets, isVisitor]);
+
+  useEffect(() => {
+    if (activeTab?.contentType === 'map') {
+      fetchAssets();
+    }
+  }, [activeTab?.contentType, fetchAssets]);
+
+  useEffect(() => {
+    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
+  }, [activeTab?.uid]);
 
   useEffect(() => {
     if (isVisitor && activeSidebarTab !== 'wiki') {
@@ -1348,7 +1379,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const selectTab = async (tabNode) => {
-    if (isDirty) {
+    if (isDirty && !isCollaborativeContentType(activeTab?.contentType)) {
       await new Promise(resolve => window.requestAnimationFrame(resolve));
       const saved = await saveDocument(true);
       if (!saved) return;
@@ -1374,6 +1405,38 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       addToast(t('common.error'), 'error');
+    }
+  };
+
+  const navigateToMapLink = async ({ linkedDocumentPath = '', linkedTabPath = '' }) => {
+    const targetTab = linkedTabPath ? findNodeByPath(tree, linkedTabPath) : null;
+    const targetDocumentPath = targetTab ? pathParent(targetTab.path) : linkedDocumentPath;
+    const targetDocument = targetDocumentPath ? findNodeByPath(tree, targetDocumentPath) : null;
+
+    if (!targetDocument || targetDocument.type !== 'container') {
+      addToast(t('workspace.map_link_broken'), 'error');
+      return;
+    }
+
+    setSelectedContainer(targetDocument);
+
+    if (targetTab) {
+      if (targetTab.type !== 'tab') {
+        addToast(t('workspace.map_link_broken'), 'error');
+        return;
+      }
+      await selectTab(targetTab);
+      return;
+    }
+
+    const firstTab = getFirstOrderedTab(targetDocument);
+    if (firstTab) {
+      await selectTab(firstTab);
+    } else {
+      setActiveTab(null);
+      setFileContent('');
+      setIsDirty(false);
+      setSaveStatus('saved');
     }
   };
 
@@ -1448,7 +1511,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const openTabCreationPanel = () => {
     if (isVisitor || !selectedContainer) return;
-    setTabCreationPanel({ isOpen: true, name: getUniqueTabName(), contentType: 'wiki' });
+    setTabCreationPanel({ isOpen: true, name: getUniqueTabName(), contentType: 'wiki', mapFile: null });
   };
 
   const handleCreateTabInline = async () => {
@@ -1463,6 +1526,33 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     try {
       const contentType = tabCreationPanel.contentType;
+      let mapBackgroundAssetPath = '';
+      if (contentType === 'map') {
+        if (!tabCreationPanel.mapFile) {
+          addToast(t('workspace.map_image_required'), 'error');
+          return;
+        }
+        const prepared = await prepareAssetUpload(tabCreationPanel.mapFile);
+        if (!prepared.contentType.startsWith('image/')) {
+          addToast(t('workspace.asset_unsupported'), 'error');
+          return;
+        }
+        const query = new URLSearchParams({
+          path: '',
+          filename: prepared.filename
+        });
+        const uploadRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': prepared.contentType },
+          body: prepared.blob
+        });
+        if (!uploadRes.ok) {
+          addToast(t('workspace.asset_upload_failed', { name: tabCreationPanel.mapFile.name }), 'error');
+          return;
+        }
+        const uploaded = await uploadRes.json();
+        mapBackgroundAssetPath = uploaded.path;
+      }
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1471,19 +1561,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           content: '',
           metadata: {
             type: 'tab',
-            contentType
+            contentType,
+            ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {})
           }
         })
       });
       if (res.ok) {
         const createdTab = await res.json();
-        setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
+        setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
         const nextActiveTab = {
           ...createdTab,
           icon: null,
           type: 'tab',
           contentType,
-          metadata: { type: 'tab', contentType }
+          metadata: { type: 'tab', contentType, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
         };
 
         if (contentType === 'wiki') {
@@ -1500,6 +1591,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           setFileContent('');
           setIsDirty(false);
           setSaveStatus('saved');
+          await fetchAssets();
         }
         await fetchTree();
         addToast(t('common.created'), 'success');
@@ -2197,7 +2289,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const handleCoverUpload = async (event) => {
     const [file] = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!file || isVisitor || !selectedContainer) return;
+    if (!file || isVisitor || !selectedContainer || !activeTab || activeTab.contentType === 'map') return;
 
     setCoverUploading(true);
     try {
@@ -2226,7 +2318,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       const metadataRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedContainer.path, metadata: { coverAssetPath: uploaded.path, coverPositionY: 50 } })
+        body: JSON.stringify({
+          path: activeTab.path,
+          metadata: {
+            coverAssetPath: uploaded.path,
+            coverPositionY: 50,
+            coverCrop: null,
+            coverZoom: 1,
+            coverCroppedArea: null
+          }
+        })
       });
 
       if (!metadataRes.ok) {
@@ -2234,7 +2335,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
-      setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, coverAssetPath: uploaded.path, coverPositionY: 50 } } : prev);
+      updateActiveTabMetadata({
+        coverAssetPath: uploaded.path,
+        coverPositionY: 50,
+        coverCrop: null,
+        coverZoom: 1,
+        coverCroppedArea: null
+      });
       await fetchTree();
       await fetchAssets();
       addToast(t('common.saved'), 'success');
@@ -2247,6 +2354,30 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const updateSelectedContainerMetadata = (metadata) => {
     setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
+  };
+
+  const updateActiveTabMetadata = (metadata) => {
+    setActiveTab(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
+  };
+
+  const saveActiveTabMetadata = async (metadata) => {
+    if (!activeTab) return false;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: activeTab.path, metadata })
+      });
+      if (!res.ok) {
+        addToast(t('common.error'), 'error');
+        return false;
+      }
+      await fetchTree();
+      return true;
+    } catch {
+      addToast(t('common.error'), 'error');
+      return false;
+    }
   };
 
   const saveSelectedContainerMetadata = async (metadata) => {
@@ -2305,55 +2436,45 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeCover = async () => {
-    if (isVisitor || !selectedContainer || !activeCoverPath) return;
-    updateSelectedContainerMetadata({ coverAssetPath: null, coverPositionY: 50 });
-    setIsRepositioningCover(false);
-    const saved = await saveSelectedContainerMetadata({ coverAssetPath: null, coverPositionY: 50 });
+    if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
+    updateActiveTabMetadata({ coverAssetPath: null, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null });
+    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
+    const saved = await saveActiveTabMetadata({ coverAssetPath: null, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null });
     if (saved) addToast(t('common.saved'), 'success');
   };
 
-  const handleCoverPointerDown = (event) => {
-    if (!isRepositioningCover || !selectedContainer || !activeCoverPath) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    document.body.style.userSelect = 'none';
-    coverDragRef.current = {
-      isDragging: true,
-      startY: event.clientY,
-      startPosition: Number(selectedContainer.metadata?.coverPositionY ?? 50),
-      currentPosition: Number(selectedContainer.metadata?.coverPositionY ?? 50),
-      frame: null
-    };
-  };
-
-  const handleCoverPointerMove = (event) => {
-    if (!coverDragRef.current.isDragging) return;
-    const coverElement = event.currentTarget;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const delta = ((coverDragRef.current.startY - event.clientY) / Math.max(rect.height, 1)) * 100;
-    const nextPosition = Math.min(100, Math.max(0, coverDragRef.current.startPosition + delta));
-    coverDragRef.current.currentPosition = nextPosition;
-
-    if (coverDragRef.current.frame) return;
-    coverDragRef.current.frame = window.requestAnimationFrame(() => {
-      coverElement.style.setProperty('--editor-cover-position-y', `${coverDragRef.current.currentPosition}%`);
-      coverDragRef.current.frame = null;
+  const openCoverCropEditor = () => {
+    if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
+    const nextCrop = activeTab.metadata?.coverCrop;
+    setCoverCropEditor({
+      isOpen: true,
+      crop: nextCrop && Number.isFinite(Number(nextCrop.x)) && Number.isFinite(Number(nextCrop.y))
+        ? { x: Number(nextCrop.x), y: Number(nextCrop.y) }
+        : { x: 0, y: 0 },
+      zoom: Math.min(3, Math.max(1, Number(activeTab.metadata?.coverZoom ?? 1))),
+      croppedArea: normalizeCoverArea(activeTab.metadata?.coverCroppedArea)
     });
   };
 
-  const handleCoverPointerUp = async (event) => {
-    if (!coverDragRef.current.isDragging) return;
-    if (coverDragRef.current.frame) {
-      window.cancelAnimationFrame(coverDragRef.current.frame);
-      coverDragRef.current.frame = null;
+  const closeCoverCropEditor = () => {
+    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
+  };
+
+  const saveCoverCrop = async () => {
+    if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
+    const croppedArea = normalizeCoverArea(coverCropEditor.croppedArea)
+      || normalizeCoverArea(activeTab.metadata?.coverCroppedArea);
+    const metadata = {
+      coverCrop: coverCropEditor.crop,
+      coverZoom: coverCropEditor.zoom,
+      coverCroppedArea: croppedArea
+    };
+    updateActiveTabMetadata(metadata);
+    const saved = await saveActiveTabMetadata(metadata);
+    if (saved) {
+      closeCoverCropEditor();
+      addToast(t('common.saved'), 'success');
     }
-    coverDragRef.current.isDragging = false;
-    document.body.style.userSelect = '';
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const finalPosition = Math.round(coverDragRef.current.currentPosition);
-    event.currentTarget.style.setProperty('--editor-cover-position-y', `${finalPosition}%`);
-    updateSelectedContainerMetadata({ coverPositionY: finalPosition });
-    await saveSelectedContainerMetadata({ coverPositionY: finalPosition });
   };
 
   const handleTreeBlankContextMenu = (event) => {
@@ -2376,9 +2497,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
   const ActiveDisplayIcon = ICON_MAP[selectedContainer?.icon] || Folder;
-  const activeCoverPath = selectedContainer?.metadata?.coverAssetPath;
-  const coverPositionY = Number(selectedContainer?.metadata?.coverPositionY ?? 50);
+  const activeCoverPath = activeTab?.contentType === 'wiki' ? activeTab?.metadata?.coverAssetPath : null;
+  const coverPositionY = clampCoverPosition(activeTab?.metadata?.coverPositionY);
+  const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
+  const isMapTab = activeTab?.contentType === 'map';
   const isAdmin = Boolean(currentUser?.isAdmin);
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit';
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
@@ -2390,6 +2513,204 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       : isDirty
         ? t('workspace.save_status_pending')
         : t('workspace.save_status_saved');
+  const editorControls = !isVisitor ? (
+    <div className="editor-cover-controls">
+      {activeTab && (
+        <span className={`editor-save-status ${saveStatus}`}>
+          {saveStatusLabel}
+        </span>
+      )}
+      {activeTab && activeTabVisitorCount > 0 && (
+        <span className="editor-visitor-count" title={t('workspace.visitors_viewing_file')}>
+          <Users size={14} />
+          <span>
+            {activeTabVisitorCount} {activeTabVisitorCount === 1 ? t('workspace.visitor_count_singular') : t('workspace.visitor_count_plural')}
+          </span>
+        </span>
+      )}
+      {worldPresenceUsers.length > 0 && (
+        <div className="world-presence" title={t('workspace.online_users')}>
+          {worldPresenceUsers.slice(0, 5).map(user => (
+            <span
+              key={user.id}
+              className="world-presence-avatar"
+              style={{ '--presence-color': user.color }}
+              title={user.name}
+            >
+              {String(user.name || '?').slice(0, 1).toUpperCase()}
+            </span>
+          ))}
+          {worldPresenceUsers.length > 5 && (
+            <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
+          )}
+        </div>
+      )}
+      <button
+        type="button"
+        className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
+        onClick={toggleDocumentLock}
+        disabled={!selectedContainer}
+        title={isDocumentUnlocked ? t('workspace.lock_document') : t('workspace.unlock_document')}
+      >
+        {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
+      </button>
+      <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
+          onClick={() => setWorldActionsMenu(prev => !prev)}
+          disabled={!selectedContainer}
+          title={t('workspace.world_actions')}
+        >
+          <MoreVertical size={16} />
+        </button>
+        {worldActionsMenu && (
+          <div className="editor-world-actions-menu glass-panel">
+            <button type="button" onClick={shareWorld}>
+              <Share2 size={14} />
+              <span>{t('workspace.share_world')}</span>
+            </button>
+            {!isMapTab && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorldActionsMenu(false);
+                    coverFileInputRef.current?.click();
+                  }}
+                  disabled={coverUploading}
+                >
+                  <Image size={14} />
+                  <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
+                </button>
+                {activeCoverPath && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWorldActionsMenu(false);
+                        openCoverCropEditor();
+                      }}
+                    >
+                      <MoveVertical size={14} />
+                      <span>{t('workspace.reposition_cover')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        setWorldActionsMenu(false);
+                        removeCover();
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      <span>{t('workspace.remove_cover')}</span>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+  const pageTitleBlock = (
+    <div className="editor-page-title-row">
+      <button
+        type="button"
+        className={`editor-page-icon ${selectedContainer && !isVisitor ? 'is-editable' : ''}`}
+        onClick={openTabIconPicker}
+        disabled={!selectedContainer || isVisitor}
+        title={selectedContainer && !isVisitor ? t('workspace.change_icon') : undefined}
+      >
+        <ActiveDisplayIcon size={isMapTab ? 20 : 24} />
+      </button>
+      <div className="editor-title-copy">
+        {pageTitleEdit.isEditing ? (
+          <input
+            className="editor-title-input"
+            value={pageTitleEdit.value}
+            onChange={event => setPageTitleEdit(prev => ({ ...prev, value: event.target.value }))}
+            onBlur={commitPageTitleRename}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+              if (event.key === 'Escape') {
+                skipTitleRenameRef.current = true;
+                setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
+              }
+            }}
+            autoFocus
+            onFocus={event => event.target.select()}
+          />
+        ) : (
+          <h1
+            onDoubleClick={() => {
+              if (!isVisitor) setPageTitleEdit({ isEditing: true, value: selectedContainer.name });
+            }}
+            title={!isVisitor ? t('workspace.rename_title_hint') : undefined}
+          >
+            {selectedContainer?.name || t('workspace.select_document')}
+          </h1>
+        )}
+      </div>
+    </div>
+  );
+  const tabRow = (
+    <div className="editor-tab-row">
+      {selectedTabs.map(tab => (
+        renamingTab.path === tab.path ? (
+          <input
+            key={tab.uid}
+            className="editor-tab-rename-input"
+            value={renamingTab.value}
+            onChange={event => setRenamingTab(prev => ({ ...prev, value: event.target.value }))}
+            onBlur={() => commitTabRename(tab)}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+              if (event.key === 'Escape') {
+                setRenamingTab({ path: '', value: '' });
+              }
+            }}
+            autoFocus
+            onFocus={event => event.target.select()}
+          />
+        ) : (
+          <button
+            key={tab.uid}
+            type="button"
+            className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`}
+            onClick={() => selectTab(tab)}
+            onContextMenu={event => {
+              if (isVisitor) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
+            }}
+          >
+            {React.createElement(ICON_MAP[tab.icon] || (tab.contentType === 'map' ? Map : FileText), { size: 14 })}
+            <span>{tab.name}</span>
+          </button>
+        )
+      ))}
+      {!isVisitor && (
+        <button
+          type="button"
+          className="editor-tab-add"
+          onClick={openTabCreationPanel}
+          title={t('workspace.create_tab')}
+        >
+          <Plus size={16} />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="workspace-container" style={{ flexDirection: 'row' }}>
@@ -2640,227 +2961,39 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className="editor-page">
-                <div
-                  className={`editor-page-cover ${activeCoverPath ? 'has-image' : ''} ${isRepositioningCover ? 'is-repositioning' : ''}`}
-                  style={activeCoverPath ? {
-                    '--editor-cover-image': `url("${getAssetUrl(activeCoverPath)}")`,
-                    '--editor-cover-position-y': `${coverPositionY}%`
-                  } : undefined}
-                  onPointerDown={handleCoverPointerDown}
-                  onPointerMove={handleCoverPointerMove}
-                  onPointerUp={handleCoverPointerUp}
-                  onPointerCancel={handleCoverPointerUp}
-                >
-                  <div className="editor-page-cover-shade" aria-hidden="true" />
-                  {!isVisitor && (
-                    <div className="editor-cover-controls">
-                      {activeTab && (
-                        <span className={`editor-save-status ${saveStatus}`}>
-                          {saveStatusLabel}
-                        </span>
-                      )}
-                      {activeTab && activeTabVisitorCount > 0 && (
-                        <span className="editor-visitor-count" title={t('workspace.visitors_viewing_file')}>
-                          <Users size={14} />
-                          <span>
-                            {activeTabVisitorCount} {activeTabVisitorCount === 1 ? t('workspace.visitor_count_singular') : t('workspace.visitor_count_plural')}
-                          </span>
-                        </span>
-                      )}
-                      {worldPresenceUsers.length > 0 && (
-                        <div className="world-presence" title={t('workspace.online_users')}>
-                          {worldPresenceUsers.slice(0, 5).map(user => (
-                            <span
-                              key={user.id}
-                              className="world-presence-avatar"
-                              style={{ '--presence-color': user.color }}
-                              title={user.name}
-                            >
-                              {String(user.name || '?').slice(0, 1).toUpperCase()}
-                            </span>
-                          ))}
-                          {worldPresenceUsers.length > 5 && (
-                            <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
-                          )}
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
-                        onClick={toggleDocumentLock}
-                        disabled={!selectedContainer}
-                        title={isDocumentUnlocked ? t('workspace.lock_document') : t('workspace.unlock_document')}
-                      >
-                        {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
-                      </button>
-                      <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
-                        <button
-                          type="button"
-                          className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
-                          onClick={() => setWorldActionsMenu(prev => !prev)}
-                          disabled={!selectedContainer}
-                          title={t('workspace.world_actions')}
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                        {worldActionsMenu && (
-                          <div className="editor-world-actions-menu glass-panel">
-                            <button type="button" onClick={shareWorld}>
-                              <Share2 size={14} />
-                              <span>{t('workspace.share_world')}</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {!isVisitor && selectedContainer && (
-                    <>
-                      <input
-                        ref={coverFileInputRef}
-                        type="file"
-                        accept="image/*,.gif"
-                        onChange={handleCoverUpload}
-                        hidden
-                      />
-                      <div className="editor-cover-toolbar">
-                        <button
-                          type="button"
-                          className="editor-cover-action"
-                          onPointerDown={event => event.stopPropagation()}
-                          onClick={() => coverFileInputRef.current?.click()}
-                          disabled={coverUploading}
-                          title={coverActionLabel}
-                        >
-                          <Image size={15} />
-                          <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
-                        </button>
-                        {activeCoverPath && (
-                          <>
-                            <button
-                              type="button"
-                              className={`editor-cover-action icon-only ${isRepositioningCover ? 'active' : ''}`}
-                              onPointerDown={event => event.stopPropagation()}
-                              onClick={() => setIsRepositioningCover(prev => !prev)}
-                              title={t('workspace.reposition_cover')}
-                            >
-                              <MoveVertical size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              className="editor-cover-action icon-only danger"
-                              onPointerDown={event => event.stopPropagation()}
-                              onClick={removeCover}
-                              title={t('workspace.remove_cover')}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
+              <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''}`}>
+                {!isVisitor && selectedContainer && activeTab?.contentType === 'wiki' && (
+                  <input
+                    ref={coverFileInputRef}
+                    type="file"
+                    accept="image/*,.gif"
+                    onChange={handleCoverUpload}
+                    hidden
+                  />
+                )}
+                {!isMapTab && activeCoverPath && (
+                  <div
+                    className="editor-page-cover has-image"
+                    style={{
+                      '--editor-cover-image': `url("${getAssetUrl(activeCoverPath)}")`,
+                      '--editor-cover-position-y': `${coverPositionY}%`,
+                      ...coverBackgroundVars
+                    }}
+                  >
+                    <div className="editor-page-cover-shade" aria-hidden="true" />
+                  </div>
+                )}
+                <div className="document-chrome">
+                  <header className="document-chrome-title">
+                    {pageTitleBlock}
+                    {tabRow}
+                  </header>
+                  <div className="document-chrome-controls">
+                    {editorControls}
+                  </div>
                 </div>
 
-                <header className="editor-page-header">
-                  <div className="editor-page-title-row">
-                    <button
-                      type="button"
-                      className={`editor-page-icon ${selectedContainer && !isVisitor ? 'is-editable' : ''}`}
-                      onClick={openTabIconPicker}
-                      disabled={!selectedContainer || isVisitor}
-                      title={selectedContainer && !isVisitor ? t('workspace.change_icon') : undefined}
-                    >
-                      <ActiveDisplayIcon size={34} />
-                    </button>
-                    <div className="editor-title-copy">
-                      {pageTitleEdit.isEditing ? (
-                        <input
-                          className="editor-title-input"
-                          value={pageTitleEdit.value}
-                          onChange={event => setPageTitleEdit(prev => ({ ...prev, value: event.target.value }))}
-                          onBlur={commitPageTitleRename}
-                          onKeyDown={event => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              event.currentTarget.blur();
-                            }
-                            if (event.key === 'Escape') {
-                              skipTitleRenameRef.current = true;
-                              setPageTitleEdit({ isEditing: false, value: selectedContainer.name });
-                            }
-                          }}
-                          autoFocus
-                          onFocus={event => event.target.select()}
-                        />
-                      ) : (
-                        <h1
-                          onDoubleClick={() => {
-                            if (!isVisitor) setPageTitleEdit({ isEditing: true, value: selectedContainer.name });
-                          }}
-                          title={!isVisitor ? t('workspace.rename_title_hint') : undefined}
-                        >
-                          {selectedContainer.name || t('workspace.select_document')}
-                        </h1>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="editor-tab-row">
-                    {selectedTabs.map(tab => (
-                      renamingTab.path === tab.path ? (
-                        <input
-                          key={tab.uid}
-                          className="editor-tab-rename-input"
-                          value={renamingTab.value}
-                          onChange={event => setRenamingTab(prev => ({ ...prev, value: event.target.value }))}
-                          onBlur={() => commitTabRename(tab)}
-                          onKeyDown={event => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              event.currentTarget.blur();
-                            }
-                            if (event.key === 'Escape') {
-                              setRenamingTab({ path: '', value: '' });
-                            }
-                          }}
-                          autoFocus
-                          onFocus={event => event.target.select()}
-                        />
-                      ) : (
-                        <button
-                          key={tab.uid}
-                          type="button"
-                          className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`}
-                          onClick={() => selectTab(tab)}
-                          onContextMenu={event => {
-                            if (isVisitor) return;
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
-                          }}
-                        >
-                          {React.createElement(ICON_MAP[tab.icon] || (tab.contentType === 'map' ? Map : FileText), { size: 14 })}
-                          <span>{tab.name}</span>
-                        </button>
-                      )
-                    ))}
-                    {!isVisitor && (
-                      <button
-                        type="button"
-                        className="editor-tab-add"
-                        onClick={openTabCreationPanel}
-                        title={t('workspace.create_tab')}
-                      >
-                        <Plus size={16} />
-                      </button>
-                    )}
-                  </div>
-                </header>
-
-                <section className="editor-page-body">
+                <section className="editor-page-body document-content-frame">
                   {tabCreationPanel.isOpen ? (
                     <div className="tab-creation-panel">
                       <div className="tab-creation-header">
@@ -2883,7 +3016,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         onChange={event => setTabCreationPanel(prev => ({ ...prev, name: event.target.value }))}
                         onKeyDown={event => {
                           if (event.key === 'Enter') handleCreateTabInline();
-                          if (event.key === 'Escape') setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' });
+                          if (event.key === 'Escape') setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
                         }}
                         placeholder={t('workspace.new_tab_name')}
                         autoFocus
@@ -2911,11 +3044,35 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         </button>
                       </div>
 
+                      {tabCreationPanel.contentType === 'map' && (
+                        <label className={`map-creation-file ${tabCreationPanel.mapFile ? 'has-file' : ''}`}>
+                          <input
+                            type="file"
+                            accept="image/*,.gif"
+                            onChange={event => {
+                              const [file] = Array.from(event.target.files || []);
+                              setTabCreationPanel(prev => ({ ...prev, mapFile: file || null }));
+                            }}
+                          />
+                          <span className="map-creation-file-icon">
+                            <Upload size={18} />
+                          </span>
+                          <span className="map-creation-file-copy">
+                            <strong>
+                              {tabCreationPanel.mapFile
+                                ? tabCreationPanel.mapFile.name
+                                : t('workspace.map_choose_base_image')}
+                            </strong>
+                            <small>{t('workspace.map_choose_base_image_hint')}</small>
+                          </span>
+                        </label>
+                      )}
+
                       <div className="tab-creation-actions">
                         <button
                           type="button"
                           className="btn-secondary"
-                          onClick={() => setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki' })}
+                          onClick={() => setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null })}
                         >
                           {t('common.cancel')}
                         </button>
@@ -2923,20 +3080,74 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           type="button"
                           className="btn-primary"
                           onClick={handleCreateTabInline}
-                          disabled={!tabCreationPanel.name.trim()}
+                          disabled={!tabCreationPanel.name.trim() || (tabCreationPanel.contentType === 'map' && !tabCreationPanel.mapFile)}
                         >
                           {t('common.create')}
                         </button>
                       </div>
                     </div>
                   ) : activeTab ? (
-                    activeTab.contentType === 'map' ? (
-                      <div className="editor-placeholder">
-                        <Map size={76} />
-                        <h2>Módulo de Mapas</h2>
-                        <p>O visualizador de mapas interativos será implementado na próxima fase.</p>
-                      </div>
-                    ) : (
+                    <>
+                      {activeTab.contentType === 'map' ? (
+                      <MapEditor
+                        key={activeTab.path}
+                        worldId={worldId}
+                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
+                        currentUser={currentUser}
+                        isVisitor={isVisitor}
+                        locked={Boolean(selectedContainer?.metadata?.isLocked)}
+                        initialMapAssetPath={activeTab.metadata?.mapBackgroundAssetPath}
+                        documentTree={tree}
+                        assetImages={assetImages}
+                        getAssetUrl={getAssetUrl}
+                        onRequestAssets={fetchAssets}
+                        onNavigateToLink={navigateToMapLink}
+                        onCollaborationSaveState={handleCollaborationSaveState}
+                        labels={{
+                          toolbar: t('workspace.map_toolbar'),
+                          selectTool: t('workspace.map_tool_select'),
+                          panTool: t('workspace.map_tool_pan'),
+                          markerTool: t('workspace.map_tool_marker'),
+                          textTool: t('workspace.map_tool_text'),
+                          imageTool: t('workspace.map_tool_image'),
+                          markerDefault: t('workspace.map_marker_default'),
+                          editMarker: t('workspace.map_edit_marker'),
+                          markerEditorTitle: t('workspace.map_marker_editor_title'),
+                          markerLabel: t('workspace.map_marker_label'),
+                          markerDescription: t('workspace.map_marker_description'),
+                          markerIcon: t('workspace.map_marker_icon'),
+                          markerColor: t('workspace.map_marker_color'),
+                          markerLinkedDocument: t('workspace.map_marker_linked_document'),
+                          markerLinkedTab: t('workspace.map_marker_linked_tab'),
+                          markerNoLink: t('workspace.map_marker_no_link'),
+                          markerRemoveLink: t('workspace.map_marker_remove_link'),
+                          markerDocumentDefaultTab: t('workspace.map_marker_document_default_tab'),
+                          linkedDocument: t('workspace.map_marker_linked_document_state'),
+                          linkedTab: t('workspace.map_marker_linked_tab_state'),
+                          notLinked: t('workspace.map_marker_not_linked_state'),
+                          textDefault: t('workspace.map_text_default'),
+                          editText: t('workspace.map_edit_text'),
+                          gridMode: t('workspace.map_grid_mode'),
+                          zoomIn: t('workspace.map_zoom_in'),
+                          zoomOut: t('workspace.map_zoom_out'),
+                          resetView: t('workspace.map_reset_view'),
+                          deleteSelected: t('workspace.map_delete_selected'),
+                          changeBaseMap: t('workspace.map_change_base_image'),
+                          insertImage: t('workspace.insert_image'),
+                          uploadImage: t('workspace.map_upload_image'),
+                          uploading: t('common.uploading'),
+                          noAssetImages: t('workspace.no_asset_images'),
+                          onlineUsers: t('workspace.online_users'),
+                          status: {
+                            connecting: t('workspace.collaboration_connecting'),
+                            connected: t('workspace.collaboration_connected'),
+                            readonly: t('workspace.collaboration_readonly'),
+                            disconnected: t('workspace.collaboration_disconnected'),
+                            error: t('workspace.collaboration_error')
+                          }
+                        }}
+                      />
+                      ) : (
                       <WikiBlockEditor
                         key={`${activeTab.path}:${selectedContainer?.metadata?.isLocked ? 'locked' : 'unlocked'}`}
                         contentKey={activeTab.path}
@@ -2962,9 +3173,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           }
                         }}
                         onVisitorCountChange={setActiveTabVisitorCount}
+                        onCollaborationSaveState={handleCollaborationSaveState}
                         onChange={handleWikiContentChange}
                       />
-                    )
+                      )}
+                    </>
                   ) : (
                     <div className="editor-placeholder muted">
                       <Book size={48} />
@@ -3365,6 +3578,75 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             </div>
 
             {membersPanel.error && <div className="error-msg">{membersPanel.error}</div>}
+          </div>
+        </div>
+      )}
+
+      {coverCropEditor.isOpen && activeCoverPath && (
+        <div className="duplicate-modal-overlay" onClick={closeCoverCropEditor}>
+          <div className="modal-content glass-panel duplicate-modal cover-crop-modal" onClick={event => event.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={closeCoverCropEditor}
+              aria-label={t('common.cancel')}
+              title={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon">
+                <Image size={22} />
+              </div>
+              <div>
+                <h3>{t('workspace.reposition_cover')}</h3>
+                <p>{t('workspace.cover_crop_hint', 'Arraste a imagem para escolher a faixa visível da capa.')}</p>
+              </div>
+            </div>
+
+            <div className="cover-crop-frame">
+              <Cropper
+                key={`${activeTab?.uid || 'cover'}-${activeCoverPath}`}
+                image={getAssetUrl(activeCoverPath)}
+                crop={coverCropEditor.crop}
+                zoom={coverCropEditor.zoom}
+                aspect={12}
+                minZoom={1}
+                maxZoom={3}
+                objectFit="cover"
+                showGrid={false}
+                initialCroppedAreaPercentages={normalizeCoverArea(activeTab?.metadata?.coverCroppedArea) || undefined}
+                onCropChange={(crop) => setCoverCropEditor(prev => ({ ...prev, crop }))}
+                onZoomChange={(zoom) => setCoverCropEditor(prev => ({ ...prev, zoom }))}
+                onCropComplete={(croppedArea) => {
+                  setCoverCropEditor(prev => ({ ...prev, croppedArea }));
+                }}
+              />
+            </div>
+
+            <label className="cover-crop-controls">
+              <span>Zoom</span>
+              <input
+                type="range"
+                min="1"
+                max="3"
+                step="0.01"
+                value={coverCropEditor.zoom}
+                onChange={(event) => {
+                  const zoom = Number(event.target.value);
+                  setCoverCropEditor(prev => ({ ...prev, zoom: Number.isFinite(zoom) ? zoom : 1 }));
+                }}
+              />
+            </label>
+
+            <div className="delete-modal-actions cover-crop-actions">
+              <button type="button" className="btn-secondary" onClick={closeCoverCropEditor}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" className="btn-primary" onClick={saveCoverCrop}>
+                {t('common.save')}
+              </button>
+            </div>
           </div>
         </div>
       )}

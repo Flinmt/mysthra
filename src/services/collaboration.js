@@ -14,11 +14,21 @@ const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
 const BLOCKNOTE_FRAGMENT = "blocknote";
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map"]);
 
 let activeCollaborationServer = null;
 
 function isPublicReadEnabled() {
   return ["1", "true", "yes", "on"].includes(String(process.env.PUBLIC_READ || "").trim().toLowerCase());
+}
+
+function isCollaborationDebugEnabled() {
+  return ["1", "true", "yes", "on"].includes(String(process.env.COLLABORATION_DEBUG || "").trim().toLowerCase());
+}
+
+function debugCollaboration(event, details = {}) {
+  if (!isCollaborationDebugEnabled()) return;
+  console.log(`[collaboration:${event}]`, details);
 }
 
 function parseCollaborationRoom(documentName = "") {
@@ -78,8 +88,12 @@ async function resolveTabRoom(room) {
   const { pages: pagesDir } = getWorldPaths(room.worldId);
   const metadata = await readDocumentMetadata(pagesDir, safePath);
 
-  if (metadata.uid !== room.tabUid || metadata.type !== "tab" || (metadata.contentType && metadata.contentType !== "wiki")) {
-    const error = new Error("Collaborative room must point to a wiki tab");
+  if (
+    metadata.uid !== room.tabUid ||
+    metadata.type !== "tab" ||
+    (metadata.contentType && !COLLABORATIVE_TAB_CONTENT_TYPES.has(metadata.contentType))
+  ) {
+    const error = new Error("Collaborative room must point to a collaborative tab");
     error.code = "DOCUMENT_NOT_FOUND";
     throw error;
   }
@@ -120,12 +134,21 @@ async function loadCollaborationDocument(document, room) {
   if (persistedState) {
     Y.applyUpdate(document, persistedState);
   }
+  debugCollaboration("load", {
+    room: `world:${room.worldId}:tab:${room.tabUid}`,
+    bytes: persistedState?.length || 0
+  });
 }
 
 async function storeCollaborationDocument(document, room) {
   await ensureWorldStructure(room.worldId);
   await fs.mkdir(getWorldYjsRoot(room.worldId), { recursive: true });
-  await fs.writeFile(getTabStatePath(room.worldId, room.tabUid), Buffer.from(Y.encodeStateAsUpdate(document)));
+  const state = Buffer.from(Y.encodeStateAsUpdate(document));
+  await fs.writeFile(getTabStatePath(room.worldId, room.tabUid), state);
+  debugCollaboration("store", {
+    room: `world:${room.worldId}:tab:${room.tabUid}`,
+    bytes: state.length
+  });
 }
 
 async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
@@ -133,20 +156,29 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   const user = getAuthenticatedUser(getCookieRequest(requestHeaders));
 
   if (!user) {
-    if (!isPublicReadEnabled() || room.type !== "tab") {
+    if (!isPublicReadEnabled()) {
+      debugCollaboration("auth-reject", { documentName, reason: "unauthorized" });
       const error = new Error("Unauthorized");
       error.reason = "unauthorized";
       error.code = 4401;
       throw error;
     }
 
+    if (room.type === "presence") {
+      connectionConfig.readOnly = true;
+      debugCollaboration("auth", { documentName, userId: "visitor", scope: "readonly" });
+      return { room, user: { userId: "visitor", username: "Visitor", isVisitor: true } };
+    }
+
     const resolvedRoom = await resolveTabRoom(room);
     connectionConfig.readOnly = true;
+    debugCollaboration("auth", { documentName, userId: "visitor", scope: "readonly" });
     return { room: resolvedRoom, user: { userId: "visitor", username: "Visitor", isVisitor: true } };
   }
 
   const { isWorldMember } = require("./worlds");
   if (!user.isAdmin && !(await isWorldMember(room.worldId, user.userId))) {
+    debugCollaboration("auth-reject", { documentName, userId: user.userId, reason: "forbidden" });
     const error = new Error("Forbidden");
     error.reason = "forbidden";
     error.code = 4403;
@@ -154,6 +186,7 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   }
 
   if (room.type === "presence") {
+    debugCollaboration("auth", { documentName, userId: user.userId, scope: "read-write" });
     return { room, user };
   }
 
@@ -161,6 +194,11 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   if (resolvedRoom.isLocked) {
     connectionConfig.readOnly = true;
   }
+  debugCollaboration("auth", {
+    documentName,
+    userId: user.userId,
+    scope: connectionConfig.readOnly ? "readonly" : "read-write"
+  });
 
   return { room: resolvedRoom, user };
 }
@@ -283,5 +321,6 @@ module.exports = {
   copyCollaborationState,
   createCollaborationServer,
   parseCollaborationRoom,
-  removeCollaborationState
+  removeCollaborationState,
+  resolveTabRoom
 };

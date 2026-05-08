@@ -5,10 +5,17 @@ const test = require("node:test");
 
 const {
   copyCollaborationState,
+  createCollaborationServer,
   parseCollaborationRoom,
-  removeCollaborationState
+  removeCollaborationState,
+  resolveTabRoom
 } = require("../../src/services/collaboration");
+const { createDocument } = require("../../src/services/tree");
+const { createWorld } = require("../../src/services/worlds");
 const { getDataRoot, resolveWorldRoot } = require("../../src/data");
+const { generateSessionToken } = require("../../src/utils/auth");
+const { HocuspocusProvider } = require("../../client/node_modules/@hocuspocus/provider");
+const Y = require("yjs");
 
 const createdWorlds = new Set();
 
@@ -38,8 +45,35 @@ test("parseCollaborationRoom accepts presence and wiki tab room names", () => {
   );
 });
 
+test("resolveTabRoom accepts wiki and map tabs only", async () => {
+  const worldName = `collab-map-world-${Date.now()}`;
+  createdWorlds.add(worldName);
+  await createWorld({ name: worldName });
+
+  const wikiTab = await createDocument(worldName, "Wiki Tab", "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+  const mapTab = await createDocument(worldName, "Map Tab", "", {
+    type: "tab",
+    contentType: "map"
+  });
+  const invalidTab = await createDocument(worldName, "Secret Tab", "", {
+    type: "tab",
+    contentType: "secret"
+  });
+
+  assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: wikiTab.uid })).tabUid, wikiTab.uid);
+  assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: mapTab.uid })).tabUid, mapTab.uid);
+
+  await assert.rejects(
+    () => resolveTabRoom({ type: "tab", worldId: worldName, tabUid: invalidTab.uid }),
+    { code: "DOCUMENT_NOT_FOUND" }
+  );
+});
+
 test("collaboration state follows tab copy and delete lifecycle", async () => {
-  const worldName = "collab-state-world";
+  const worldName = `collab-state-world-${Date.now()}`;
   createdWorlds.add(worldName);
   const sourceUid = "source-tab";
   const targetUid = "target-tab";
@@ -64,4 +98,142 @@ test("collaboration state follows tab copy and delete lifecycle", async () => {
     () => fs.stat(targetPath),
     { code: "ENOENT" }
   );
+});
+
+function createLocalWebSocketPolyfill(server, cookie = "") {
+  return class LocalWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.listeners = {};
+      this.serverSocket = {
+        readyState: 1,
+        send: (data) => this.dispatch("message", { data }),
+        close: (code = 1000, reason = "") => {
+          this.readyState = 3;
+          this.dispatch("close", { code, reason });
+        }
+      };
+      this.connection = server.handleConnection(
+        this.serverSocket,
+        new Request(url, { headers: cookie ? { cookie } : {} })
+      );
+      setTimeout(() => {
+        this.readyState = 1;
+        this.dispatch("open", {});
+      }, 0);
+    }
+
+    addEventListener(name, handler) {
+      if (!this.listeners[name]) this.listeners[name] = new Set();
+      this.listeners[name].add(handler);
+    }
+
+    removeEventListener(name, handler) {
+      this.listeners[name]?.delete(handler);
+    }
+
+    dispatch(name, event) {
+      for (const handler of this.listeners[name] || []) {
+        handler(event);
+      }
+    }
+
+    send(data) {
+      this.connection.handleMessage(data instanceof Uint8Array ? data : new Uint8Array(data));
+    }
+
+    close(code = 1000, reason = "") {
+      this.readyState = 3;
+      this.connection.handleClose({ code, reason });
+      this.dispatch("close", { code, reason });
+    }
+  };
+}
+
+async function waitFor(assertion, timeoutMs = 2500) {
+  const start = Date.now();
+  let lastError;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  }
+  throw lastError;
+}
+
+test("hocuspocus providers sync and persist tab state", async () => {
+  const previousPublicRead = process.env.PUBLIC_READ;
+  process.env.PUBLIC_READ = "true";
+  const worldName = `collab-runtime-${Date.now()}`;
+  createdWorlds.add(worldName);
+  await createWorld({ name: worldName });
+  const tab = await createDocument(worldName, "Runtime Wiki", "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  const token = generateSessionToken({ userId: "admin", username: "admin", isAdmin: true });
+  const server = createCollaborationServer();
+  const WebSocketPolyfill = createLocalWebSocketPolyfill(server, `mysthra_session=${token}`);
+  const roomName = `world:${worldName}:tab:${tab.uid}`;
+  const firstDoc = new Y.Doc();
+  const secondDoc = new Y.Doc();
+  const authenticatedScopes = [];
+  const firstProvider = new HocuspocusProvider({
+    url: "ws://local/collaboration",
+    name: roomName,
+    document: firstDoc,
+    WebSocketPolyfill,
+    onAuthenticated: ({ scope }) => authenticatedScopes.push(scope)
+  });
+  const secondProvider = new HocuspocusProvider({
+    url: "ws://local/collaboration",
+    name: roomName,
+    document: secondDoc,
+    WebSocketPolyfill,
+    onAuthenticated: ({ scope }) => authenticatedScopes.push(scope)
+  });
+  const firstItems = firstDoc.getArray("runtimeItems");
+  const secondItems = secondDoc.getArray("runtimeItems");
+
+  try {
+    await waitFor(() => assert.equal(authenticatedScopes.filter(scope => scope === "read-write").length, 2));
+    firstItems.push(["synced"]);
+    await waitFor(() => assert.deepEqual(secondItems.toArray(), ["synced"]));
+
+    firstProvider.destroy();
+    secondProvider.destroy();
+    await new Promise(resolve => setTimeout(resolve, 250));
+
+    const statePath = path.join(getDataRoot(), "worlds", worldName, "yjs", `${tab.uid}.bin`);
+    const persisted = await fs.stat(statePath);
+    assert.ok(persisted.size > 0);
+
+    const reloadDoc = new Y.Doc();
+    const reloadProvider = new HocuspocusProvider({
+      url: "ws://local/collaboration",
+      name: roomName,
+      document: reloadDoc,
+      WebSocketPolyfill
+    });
+    try {
+      await waitFor(() => assert.deepEqual(reloadDoc.getArray("runtimeItems").toArray(), ["synced"]));
+    } finally {
+      reloadProvider.destroy();
+      reloadDoc.destroy();
+    }
+  } finally {
+    firstProvider.destroy();
+    secondProvider.destroy();
+    firstDoc.destroy();
+    secondDoc.destroy();
+    await new Promise(resolve => setTimeout(resolve, 250));
+    if (previousPublicRead === undefined) delete process.env.PUBLIC_READ;
+    else process.env.PUBLIC_READ = previousPublicRead;
+  }
 });
