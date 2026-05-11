@@ -3034,11 +3034,15 @@ body {
 }
 
 .map-editor-shell canvas {
-  cursor: crosshair;
+  cursor: default;
+}
+
+.map-editor-shell .can-pan canvas {
+  cursor: grab;
 }
 
 .map-editor-shell .is-panning canvas {
-  cursor: grab;
+  cursor: grabbing;
 }
 
 .map-floating-dock {
