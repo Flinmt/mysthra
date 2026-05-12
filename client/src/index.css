@@ -4423,6 +4423,12 @@ body {
   pointer-events: none;
 }
 
+.editor-page.is-cover-repositioning .document-chrome {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .document-chrome-title {
   width: min(560px, calc(100% - 360px));
   min-width: min(420px, 100%);
@@ -4533,6 +4539,66 @@ body {
     linear-gradient(90deg, rgba(8, 10, 15, 0.42), transparent 58%),
     radial-gradient(circle at 78% 28%, rgba(255, 255, 255, 0.14), transparent 24%);
   animation: editorCoverBreath 12s ease-in-out infinite alternate;
+}
+
+.editor-page-cover.is-repositioning {
+  cursor: grab;
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.42), inset 0 -70px 90px rgba(7, 9, 14, 0.5);
+  touch-action: none;
+  user-select: none;
+}
+
+.editor-page-cover.is-dragging {
+  cursor: grabbing;
+}
+
+.editor-page-cover.is-repositioning .editor-page-cover-shade {
+  animation: none;
+  background:
+    linear-gradient(180deg, rgba(7, 9, 14, 0.08), rgba(7, 9, 14, 0.22)),
+    linear-gradient(90deg, rgba(8, 10, 15, 0.22), transparent 58%);
+}
+
+.editor-cover-reposition-hint,
+.editor-cover-reposition-actions {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(8, 10, 15, 0.72);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.editor-cover-reposition-hint {
+  left: 18px;
+  bottom: 14px;
+  max-width: min(460px, calc(100% - 180px));
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 0.75rem;
+  font-weight: 760;
+  pointer-events: none;
+}
+
+.editor-cover-reposition-actions {
+  right: 18px;
+  bottom: 12px;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.editor-cover-reposition-actions .btn-primary,
+.editor-cover-reposition-actions .btn-secondary {
+  min-height: 30px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-size: 0.72rem;
 }
 
 .editor-cover-action {
@@ -5440,6 +5506,19 @@ body {
     height: 96px;
   }
 
+  .editor-cover-reposition-hint {
+    left: 12px;
+    right: 12px;
+    bottom: 52px;
+    max-width: none;
+    justify-content: center;
+  }
+
+  .editor-cover-reposition-actions {
+    right: 12px;
+    bottom: 10px;
+  }
+
   .editor-cover-controls {
     top: 14px;
     right: 14px;
@@ -5980,61 +6059,6 @@ body {
   color: var(--text-secondary);
   font-size: 0.88rem;
   line-height: 1.45;
-}
-
-.cover-crop-modal {
-  width: min(920px, calc(100vw - 36px));
-  max-width: 920px;
-}
-
-.cover-crop-frame {
-  position: relative;
-  height: clamp(118px, 22vh, 184px);
-  margin-top: 22px;
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 12px;
-  background: #05070b;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
-}
-
-.cover-crop-frame .reactEasyCrop_Container {
-  background: #05070b;
-}
-
-.cover-crop-frame .reactEasyCrop_CropArea {
-  border: 1px solid rgba(248, 250, 252, 0.72);
-  box-shadow: 0 0 0 9999em rgba(3, 5, 10, 0.48);
-}
-
-.cover-crop-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 16px;
-  color: rgba(203, 213, 225, 0.88);
-  font-size: 0.78rem;
-  font-weight: 760;
-}
-
-.cover-crop-controls span {
-  min-width: 42px;
-}
-
-.cover-crop-controls input[type="range"] {
-  width: 100%;
-  accent-color: #a78bfa;
-}
-
-.cover-crop-actions {
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.cover-crop-actions .btn-primary,
-.cover-crop-actions .btn-secondary {
-  min-height: 38px;
-  padding: 9px 14px;
 }
 
 .members-panel-section {

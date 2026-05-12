@@ -5,9 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import { blocksToYXmlFragment } from '@blocknote/core/yjs';
-import Cropper from 'react-easy-crop';
 import '@blocknote/mantine/style.css';
-import 'react-easy-crop/react-easy-crop.css';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
 
@@ -220,20 +218,30 @@ function normalizeCoverArea(area) {
   };
 }
 
-function getCoverBackgroundVars(area, fallbackPositionY = 50) {
+function getCoverBackgroundVars(area, fallbackPositionX, fallbackPositionY) {
+  const hasExplicitPosition = fallbackPositionX !== undefined || fallbackPositionY !== undefined;
+  const positionX = clampCoverPosition(fallbackPositionX ?? 50);
+  const positionY = clampCoverPosition(fallbackPositionY ?? 50);
+  if (hasExplicitPosition) {
+    return {
+      '--editor-cover-bg-position': `${positionX}% ${positionY}%`,
+      '--editor-cover-bg-size': 'cover'
+    };
+  }
+
   const normalized = normalizeCoverArea(area);
   if (!normalized) {
     return {
-      '--editor-cover-bg-position': `center ${clampCoverPosition(fallbackPositionY)}%`,
+      '--editor-cover-bg-position': `center ${positionY}%`,
       '--editor-cover-bg-size': 'cover'
     };
   }
   const maxX = Math.max(0, 100 - normalized.width);
   const maxY = Math.max(0, 100 - normalized.height);
-  const positionX = maxX > 0 ? (normalized.x / maxX) * 100 : 50;
-  const positionY = maxY > 0 ? (normalized.y / maxY) * 100 : 50;
+  const cropPositionX = maxX > 0 ? (normalized.x / maxX) * 100 : 50;
+  const cropPositionY = maxY > 0 ? (normalized.y / maxY) * 100 : 50;
   return {
-    '--editor-cover-bg-position': `${Math.min(100, Math.max(0, positionX))}% ${Math.min(100, Math.max(0, positionY))}%`,
+    '--editor-cover-bg-position': `${Math.min(100, Math.max(0, cropPositionX))}% ${Math.min(100, Math.max(0, cropPositionY))}%`,
     '--editor-cover-bg-size': `${10000 / normalized.width}% ${10000 / normalized.height}%`
   };
 }
@@ -1012,8 +1020,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
   const [pageTitleEdit, setPageTitleEdit] = useState({ isEditing: false, value: '' });
   const [tabCreationPanel, setTabCreationPanel] = useState({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
-  const [coverCropEditor, setCoverCropEditor] = useState({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
+  const [coverReposition, setCoverReposition] = useState({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
   const assetUploadTargetPathRef = useRef('');
+  const coverRef = useRef(null);
   const latestContentRef = useRef('');
   const latestTabPathRef = useRef('');
   const selectedContainerPathRef = useRef('');
@@ -1236,7 +1245,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   useEffect(() => {
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
     setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
-    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
+    setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
     setViewMode(selectedContainer?.metadata?.isLocked ? 'view' : 'edit');
   }, [selectedContainer?.uid, selectedContainer?.name, selectedContainer?.metadata?.isLocked]);
 
@@ -1264,7 +1273,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeTab?.contentType, fetchAssets]);
 
   useEffect(() => {
-    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
+    setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
   }, [activeTab?.uid]);
 
   useEffect(() => {
@@ -2311,6 +2320,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           path: activeTab.path,
           metadata: {
             coverAssetPath: uploaded.path,
+            coverPositionX: 50,
             coverPositionY: 50,
             coverCrop: null,
             coverZoom: 1,
@@ -2326,6 +2336,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
       updateActiveTabMetadata({
         coverAssetPath: uploaded.path,
+        coverPositionX: 50,
         coverPositionY: 50,
         coverCrop: null,
         coverZoom: 1,
@@ -2426,45 +2437,126 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const removeCover = async () => {
     if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
-    updateActiveTabMetadata({ coverAssetPath: null, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null });
-    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
-    const saved = await saveActiveTabMetadata({ coverAssetPath: null, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null });
+    const metadata = { coverAssetPath: null, coverPositionX: 50, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null };
+    updateActiveTabMetadata(metadata);
+    setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
+    const saved = await saveActiveTabMetadata(metadata);
     if (saved) addToast(t('common.saved'), 'success');
   };
 
-  const openCoverCropEditor = () => {
+  const getCurrentCoverPosition = () => {
+    const explicitX = activeTab?.metadata?.coverPositionX;
+    const explicitY = activeTab?.metadata?.coverPositionY;
+    if (explicitX !== undefined || explicitY !== undefined) {
+      return {
+        x: clampCoverPosition(explicitX ?? 50),
+        y: clampCoverPosition(explicitY ?? 50)
+      };
+    }
+
+    const area = normalizeCoverArea(activeTab?.metadata?.coverCroppedArea);
+    if (!area) return { x: 50, y: clampCoverPosition(activeTab?.metadata?.coverPositionY) };
+    const maxX = Math.max(0, 100 - area.width);
+    const maxY = Math.max(0, 100 - area.height);
+    return {
+      x: maxX > 0 ? clampCoverPosition((area.x / maxX) * 100) : 50,
+      y: maxY > 0 ? clampCoverPosition((area.y / maxY) * 100) : 50
+    };
+  };
+
+  const startCoverReposition = () => {
     if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
-    const nextCrop = activeTab.metadata?.coverCrop;
-    setCoverCropEditor({
-      isOpen: true,
-      crop: nextCrop && Number.isFinite(Number(nextCrop.x)) && Number.isFinite(Number(nextCrop.y))
-        ? { x: Number(nextCrop.x), y: Number(nextCrop.y) }
-        : { x: 0, y: 0 },
-      zoom: Math.min(3, Math.max(1, Number(activeTab.metadata?.coverZoom ?? 1))),
-      croppedArea: normalizeCoverArea(activeTab.metadata?.coverCroppedArea)
+    const position = getCurrentCoverPosition();
+    setCoverReposition({
+      isEditing: true,
+      x: position.x,
+      y: position.y,
+      initialX: position.x,
+      initialY: position.y,
+      isDragging: false,
+      dragStart: null
     });
   };
 
-  const closeCoverCropEditor = () => {
-    setCoverCropEditor({ isOpen: false, crop: { x: 0, y: 0 }, zoom: 1, croppedArea: null });
-  };
+  const cancelCoverReposition = useCallback(() => {
+    setCoverReposition(prev => ({
+      isEditing: false,
+      x: prev.initialX,
+      y: prev.initialY,
+      initialX: prev.initialX,
+      initialY: prev.initialY,
+      isDragging: false,
+      dragStart: null
+    }));
+  }, []);
 
-  const saveCoverCrop = async () => {
+  const saveCoverReposition = async () => {
     if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
-    const croppedArea = normalizeCoverArea(coverCropEditor.croppedArea)
-      || normalizeCoverArea(activeTab.metadata?.coverCroppedArea);
     const metadata = {
-      coverCrop: coverCropEditor.crop,
-      coverZoom: coverCropEditor.zoom,
-      coverCroppedArea: croppedArea
+      coverPositionX: coverReposition.x,
+      coverPositionY: coverReposition.y,
+      coverCrop: null,
+      coverZoom: 1,
+      coverCroppedArea: null
     };
     updateActiveTabMetadata(metadata);
     const saved = await saveActiveTabMetadata(metadata);
     if (saved) {
-      closeCoverCropEditor();
+      setCoverReposition(prev => ({
+        isEditing: false,
+        x: prev.x,
+        y: prev.y,
+        initialX: prev.x,
+        initialY: prev.y,
+        isDragging: false,
+        dragStart: null
+      }));
       addToast(t('common.saved'), 'success');
     }
   };
+
+  const beginCoverDrag = (event) => {
+    if (!coverReposition.isEditing || !coverRef.current) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setCoverReposition(prev => ({
+      ...prev,
+      isDragging: true,
+      dragStart: {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        x: prev.x,
+        y: prev.y
+      }
+    }));
+  };
+
+  const updateCoverDrag = (event) => {
+    if (!coverReposition.isEditing || !coverReposition.isDragging || !coverReposition.dragStart || !coverRef.current) return;
+    const rect = coverRef.current.getBoundingClientRect();
+    const deltaX = rect.width > 0 ? ((event.clientX - coverReposition.dragStart.clientX) / rect.width) * 100 : 0;
+    const deltaY = rect.height > 0 ? ((event.clientY - coverReposition.dragStart.clientY) / rect.height) * 100 : 0;
+    setCoverReposition(prev => ({
+      ...prev,
+      x: clampCoverPosition(coverReposition.dragStart.x - deltaX),
+      y: clampCoverPosition(coverReposition.dragStart.y - deltaY)
+    }));
+  };
+
+  const endCoverDrag = (event) => {
+    if (!coverReposition.isEditing) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    setCoverReposition(prev => ({ ...prev, isDragging: false, dragStart: null }));
+  };
+
+  useEffect(() => {
+    if (!coverReposition.isEditing) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') cancelCoverReposition();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [coverReposition.isEditing, cancelCoverReposition]);
 
   const handleTreeBlankContextMenu = (event) => {
     if (isVisitor) return;
@@ -2486,8 +2578,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
   const activeCoverPath = activeTab?.contentType === 'wiki' ? activeTab?.metadata?.coverAssetPath : null;
-  const coverPositionY = clampCoverPosition(activeTab?.metadata?.coverPositionY);
-  const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionY);
+  const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
+  const coverPositionX = coverReposition.isEditing
+    ? coverReposition.x
+    : hasInlineCoverPosition ? clampCoverPosition(activeTab?.metadata?.coverPositionX) : undefined;
+  const coverPositionY = coverReposition.isEditing
+    ? coverReposition.y
+    : hasInlineCoverPosition ? clampCoverPosition(activeTab?.metadata?.coverPositionY) : undefined;
+  const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
   const isAdmin = Boolean(currentUser?.isAdmin);
@@ -2577,7 +2675,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         type="button"
                         onClick={() => {
                           setWorldActionsMenu(false);
-                          openCoverCropEditor();
+                          startCoverReposition();
                         }}
                       >
                         <MoveVertical size={14} />
@@ -2949,7 +3047,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''}`}>
+              <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
                 {!isVisitor && selectedContainer && activeTab?.contentType === 'wiki' && (
                   <input
                     ref={coverFileInputRef}
@@ -2961,14 +3059,34 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 )}
                 {!isMapTab && activeCoverPath && (
                   <div
-                    className="editor-page-cover has-image"
+                    ref={coverRef}
+                    className={`editor-page-cover has-image ${coverReposition.isEditing ? 'is-repositioning' : ''} ${coverReposition.isDragging ? 'is-dragging' : ''}`}
                     style={{
                       '--editor-cover-image': `url("${getAssetUrl(activeCoverPath)}")`,
-                      '--editor-cover-position-y': `${coverPositionY}%`,
                       ...coverBackgroundVars
                     }}
+                    onPointerDown={beginCoverDrag}
+                    onPointerMove={updateCoverDrag}
+                    onPointerUp={endCoverDrag}
+                    onPointerCancel={endCoverDrag}
                   >
                     <div className="editor-page-cover-shade" aria-hidden="true" />
+                    {coverReposition.isEditing && (
+                      <>
+                        <div className="editor-cover-reposition-hint">
+                          <MoveVertical size={14} />
+                          <span>{t('workspace.cover_crop_hint', 'Arraste a imagem para escolher a faixa visível da capa.')}</span>
+                        </div>
+                        <div className="editor-cover-reposition-actions" onPointerDown={(event) => event.stopPropagation()}>
+                          <button type="button" className="btn-secondary" onClick={cancelCoverReposition}>
+                            {t('common.cancel')}
+                          </button>
+                          <button type="button" className="btn-primary" onClick={saveCoverReposition}>
+                            {t('common.save')}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
                 <div className="document-chrome">
@@ -3572,75 +3690,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             </div>
 
             {membersPanel.error && <div className="error-msg">{membersPanel.error}</div>}
-          </div>
-        </div>
-      )}
-
-      {coverCropEditor.isOpen && activeCoverPath && (
-        <div className="duplicate-modal-overlay" onClick={closeCoverCropEditor}>
-          <div className="modal-content glass-panel duplicate-modal cover-crop-modal" onClick={event => event.stopPropagation()}>
-            <button
-              type="button"
-              className="duplicate-modal-close"
-              onClick={closeCoverCropEditor}
-              aria-label={t('common.cancel')}
-              title={t('common.cancel')}
-            >
-              <X size={16} />
-            </button>
-            <div className="duplicate-modal-header">
-              <div className="duplicate-modal-icon">
-                <Image size={22} />
-              </div>
-              <div>
-                <h3>{t('workspace.reposition_cover')}</h3>
-                <p>{t('workspace.cover_crop_hint', 'Arraste a imagem para escolher a faixa visível da capa.')}</p>
-              </div>
-            </div>
-
-            <div className="cover-crop-frame">
-              <Cropper
-                key={`${activeTab?.uid || 'cover'}-${activeCoverPath}`}
-                image={getAssetUrl(activeCoverPath)}
-                crop={coverCropEditor.crop}
-                zoom={coverCropEditor.zoom}
-                aspect={12}
-                minZoom={1}
-                maxZoom={3}
-                objectFit="cover"
-                showGrid={false}
-                initialCroppedAreaPercentages={normalizeCoverArea(activeTab?.metadata?.coverCroppedArea) || undefined}
-                onCropChange={(crop) => setCoverCropEditor(prev => ({ ...prev, crop }))}
-                onZoomChange={(zoom) => setCoverCropEditor(prev => ({ ...prev, zoom }))}
-                onCropComplete={(croppedArea) => {
-                  setCoverCropEditor(prev => ({ ...prev, croppedArea }));
-                }}
-              />
-            </div>
-
-            <label className="cover-crop-controls">
-              <span>Zoom</span>
-              <input
-                type="range"
-                min="1"
-                max="3"
-                step="0.01"
-                value={coverCropEditor.zoom}
-                onChange={(event) => {
-                  const zoom = Number(event.target.value);
-                  setCoverCropEditor(prev => ({ ...prev, zoom: Number.isFinite(zoom) ? zoom : 1 }));
-                }}
-              />
-            </label>
-
-            <div className="delete-modal-actions cover-crop-actions">
-              <button type="button" className="btn-secondary" onClick={closeCoverCropEditor}>
-                {t('common.cancel')}
-              </button>
-              <button type="button" className="btn-primary" onClick={saveCoverCrop}>
-                {t('common.save')}
-              </button>
-            </div>
           </div>
         </div>
       )}
