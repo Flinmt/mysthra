@@ -14,6 +14,7 @@
     "@blocknote/core": "^0.50.0",
     "@blocknote/mantine": "^0.50.0",
     "@blocknote/react": "^0.50.0",
+    "@blocknote/xl-multi-column": "^0.50.0",
     "@hocuspocus/provider": "^4.0.0",
     "@mantine/core": "^9.1.1",
     "@mantine/hooks": "^9.1.1",

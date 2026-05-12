@@ -1,10 +1,44 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Columns2, Columns3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useCreateBlockNote } from '@blocknote/react';
+import { BlockNoteSchema, combineByGroup } from '@blocknote/core';
+import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core/extensions';
+import * as blockNoteLocales from '@blocknote/core/locales';
+import {
+  AddBlockButton,
+  AddCommentButton,
+  AddTiptapCommentButton,
+  BasicTextStyleButton,
+  BlockTypeSelect,
+  CreateLinkButton,
+  DragHandleButton,
+  DragHandleMenu,
+  FileCaptionButton,
+  FileDeleteButton,
+  FileDownloadButton,
+  FilePreviewButton,
+  FileRenameButton,
+  FileReplaceButton,
+  FormattingToolbar,
+  FormattingToolbarController,
+  NestBlockButton,
+  RemoveBlockItem,
+  SideMenu,
+  SideMenuController,
+  SuggestionMenuController,
+  TableCellMergeButton,
+  TableColumnHeaderItem,
+  TableRowHeaderItem,
+  TextAlignButton,
+  UnnestBlockButton,
+  getDefaultReactSlashMenuItems,
+  useCreateBlockNote,
+  useDictionary
+} from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import { blocksToYXmlFragment } from '@blocknote/core/yjs';
+import { locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column';
 import '@blocknote/mantine/style.css';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
@@ -67,6 +101,7 @@ const ICON_MAP = {
 };
 
 const DOCUMENT_ICON_OPTIONS = Object.keys(ICON_MAP);
+const WIKI_BLOCKNOTE_SCHEMA = withMultiColumn(BlockNoteSchema.create());
 
 function getDocumentIcon(icon) {
   return ICON_MAP[icon] || Folder;
@@ -74,6 +109,129 @@ function getDocumentIcon(icon) {
 
 function getTabTypeIcon(contentType) {
   return contentType === 'map' ? Map : Book;
+}
+
+function getBlockNoteLocaleKey(language = 'en') {
+  const normalized = String(language || 'en').toLowerCase();
+  if (normalized === 'zh-tw' || normalized === 'zh_tw') return 'zhTW';
+  return normalized.split('-')[0] || 'en';
+}
+
+function mergeBlockNoteDictionaries(base, extension) {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(extension || {})) {
+    if (
+      value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && base?.[key]
+      && typeof base[key] === 'object'
+      && !Array.isArray(base[key])
+    ) {
+      merged[key] = mergeBlockNoteDictionaries(base[key], value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function getBlockNoteDictionary(language = 'en') {
+  const localeKey = getBlockNoteLocaleKey(language);
+  const coreDictionary = blockNoteLocales[localeKey] || blockNoteLocales.en;
+  const multiColumnDictionary = multiColumnLocales[localeKey] || multiColumnLocales.en;
+  return mergeBlockNoteDictionaries(coreDictionary, multiColumnDictionary);
+}
+
+function createColumnListBlock(columnCount) {
+  return {
+    type: 'columnList',
+    children: Array.from({ length: columnCount }, () => ({
+      type: 'column',
+      children: [{ type: 'paragraph' }]
+    }))
+  };
+}
+
+function getMythraMultiColumnSlashMenuItems(editor, dictionary) {
+  const slashMenu = dictionary?.slash_menu || {};
+  const twoColumns = slashMenu.two_columns || {
+    title: 'Duas Colunas',
+    subtext: 'Duas colunas lado a lado',
+    aliases: ['colunas', 'linha', 'dividir'],
+    group: slashMenu.heading?.group || 'Blocos básicos'
+  };
+  const threeColumns = slashMenu.three_columns || {
+    title: 'Três Colunas',
+    subtext: 'Três colunas lado a lado',
+    aliases: ['colunas', 'linha', 'dividir'],
+    group: slashMenu.heading?.group || 'Blocos básicos'
+  };
+
+  return [
+    {
+      ...twoColumns,
+      icon: <Columns2 size={18} />,
+      onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, createColumnListBlock(2))
+    },
+    {
+      ...threeColumns,
+      icon: <Columns3 size={18} />,
+      onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, createColumnListBlock(3))
+    }
+  ];
+}
+
+function MythraDragHandleMenu() {
+  const dict = useDictionary();
+
+  return (
+    <DragHandleMenu>
+      <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
+      <TableRowHeaderItem>
+        {dict.drag_handle.header_row_menuitem}
+      </TableRowHeaderItem>
+      <TableColumnHeaderItem>
+        {dict.drag_handle.header_column_menuitem}
+      </TableColumnHeaderItem>
+    </DragHandleMenu>
+  );
+}
+
+function MythraSideMenu() {
+  return (
+    <SideMenu>
+      <AddBlockButton />
+      <DragHandleButton dragHandleMenu={MythraDragHandleMenu} />
+    </SideMenu>
+  );
+}
+
+function MythraFormattingToolbar() {
+  return (
+    <FormattingToolbar>
+      <BlockTypeSelect />
+      <TableCellMergeButton />
+      <FileCaptionButton />
+      <FileReplaceButton />
+      <FileRenameButton />
+      <FileDeleteButton />
+      <FileDownloadButton />
+      <FilePreviewButton />
+      <BasicTextStyleButton basicTextStyle="bold" />
+      <BasicTextStyleButton basicTextStyle="italic" />
+      <BasicTextStyleButton basicTextStyle="underline" />
+      <BasicTextStyleButton basicTextStyle="strike" />
+      <TextAlignButton textAlignment="left" />
+      <TextAlignButton textAlignment="center" />
+      <TextAlignButton textAlignment="right" />
+      <NestBlockButton />
+      <UnnestBlockButton />
+      <CreateLinkButton />
+      <AddCommentButton />
+      <AddTiptapCommentButton />
+    </FormattingToolbar>
+  );
 }
 
 const AUDIO_EXTENSIONS = new Set(['mp3', 'ogg', 'wav', 'm4a', 'mp4']);
@@ -295,6 +453,7 @@ function WikiBlockEditor({
   onCollaborationSaveState,
   onChange
 }) {
+  const { i18n } = useTranslation();
   const [imageContextMenu, setImageContextMenu] = useState({ isOpen: false, x: 0, y: 0 });
   const collaborationRoomState = useCollaborationRoom({
     roomName: collaborationRoom,
@@ -332,8 +491,12 @@ function WikiBlockEditor({
   const onChangeRef = useRef(onChange);
   const emitFrameRef = useRef(null);
   const legacyMigrationRef = useRef('');
+  const dictionary = useMemo(() => getBlockNoteDictionary(i18n.language), [i18n.language]);
   const editor = useCreateBlockNote(
     {
+      schema: WIKI_BLOCKNOTE_SCHEMA,
+      dictionary,
+      dropCursor: multiColumnDropCursor,
       ...(collaborationState
         ? {
           collaboration: {
@@ -364,7 +527,23 @@ function WikiBlockEditor({
         return getAssetUrl(uploaded.path);
       }
     },
-    [contentKey, collaborationRoom, collaborationProvider]
+    [contentKey, collaborationRoom, collaborationProvider, dictionary]
+  );
+  const getSlashMenuItems = useCallback(
+    async (query) => {
+      try {
+        return filterSuggestionItems(
+          combineByGroup(
+            getDefaultReactSlashMenuItems(editor),
+            getMythraMultiColumnSlashMenuItems(editor, dictionary)
+          ),
+          query
+        );
+      } catch {
+        return filterSuggestionItems(getDefaultReactSlashMenuItems(editor), query);
+      }
+    },
+    [dictionary, editor]
   );
 
   useEffect(() => {
@@ -609,8 +788,18 @@ function WikiBlockEditor({
         editor={editor}
         editable={editable && !collaborationReadOnly}
         theme="dark"
+        slashMenu={false}
+        sideMenu={false}
+        formattingToolbar={false}
         onChange={emitEditorDocument}
-      />
+      >
+        <SideMenuController sideMenu={MythraSideMenu} />
+        <FormattingToolbarController formattingToolbar={MythraFormattingToolbar} />
+        <SuggestionMenuController
+          triggerCharacter="/"
+          getItems={getSlashMenuItems}
+        />
+      </BlockNoteView>
     </div>
   );
 }
