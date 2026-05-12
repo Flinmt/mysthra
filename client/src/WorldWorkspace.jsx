@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Shield, Castle, Map, Crown, Book, Star, Skull, Trash2, Search, Home, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, Unlock, MoveVertical, MoreVertical, Share2, Users } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
@@ -12,8 +12,71 @@ import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
 
 const ICON_MAP = {
-  FileText, Sword, Shield, Castle, Map, Crown, Book, Star, Skull
+  FileText,
+  Book,
+  BookOpen,
+  Scroll,
+  ScrollText,
+  Library,
+  Feather,
+  Map,
+  MapPin,
+  Compass,
+  Route,
+  Footprints,
+  Binoculars,
+  Castle,
+  Landmark,
+  Church,
+  House,
+  Home,
+  Tent,
+  Mountain,
+  Trees,
+  TreePine,
+  TreeDeciduous,
+  DoorOpen,
+  Crown,
+  Flag,
+  Sword,
+  Swords,
+  Shield,
+  Axe,
+  Hammer,
+  Pickaxe,
+  Skull,
+  Flame,
+  Eye,
+  Sparkles,
+  WandSparkles,
+  Ghost,
+  Drama,
+  Gem,
+  Diamond,
+  Coins,
+  Key,
+  LockKeyhole,
+  Star,
+  Moon,
+  Sun,
+  CloudLightning,
+  Ship,
+  Sailboat,
+  Anchor,
+  Waves,
+  Telescope,
+  Pyramid
 };
+
+const DOCUMENT_ICON_OPTIONS = Object.keys(ICON_MAP);
+
+function getDocumentIcon(icon) {
+  return ICON_MAP[icon] || Folder;
+}
+
+function getTabTypeIcon(contentType) {
+  return contentType === 'map' ? Map : Book;
+}
 
 const AUDIO_EXTENSIONS = new Set(['mp3', 'ogg', 'wav', 'm4a', 'mp4']);
 
@@ -776,7 +839,7 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
   );
 }
 
-function FileTree({ nodes, onFileSelect, selectedFile, onCreateChild, onIconSelect, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isSearching, isVisitor, worldData }) {
+function FileTree({ nodes, onFileSelect, selectedFile, onCreateChild, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isSearching, isVisitor, worldData }) {
   if (!nodes || nodes.length === 0) return null;
   return (
     <ul className="file-tree">
@@ -787,7 +850,6 @@ function FileTree({ nodes, onFileSelect, selectedFile, onCreateChild, onIconSele
           onFileSelect={onFileSelect} 
           selectedFile={selectedFile} 
           onCreateChild={onCreateChild} 
-          onIconSelect={onIconSelect} 
           onContextMenu={onContextMenu} 
           renamingPath={renamingPath} 
           onRename={onRename} 
@@ -802,11 +864,9 @@ function FileTree({ nodes, onFileSelect, selectedFile, onCreateChild, onIconSele
   );
 }
 
-function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onIconSelect, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isSearching, isVisitor, worldData }) {
+function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isSearching, isVisitor, worldData }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const [showIcons, setShowIcons] = useState(false);
-  const [iconPickerPosition, setIconPickerPosition] = useState({ top: 0, left: 0 });
   const [editValue, setEditValue] = useState(node.name);
   const isSelected = selectedFile?.path === node.path;
   const isRenaming = renamingPath === node.path;
@@ -821,44 +881,6 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onIconS
   useEffect(() => {
     if (renamingPath?.startsWith(`${node.path}/`)) setIsOpen(true);
   }, [node.path, renamingPath]);
-
-  useEffect(() => {
-    if (!showIcons) return;
-    const closeIt = () => setShowIcons(false);
-    window.addEventListener('click', closeIt);
-    window.addEventListener('scroll', closeIt, true);
-    window.addEventListener('resize', closeIt);
-    return () => {
-      window.removeEventListener('click', closeIt);
-      window.removeEventListener('scroll', closeIt, true);
-      window.removeEventListener('resize', closeIt);
-    };
-  }, [showIcons]);
-
-  const toggleIconPicker = (event) => {
-    event.stopPropagation();
-    if (isRenaming || isVisitor) return;
-    if (showIcons) {
-      setShowIcons(false);
-      return;
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const pickerWidth = 178;
-    const pickerHeight = 118;
-    const viewportPadding = 12;
-    const top = Math.min(
-      Math.max(rect.top - 12, viewportPadding),
-      window.innerHeight - pickerHeight - viewportPadding
-    );
-    const left = Math.max(
-      viewportPadding,
-      Math.min(rect.right + 10, window.innerWidth - pickerWidth - viewportPadding)
-    );
-
-    setIconPickerPosition({ top, left });
-    setShowIcons(true);
-  };
 
   return (
     <li className="tree-document">
@@ -887,35 +909,8 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onIconS
             onFileSelect(node);
           }}
         >
-          <span 
-            className={`tree-icon ${showIcons ? 'is-picking' : ''}`}
-            onClick={toggleIconPicker}
-            title={isVisitor ? undefined : t('workspace.change_icon')}
-          >
-            {React.createElement(ICON_MAP[node.icon] || FileText, { size: 14 })}
-            
-            {showIcons && !isVisitor && (
-              <div
-                className="icon-selector-dropdown glass-panel"
-                style={{ top: iconPickerPosition.top, left: iconPickerPosition.left }}
-                onClick={e => e.stopPropagation()}
-              >
-                {Object.keys(ICON_MAP).map(key => (
-                  <button 
-                    key={key} 
-                    className={`icon-option ${node.icon === key ? 'active' : ''}`}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      setShowIcons(false); 
-                      onIconSelect(node, key); 
-                    }} 
-                    title={key}
-                  >
-                    {React.createElement(ICON_MAP[key], { size: 18 })}
-                  </button>
-                ))}
-              </div>
-            )}
+          <span className="tree-icon" aria-hidden="true">
+            {React.createElement(getDocumentIcon(node.icon), { size: 14 })}
           </span>
           {isRenaming ? (
             <input
@@ -966,7 +961,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onIconS
           )}
         </div>
       </div>
-      {showChildren && visibleChildren.length > 0 && <FileTree nodes={visibleChildren} onFileSelect={onFileSelect} selectedFile={selectedFile} onCreateChild={onCreateChild} onIconSelect={onIconSelect} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} onRequestRename={onRequestRename} onDelete={onDelete} isSearching={isSearching} isVisitor={isVisitor} worldData={worldData} />}
+      {showChildren && visibleChildren.length > 0 && <FileTree nodes={visibleChildren} onFileSelect={onFileSelect} selectedFile={selectedFile} onCreateChild={onCreateChild} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} onRequestRename={onRequestRename} onDelete={onDelete} isSearching={isSearching} isVisitor={isVisitor} worldData={worldData} />}
     </li>
   );
 }
@@ -1011,7 +1006,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
   const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
-  const [tabIconPicker, setTabIconPicker] = useState({ isOpen: false, top: 0, left: 0 });
+  const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false, top: 0, left: 0 });
   const [renamingPath, setRenamingPath] = useState(null);
   const [assetRenamingPath, setAssetRenamingPath] = useState(null);
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
@@ -1888,32 +1883,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
-  const handleIconSelect = async (node, icon) => {
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: node.path, metadata: { icon } })
-      });
-      if (res.ok) {
-        fetchTree();
-      }
-    } catch {
-      addToast(t('common.error'), 'error');
-    }
-  };
-
-  const openTabIconPicker = (event) => {
+  const openDocumentIconPicker = (event) => {
     if (isVisitor || !selectedContainer) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    setTabIconPicker({
+    const pickerWidth = 336;
+    const pickerHeight = 392;
+    const viewportPadding = 12;
+    setDocumentIconPicker({
       isOpen: true,
-      top: rect.bottom + 10,
-      left: Math.max(12, rect.left)
+      top: Math.min(
+        Math.max(rect.bottom + 10, viewportPadding),
+        window.innerHeight - pickerHeight - viewportPadding
+      ),
+      left: Math.max(
+        viewportPadding,
+        Math.min(rect.left, window.innerWidth - pickerWidth - viewportPadding)
+      )
     });
   };
 
-  const handleTabIconSelect = async (icon) => {
+  const handleDocumentIconSelect = async (icon) => {
     if (!selectedContainer) return;
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
@@ -1922,7 +1911,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         body: JSON.stringify({ path: selectedContainer.path, metadata: { icon } })
       });
       if (res.ok) {
-        setTabIconPicker({ isOpen: false, top: 0, left: 0 });
+        setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
         setSelectedContainer(prev => prev ? { ...prev, icon, metadata: { ...prev.metadata, icon } } : prev);
         await fetchTree();
       } else {
@@ -2496,7 +2485,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
-  const ActiveDisplayIcon = ICON_MAP[selectedContainer?.icon] || Folder;
   const activeCoverPath = activeTab?.contentType === 'wiki' ? activeTab?.metadata?.coverAssetPath : null;
   const coverPositionY = clampCoverPosition(activeTab?.metadata?.coverPositionY);
   const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionY);
@@ -2620,11 +2608,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       <button
         type="button"
         className={`editor-page-icon ${selectedContainer && !isVisitor ? 'is-editable' : ''}`}
-        onClick={openTabIconPicker}
+        onClick={openDocumentIconPicker}
         disabled={!selectedContainer || isVisitor}
         title={selectedContainer && !isVisitor ? t('workspace.change_icon') : undefined}
       >
-        <ActiveDisplayIcon size={isMapTab ? 20 : 24} />
+        {React.createElement(getDocumentIcon(selectedContainer?.icon), { size: isMapTab ? 20 : 24 })}
       </button>
       <div className="editor-title-copy">
         {pageTitleEdit.isEditing ? (
@@ -2694,7 +2682,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
             }}
           >
-            {React.createElement(ICON_MAP[tab.icon] || (tab.contentType === 'map' ? Map : FileText), { size: 14 })}
+            {React.createElement(getTabTypeIcon(tab.contentType), { size: 14 })}
             <span>{tab.name}</span>
           </button>
         )
@@ -2787,7 +2775,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                   onFileSelect={selectContainer}
                   selectedFile={selectedContainer}
                   onCreateChild={createDocumentInline}
-                  onIconSelect={handleIconSelect}
                   onContextMenu={(e, node) => setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, node })}
                   renamingPath={renamingPath}
                   onRename={handleRename}
@@ -3207,25 +3194,31 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       </main>
 
       {/* Modals & Overlays */}
-      {tabIconPicker.isOpen && (
+      {documentIconPicker.isOpen && (
         <>
-          <div className="icon-picker-backdrop" onClick={() => setTabIconPicker({ isOpen: false, top: 0, left: 0 })} />
+          <div className="icon-picker-backdrop" onClick={() => setDocumentIconPicker({ isOpen: false, top: 0, left: 0 })} />
           <div
             className="icon-selector-dropdown glass-panel"
-            style={{ top: tabIconPicker.top, left: tabIconPicker.left }}
+            style={{ top: documentIconPicker.top, left: documentIconPicker.left }}
             onClick={event => event.stopPropagation()}
           >
-            {Object.keys(ICON_MAP).map(key => (
-              <button
-                key={key}
-                type="button"
-                className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
-                onClick={() => handleTabIconSelect(key)}
-                title={key}
-              >
-                {React.createElement(ICON_MAP[key], { size: 18 })}
-              </button>
-            ))}
+            <div className="icon-selector-header">
+              <span>{t('workspace.change_icon')}</span>
+              <strong>{selectedContainer?.name}</strong>
+            </div>
+            <div className="icon-selector-grid">
+              {DOCUMENT_ICON_OPTIONS.map(key => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
+                  onClick={() => handleDocumentIconSelect(key)}
+                  title={key}
+                >
+                  {React.createElement(ICON_MAP[key], { size: 19 })}
+                </button>
+              ))}
+            </div>
           </div>
         </>
       )}
