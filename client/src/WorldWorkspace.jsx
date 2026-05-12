@@ -2542,65 +2542,66 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       >
         {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
       </button>
-      <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
-        <button
-          type="button"
-          className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
-          onClick={() => setWorldActionsMenu(prev => !prev)}
-          disabled={!selectedContainer}
-          title={t('workspace.world_actions')}
-        >
-          <MoreVertical size={16} />
-        </button>
-        {worldActionsMenu && (
-          <div className="editor-world-actions-menu glass-panel">
-            <button type="button" onClick={shareWorld}>
-              <Share2 size={14} />
-              <span>{t('workspace.share_world')}</span>
-            </button>
-            {!isMapTab && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWorldActionsMenu(false);
-                    coverFileInputRef.current?.click();
-                  }}
-                  disabled={coverUploading}
-                >
-                  <Image size={14} />
-                  <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
-                </button>
-                {activeCoverPath && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setWorldActionsMenu(false);
-                        openCoverCropEditor();
-                      }}
-                    >
-                      <MoveVertical size={14} />
-                      <span>{t('workspace.reposition_cover')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => {
-                        setWorldActionsMenu(false);
-                        removeCover();
-                      }}
-                    >
-                      <Trash2 size={14} />
-                      <span>{t('workspace.remove_cover')}</span>
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
+      {activeTab && (
+        <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
+            onClick={() => setWorldActionsMenu(prev => !prev)}
+            title={t('workspace.world_actions')}
+          >
+            <MoreVertical size={16} />
+          </button>
+          {worldActionsMenu && (
+            <div className="editor-world-actions-menu glass-panel">
+              <button type="button" onClick={shareWorld}>
+                <Share2 size={14} />
+                <span>{t('workspace.share_world')}</span>
+              </button>
+              {!isMapTab && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorldActionsMenu(false);
+                      coverFileInputRef.current?.click();
+                    }}
+                    disabled={coverUploading}
+                  >
+                    <Image size={14} />
+                    <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
+                  </button>
+                  {activeCoverPath && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWorldActionsMenu(false);
+                          openCoverCropEditor();
+                        }}
+                      >
+                        <MoveVertical size={14} />
+                        <span>{t('workspace.reposition_cover')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => {
+                          setWorldActionsMenu(false);
+                          removeCover();
+                        }}
+                      >
+                        <Trash2 size={14} />
+                        <span>{t('workspace.remove_cover')}</span>
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   ) : null;
   const pageTitleBlock = (
@@ -2612,7 +2613,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         disabled={!selectedContainer || isVisitor}
         title={selectedContainer && !isVisitor ? t('workspace.change_icon') : undefined}
       >
-        {React.createElement(getDocumentIcon(selectedContainer?.icon), { size: isMapTab ? 20 : 24 })}
+        {React.createElement(getDocumentIcon(selectedContainer?.icon), { size: 20 })}
       </button>
       <div className="editor-title-copy">
         {pageTitleEdit.isEditing ? (
