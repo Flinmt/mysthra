@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Text, Image as KonvaImage, Group, Transformer, Path } from 'react-konva';
-import { Focus, Grid2X2, Grid3X3, Hand, Hexagon, Image, MapPin, Minus, MousePointer2, Plus, Trash2, Type, Upload, Users } from 'lucide-react';
+import { Focus, Grid2X2, Grid3X3, Hexagon, Image, MapPin, Minus, MousePointer2, Plus, Trash2, Type, Upload, Users } from 'lucide-react';
 import { __iconNode as BookIconNode } from 'lucide-react/dist/esm/icons/book.mjs';
 import { __iconNode as CastleIconNode } from 'lucide-react/dist/esm/icons/castle.mjs';
 import { __iconNode as CircleHelpIconNode } from 'lucide-react/dist/esm/icons/circle-question-mark.mjs';
@@ -181,6 +181,11 @@ function prepareAssetUpload(file) {
   return { contentType, filename, blob: file };
 }
 
+function isTypingTarget(target) {
+  const tagName = target?.tagName?.toLowerCase();
+  return target?.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+}
+
 function useImageSource(src) {
   const [image, setImage] = useState(null);
 
@@ -348,8 +353,10 @@ export default function MapEditor({
   const itemNodesRef = useRef(new Map());
   const fittedBackgroundRef = useRef('');
   const userMovedViewportRef = useRef(false);
+  const panSessionRef = useRef(null);
+  const spacePressedRef = useRef(false);
   const [size, setSize] = useState({ width: 900, height: 560 });
-  const [tool, setTool] = useState('pan');
+  const [tool, setTool] = useState('select');
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
   const [state, setState] = useState({
     canvas: DEFAULT_CANVAS,
@@ -361,6 +368,8 @@ export default function MapEditor({
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [markerEditor, setMarkerEditor] = useState({ isOpen: false, itemId: '', x: 0, y: 0 });
   const [uploading, setUploading] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isViewportPanning, setIsViewportPanning] = useState(false);
   const collaborationRoomState = useCollaborationRoom({
     roomName: collaborationRoom,
     currentUser,
@@ -504,18 +513,6 @@ export default function MapEditor({
     transformerRef.current.getLayer()?.batchDraw();
   }, [readOnly, selectedId, state.items]);
 
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (readOnly || !selectedId || !collaboration) return;
-      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
-      event.preventDefault();
-      collaboration.doc.transact(() => removeYItem(collaboration.yItems, selectedId));
-      setSelectedId('');
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [collaboration, readOnly, selectedId]);
-
   const registerNode = useCallback((id, node) => {
     if (node) itemNodesRef.current.set(id, node);
     else itemNodesRef.current.delete(id);
@@ -530,6 +527,84 @@ export default function MapEditor({
       y: (pointer.y - viewport.y) / viewport.scale
     };
   }, [viewport]);
+
+  const endViewportPan = useCallback(() => {
+    panSessionRef.current = null;
+    setIsViewportPanning(false);
+  }, []);
+
+  const beginViewportPan = useCallback((event) => {
+    const stage = event.target.getStage();
+    const pointer = stage?.getPointerPosition();
+    if (!pointer) return false;
+
+    event.evt?.preventDefault?.();
+    event.cancelBubble = true;
+    panSessionRef.current = {
+      pointer,
+      viewport
+    };
+    setIsViewportPanning(true);
+    return true;
+  }, [viewport]);
+
+  const updateViewportPan = useCallback(() => {
+    const session = panSessionRef.current;
+    if (!session) return false;
+
+    const stage = stageRef.current;
+    const pointer = stage?.getPointerPosition();
+    if (!pointer) return false;
+
+    setViewport({
+      ...session.viewport,
+      x: session.viewport.x + pointer.x - session.pointer.x,
+      y: session.viewport.y + pointer.y - session.pointer.y
+    });
+    userMovedViewportRef.current = true;
+    return true;
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.code === 'Space' && !isTypingTarget(event.target)) {
+        event.preventDefault();
+        spacePressedRef.current = true;
+        setIsSpacePressed(true);
+        return;
+      }
+
+      if (readOnly || !selectedId || !collaboration) return;
+      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+      event.preventDefault();
+      collaboration.doc.transact(() => removeYItem(collaboration.yItems, selectedId));
+      setSelectedId('');
+    };
+    const handleKeyUp = (event) => {
+      if (event.code !== 'Space') return;
+      spacePressedRef.current = false;
+      setIsSpacePressed(false);
+      endViewportPan();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [collaboration, endViewportPan, readOnly, selectedId]);
+
+  useEffect(() => {
+    if (!isViewportPanning) return undefined;
+
+    const stopPanning = () => endViewportPan();
+    window.addEventListener('mouseup', stopPanning);
+    window.addEventListener('blur', stopPanning);
+    return () => {
+      window.removeEventListener('mouseup', stopPanning);
+      window.removeEventListener('blur', stopPanning);
+    };
+  }, [endViewportPan, isViewportPanning]);
 
   const updateItem = useCallback((item) => {
     if (readOnly || !collaboration) return;
@@ -574,6 +649,12 @@ export default function MapEditor({
   }, [addItem, stagePointToWorld]);
 
   const handleStagePointerDown = (event) => {
+    const button = event.evt?.button ?? 0;
+    if (button === 1 || (button === 0 && spacePressedRef.current)) {
+      beginViewportPan(event);
+      return;
+    }
+
     if (event.target !== event.target.getStage()) return;
     if (readOnly) {
       setSelectedId('');
@@ -674,6 +755,14 @@ export default function MapEditor({
     onNavigateToLink?.({ linkedDocumentPath, linkedTabPath });
   };
 
+  const selectMapItem = (event, itemId) => {
+    const button = event.evt?.button;
+    if (button !== undefined && button !== 0) return;
+    if (spacePressedRef.current || isViewportPanning) return;
+    event.cancelBubble = true;
+    setSelectedId(itemId);
+  };
+
   const uploadImageAsset = async (file) => {
     const prepared = prepareAssetUpload(file);
     if (!prepared.contentType.startsWith('image/')) return null;
@@ -729,12 +818,11 @@ export default function MapEditor({
 
   const editableTools = [
     { id: 'select', icon: MousePointer2, label: labels.selectTool || TOOL_LABELS.select },
-    { id: 'pan', icon: Hand, label: labels.panTool || TOOL_LABELS.pan },
     { id: 'marker', icon: MapPin, label: labels.markerTool || TOOL_LABELS.marker },
     { id: 'text', icon: Type, label: labels.textTool || TOOL_LABELS.text },
     { id: 'image', icon: Image, label: labels.imageTool || TOOL_LABELS.image }
   ];
-  const tools = readOnly ? editableTools.slice(0, 2) : editableTools;
+  const tools = readOnly ? editableTools.slice(0, 1) : editableTools;
   const GridIcon = state.settings.gridMode === 'hex'
     ? Hexagon
     : state.settings.gridMode === 'square'
@@ -764,20 +852,17 @@ export default function MapEditor({
         y={viewport.y}
         scaleX={viewport.scale}
         scaleY={viewport.scale}
-        draggable={tool === 'pan'}
-        onDragEnd={event => {
-          if (event.target !== event.target.getStage()) return;
-          userMovedViewportRef.current = true;
-          setViewport(prev => ({ ...prev, x: event.target.x(), y: event.target.y() }));
-        }}
         onWheel={handleWheel}
         onMouseDown={handleStagePointerDown}
+        onMouseUp={endViewportPan}
+        onMouseLeave={endViewportPan}
         onTouchStart={handleStagePointerDown}
         onMouseMove={() => {
+          updateViewportPan();
           const point = stagePointToWorld();
           emitAwareness({ cursor: point, mapCursor: point });
         }}
-        className={tool === 'pan' ? 'is-panning' : ''}
+        className={`${isSpacePressed ? 'can-pan' : ''} ${isViewportPanning ? 'is-panning' : ''}`.trim()}
       >
         <Layer>
           {backgroundImage && (
@@ -794,7 +879,7 @@ export default function MapEditor({
           <MapGrid settings={state.settings} viewport={viewport} size={size} mapSize={mapSize} />
           {state.items.map(item => {
             const isSelected = selectedId === item.id;
-            const draggable = !readOnly && tool === 'select';
+            const draggable = !readOnly && tool === 'select' && !isSpacePressed && !isViewportPanning;
             if (item.type === 'image') {
               return (
                 <MapImageItem
@@ -804,10 +889,7 @@ export default function MapEditor({
                   draggable={draggable}
                   getAssetUrl={getAssetUrl}
                   registerNode={registerNode}
-                  onSelect={(event) => {
-                    event.cancelBubble = true;
-                    setSelectedId(item.id);
-                  }}
+                  onSelect={(event) => selectMapItem(event, item.id)}
                   onChange={updateItem}
                 />
               );
@@ -827,14 +909,8 @@ export default function MapEditor({
                   fontStyle="600"
                   padding={6}
                   draggable={draggable}
-                  onClick={(event) => {
-                    event.cancelBubble = true;
-                    setSelectedId(item.id);
-                  }}
-                  onTap={(event) => {
-                    event.cancelBubble = true;
-                    setSelectedId(item.id);
-                  }}
+                  onClick={(event) => selectMapItem(event, item.id)}
+                  onTap={(event) => selectMapItem(event, item.id)}
                   onDblClick={() => handleTextEdit(item)}
                   onDblTap={() => handleTextEdit(item)}
                   onDragEnd={event => updateItem({ ...item, x: event.target.x(), y: event.target.y() })}
@@ -863,14 +939,8 @@ export default function MapEditor({
                 x={item.x}
                 y={item.y}
                 draggable={draggable}
-                onClick={(event) => {
-                  event.cancelBubble = true;
-                  setSelectedId(item.id);
-                }}
-                onTap={(event) => {
-                  event.cancelBubble = true;
-                  setSelectedId(item.id);
-                }}
+                onClick={(event) => selectMapItem(event, item.id)}
+                onTap={(event) => selectMapItem(event, item.id)}
                 onDblClick={() => {
                   navigateMarker(item);
                 }}
