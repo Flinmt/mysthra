@@ -1855,17 +1855,33 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     const shareUrl = new URL(`/world/${encodeURIComponent(worldId)}`, window.location.origin);
     shareUrl.searchParams.set('view', 'true');
-    if (selectedContainer?.path) {
-      shareUrl.searchParams.set('document', selectedContainer.path);
-    }
-    if (activeTab?.path) {
-      shareUrl.searchParams.set('tab', activeTab.path);
-    }
     setWorldActionsMenu(false);
 
     try {
       await copyTextToClipboard(shareUrl.toString());
       addToast(t('workspace.share_world_copied'), 'success');
+    } catch {
+      addToast(t('workspace.share_world_failed'), 'error');
+    }
+  };
+
+  const shareCurrentTab = async () => {
+    if (!worldData?.publicRead) {
+      addToast(t('workspace.share_world_public_required'), 'error');
+      setWorldActionsMenu(false);
+      return;
+    }
+    if (!selectedContainer?.path || !activeTab?.path) return;
+
+    const shareUrl = new URL(`/world/${encodeURIComponent(worldId)}`, window.location.origin);
+    shareUrl.searchParams.set('view', 'true');
+    shareUrl.searchParams.set('document', selectedContainer.path);
+    shareUrl.searchParams.set('tab', activeTab.path);
+    setWorldActionsMenu(false);
+
+    try {
+      await copyTextToClipboard(shareUrl.toString());
+      addToast(t('workspace.share_tab_copied'), 'success');
     } catch {
       addToast(t('workspace.share_world_failed'), 'error');
     }
@@ -2076,7 +2092,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       >
         {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
       </button>
-      {activeTab && (
+      {selectedContainer && (
         <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
           <button
             type="button"
@@ -2092,7 +2108,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <Share2 size={14} />
                 <span>{t('workspace.share_world')}</span>
               </button>
-              {!isMapTab && (
+              {activeTab && (
+                <button type="button" onClick={shareCurrentTab}>
+                  <Copy size={14} />
+                  <span>{t('workspace.share_tab')}</span>
+                </button>
+              )}
+              {activeTab && !isMapTab && (
                 <>
                   <button
                     type="button"
