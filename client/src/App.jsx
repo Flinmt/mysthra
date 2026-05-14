@@ -55,7 +55,7 @@ function App() {
               <>
                 <WorldWorkspace params={params} isVisitor={isVisitor && !isAuthenticated} currentUser={currentUser} />
                 <div className="workspace-language-wrapper">
-                  <WorldShareButton worldId={params.id} />
+                  {isVisitor && !isAuthenticated && <WorldShareButton worldId={params.id} />}
                   <LanguageSwitcher variant="floating" />
                 </div>
               </>
@@ -707,6 +707,7 @@ function CreateWorldModal({ onClose, onCreated }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [publicRead, setPublicRead] = useState(false)
   const [thumbnailPreview, setThumbnailPreview] = useState('')
   const [thumbnailFile, setThumbnailFile] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -723,7 +724,8 @@ function CreateWorldModal({ onClose, onCreated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          description
+          description,
+          publicRead
         })
       })
 
@@ -801,6 +803,18 @@ function CreateWorldModal({ onClose, onCreated }) {
             </label>
           </div>
 
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={publicRead}
+              onChange={e => setPublicRead(e.target.checked)}
+            />
+            <span>
+              <strong>{t('dashboard.public_read')}</strong>
+              <small>{t('dashboard.public_read_hint')}</small>
+            </span>
+          </label>
+
           {error && <div className="error-msg">{error}</div>}
 
           <div className="modal-actions">
@@ -821,6 +835,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const { t } = useTranslation()
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
+  const [publicRead, setPublicRead] = useState(Boolean(world.publicRead))
   const [thumbnailPreview, setThumbnailPreview] = useState(world.thumbnail?.filename ? `/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0}` : '')
   const [thumbnailFile, setThumbnailFile] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -837,7 +852,8 @@ function EditWorldModal({ world, onClose, onUpdated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          description
+          description,
+          publicRead
         })
       })
 
@@ -910,6 +926,18 @@ function EditWorldModal({ world, onClose, onUpdated }) {
               )}
             </label>
           </div>
+
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={publicRead}
+              onChange={e => setPublicRead(e.target.checked)}
+            />
+            <span>
+              <strong>{t('dashboard.public_read')}</strong>
+              <small>{t('dashboard.public_read_hint')}</small>
+            </span>
+          </label>
 
           {error && <div className="error-msg">{error}</div>}
 

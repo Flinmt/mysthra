@@ -233,6 +233,42 @@ body {
   box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
 }
 
+.settings-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.settings-checkbox input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--primary-color);
+}
+
+.settings-checkbox span {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-checkbox strong {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.settings-checkbox small {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .login-user-combobox {
   position: relative;
 }

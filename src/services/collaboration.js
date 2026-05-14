@@ -18,10 +18,6 @@ const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map"]);
 
 let activeCollaborationServer = null;
 
-function isPublicReadEnabled() {
-  return ["1", "true", "yes", "on"].includes(String(process.env.PUBLIC_READ || "").trim().toLowerCase());
-}
-
 function isCollaborationDebugEnabled() {
   return ["1", "true", "yes", "on"].includes(String(process.env.COLLABORATION_DEBUG || "").trim().toLowerCase());
 }
@@ -156,7 +152,9 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   const user = getAuthenticatedUser(getCookieRequest(requestHeaders));
 
   if (!user) {
-    if (!isPublicReadEnabled()) {
+    const { isWorldPublicReadable } = require("./worlds");
+    const isPublicWorld = await isWorldPublicReadable(room.worldId).catch(() => false);
+    if (!isPublicWorld) {
       debugCollaboration("auth-reject", { documentName, reason: "unauthorized" });
       const error = new Error("Unauthorized");
       error.reason = "unauthorized";

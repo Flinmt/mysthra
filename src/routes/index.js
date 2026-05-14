@@ -40,6 +40,7 @@ const {
   getWorldConfig,
   getWorldThumbnail,
   isWorldMember,
+  isWorldPublicReadable,
   listWorldMembers,
   addWorldMember,
   removeWorldMember,
@@ -75,7 +76,10 @@ function getWorldIdFromPath(requestUrl) {
 }
 
 function getErrorStatusCode(error) {
+  if (error.code === "PAYLOAD_TOO_LARGE") return 413;
+  if (error.code === "INVALID_JSON") return 400;
   if (error.code === "INVALID_PATH") return 400;
+  if (error.code === "INVALID_DOCUMENT_METADATA") return 400;
   if (error.code === "INVALID_HOME_PAGE") return 400;
   if (error.code === "INVALID_USER_INPUT") return 400;
   if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL") return 400;
@@ -88,18 +92,23 @@ function getErrorStatusCode(error) {
 }
 
 function getErrorMessage(error, statusCode) {
-  if (statusCode === 400 || statusCode === 404 || statusCode === 409) {
+  if (statusCode === 400 || statusCode === 404 || statusCode === 409 || statusCode === 413) {
     return error.message;
   }
   return "Internal Server Error";
 }
 
-function isPublicReadEnabled() {
-  return ["1", "true", "yes", "on"].includes(String(process.env.PUBLIC_READ || "").trim().toLowerCase());
+function isPublicReadRequest(method, pathname) {
+  return method === "GET" && /^\/api\/worlds\/[^\/]+(\/.*)?$/.test(pathname);
 }
 
-function isPublicReadRequest(method, pathname) {
-  return method === "GET" && pathname.startsWith("/api/worlds");
+async function isPublicWorldReadRequest(method, pathname, worldId) {
+  if (!worldId || !isPublicReadRequest(method, pathname)) return false;
+  try {
+    return await isWorldPublicReadable(worldId);
+  } catch {
+    return false;
+  }
 }
 
 function getPublicUser(user) {
@@ -113,6 +122,43 @@ function getPublicUser(user) {
 
 function sendForbidden(response) {
   return sendJson(response, 403, { error: "Forbidden" });
+}
+
+function parseSizeLimit(value, fallbackBytes) {
+  if (value === undefined || value === null || String(value).trim() === "") return fallbackBytes;
+  const normalized = String(value).trim().toLowerCase();
+  const match = normalized.match(/^(\d+(?:\.\d+)?)\s*(b|kb|kib|mb|mib|gb|gib)?$/);
+  if (!match) return fallbackBytes;
+
+  const amount = Number.parseFloat(match[1]);
+  const unit = match[2] || "b";
+  const multiplier = {
+    b: 1,
+    kb: 1000,
+    kib: 1024,
+    mb: 1000 * 1000,
+    mib: 1024 * 1024,
+    gb: 1000 * 1000 * 1000,
+    gib: 1024 * 1024 * 1024
+  }[unit];
+
+  const bytes = Math.floor(amount * multiplier);
+  return Number.isFinite(bytes) && bytes > 0 ? bytes : fallbackBytes;
+}
+
+function getJsonBodyLimit() {
+  return parseSizeLimit(process.env.MAX_JSON_BODY_SIZE, 1000 * 1000);
+}
+
+function getUploadBodyLimit() {
+  return parseSizeLimit(process.env.MAX_UPLOAD_SIZE, 50 * 1000 * 1000);
+}
+
+function createPayloadTooLargeError(limitBytes) {
+  const error = new Error(`Request body exceeds the ${limitBytes} byte limit`);
+  error.code = "PAYLOAD_TOO_LARGE";
+  error.limitBytes = limitBytes;
+  return error;
 }
 
 function requireAdmin(response, user) {
@@ -138,30 +184,48 @@ async function requireWorldMemberOrAdmin(response, worldId, user) {
   return false;
 }
 
-function readRequestBody(request) {
+function readLimitedRequest(request, limitBytes, toChunk) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    const contentLength = Number.parseInt(request.headers?.["content-length"] || "", 10);
+    if (Number.isFinite(contentLength) && contentLength > limitBytes) {
+      request.resume();
+      reject(createPayloadTooLargeError(limitBytes));
+      return;
+    }
+
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+
     request.on("data", (chunk) => {
-      body += chunk.toString();
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.length;
+      if (totalBytes > limitBytes) {
+        settled = true;
+        request.resume();
+        reject(createPayloadTooLargeError(limitBytes));
+        return;
+      }
+      chunks.push(toChunk(buffer));
     });
     request.on("end", () => {
-      resolve(body);
+      if (!settled) resolve(chunks);
     });
-    request.on("error", reject);
+    request.on("error", (error) => {
+      if (!settled) reject(error);
+    });
   });
 }
 
-function readRequestBuffer(request) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    request.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    request.on("end", () => {
-      resolve(Buffer.concat(chunks));
-    });
-    request.on("error", reject);
-  });
+async function readRequestBody(request) {
+  const chunks = await readLimitedRequest(request, getJsonBodyLimit(), (buffer) => buffer.toString());
+  return chunks.join("");
+}
+
+async function readRequestBuffer(request) {
+  const chunks = await readLimitedRequest(request, getUploadBodyLimit(), (buffer) => buffer);
+  return Buffer.concat(chunks);
 }
 
 async function parseJsonBody(request) {
@@ -221,8 +285,9 @@ async function router(request, response) {
         }
 
         sendJson(response, 401, { error: "Invalid username or password" });
-      } catch (e) {
-        sendJson(response, 400, { error: "Invalid request" });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        sendJson(response, statusCode, { error: statusCode === 413 ? getErrorMessage(error, statusCode) : "Invalid request" });
       }
       return;
     }
@@ -255,8 +320,9 @@ async function router(request, response) {
       }
     }
 
-    const isPublicGet = isPublicReadEnabled() && isPublicReadRequest(request.method, pathname);
     const currentUser = getAuthenticatedUser(request);
+    const publicWorldId = getWorldIdFromPath(request.url);
+    const isPublicGet = !currentUser && await isPublicWorldReadRequest(request.method, pathname, publicWorldId);
     if (!isPublicGet && !currentUser) {
       return sendJson(response, 401, { error: "Unauthorized" });
     }
@@ -740,4 +806,11 @@ async function router(request, response) {
   }
 }
 
-module.exports = { isPublicReadEnabled, isPublicReadRequest, router };
+module.exports = {
+  getJsonBodyLimit,
+  getUploadBodyLimit,
+  isPublicReadRequest,
+  isPublicWorldReadRequest,
+  parseSizeLimit,
+  router
+};

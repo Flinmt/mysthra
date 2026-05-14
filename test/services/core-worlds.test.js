@@ -19,6 +19,7 @@ const {
   listAssets,
   listWorlds,
   getFileTree,
+  isWorldPublicReadable,
   moveAsset,
   readDocument,
   renameAsset,
@@ -58,6 +59,7 @@ test("createWorld stores lean world metadata", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, worldName);
   assert.equal(world.description, "A world in migration");
+  assert.equal(world.publicRead, false);
   assert.equal("thumbnailUrl" in world, false);
 
   const config = JSON.parse(
@@ -79,6 +81,23 @@ test("updateWorld only updates world profile fields", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, "Renamed World");
   assert.equal(world.description, "Updated");
+  assert.equal(world.publicRead, false);
+});
+
+test("world public visitor access is stored per world", async () => {
+  const worldName = "core-world-public-read";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  assert.equal(await isWorldPublicReadable(worldName), false);
+
+  let world = await updateWorld(worldName, { publicRead: true });
+  assert.equal(world.publicRead, true);
+  assert.equal(await isWorldPublicReadable(worldName), true);
+
+  world = await updateWorld(worldName, { publicRead: false });
+  assert.equal(world.publicRead, false);
+  assert.equal(await isWorldPublicReadable(worldName), false);
 });
 
 test("saveWorldThumbnail stores thumbnail metadata", async () => {
@@ -206,10 +225,37 @@ test("document metadata changes do not move physical paths", async () => {
   assert.equal(renamed.name, "Places");
 
   const result = await updateDocumentMetadata(worldName, document.path, {
-    icon: "Castle"
+    icon: "Castle",
+    order: 2
   });
   assert.equal(result.metadata.name, "Places");
   assert.equal(result.metadata.icon, "Castle");
+  assert.equal(result.metadata.order, 2);
+});
+
+test("document metadata updates reject structural fields", async () => {
+  const worldName = "core-tree-metadata-guards";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const document = await createDocument(worldName, "Locations", "", {
+    type: "container"
+  });
+
+  await assert.rejects(
+    () => updateDocumentMetadata(worldName, document.path, {
+      uid: "forged",
+      type: "tab",
+      contentType: "map",
+      ownerUserId: "admin"
+    }),
+    { code: "INVALID_DOCUMENT_METADATA" }
+  );
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree[0].uid, document.uid);
+  assert.equal(tree[0].type, "container");
+  assert.equal(tree[0].contentType, null);
 });
 
 test("deleteDocument removes a document subtree", async () => {
@@ -400,11 +446,11 @@ test("asset service migrates legacy Assets directory into lowercase assets", asy
   const currentAssetsPath = path.join(worldRoot, "assets");
   await fs.mkdir(path.join(legacyAssetsPath, "Folder"), { recursive: true });
   await fs.mkdir(path.join(currentAssetsPath, "Folder"), { recursive: true });
-  const [legacyRealPath, currentRealPath] = await Promise.all([
-    fs.realpath(legacyAssetsPath),
-    fs.realpath(currentAssetsPath)
+  const [legacyStat, currentStat] = await Promise.all([
+    fs.stat(legacyAssetsPath),
+    fs.stat(currentAssetsPath)
   ]);
-  const isCaseInsensitiveAssetsPath = legacyRealPath.toLowerCase() === currentRealPath.toLowerCase();
+  const isCaseInsensitiveAssetsPath = legacyStat.dev === currentStat.dev && legacyStat.ino === currentStat.ino;
 
   await fs.writeFile(path.join(legacyAssetsPath, "Folder", "map.webp"), "legacy", "utf-8");
   if (!isCaseInsensitiveAssetsPath) {

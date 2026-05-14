@@ -11,7 +11,7 @@ const {
   resolveTabRoom
 } = require("../../src/services/collaboration");
 const { createDocument } = require("../../src/services/tree");
-const { createWorld } = require("../../src/services/worlds");
+const { createWorld, updateWorld } = require("../../src/services/worlds");
 const { getDataRoot, resolveWorldRoot } = require("../../src/data");
 const { generateSessionToken } = require("../../src/utils/auth");
 const { HocuspocusProvider } = require("../../client/node_modules/@hocuspocus/provider");
@@ -167,8 +167,6 @@ async function waitFor(assertion, timeoutMs = 2500) {
 }
 
 test("hocuspocus providers sync and persist tab state", async () => {
-  const previousPublicRead = process.env.PUBLIC_READ;
-  process.env.PUBLIC_READ = "true";
   const worldName = `collab-runtime-${Date.now()}`;
   createdWorlds.add(worldName);
   await createWorld({ name: worldName });
@@ -233,7 +231,56 @@ test("hocuspocus providers sync and persist tab state", async () => {
     firstDoc.destroy();
     secondDoc.destroy();
     await new Promise(resolve => setTimeout(resolve, 250));
-    if (previousPublicRead === undefined) delete process.env.PUBLIC_READ;
-    else process.env.PUBLIC_READ = previousPublicRead;
+  }
+});
+
+test("unauthenticated collaboration is read-only only for public worlds", async () => {
+  const publicWorld = `collab-public-${Date.now()}`;
+  const privateWorld = `collab-private-${Date.now()}`;
+  createdWorlds.add(publicWorld);
+  createdWorlds.add(privateWorld);
+  await createWorld({ name: publicWorld });
+  await createWorld({ name: privateWorld });
+  await updateWorld(publicWorld, { publicRead: true });
+  const publicTab = await createDocument(publicWorld, "Public Wiki", "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+  const privateTab = await createDocument(privateWorld, "Private Wiki", "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  const server = createCollaborationServer();
+  const publicDoc = new Y.Doc();
+  const privateDoc = new Y.Doc();
+  const publicScopes = [];
+  const privateFailures = [];
+  const PublicWebSocket = createLocalWebSocketPolyfill(server);
+  const PrivateWebSocket = createLocalWebSocketPolyfill(server);
+  const publicProvider = new HocuspocusProvider({
+    url: "ws://local/collaboration",
+    name: `world:${publicWorld}:tab:${publicTab.uid}`,
+    document: publicDoc,
+    WebSocketPolyfill: PublicWebSocket,
+    onAuthenticated: ({ scope }) => publicScopes.push(scope)
+  });
+  const privateProvider = new HocuspocusProvider({
+    url: "ws://local/collaboration",
+    name: `world:${privateWorld}:tab:${privateTab.uid}`,
+    document: privateDoc,
+    WebSocketPolyfill: PrivateWebSocket,
+    onAuthenticationFailed: ({ reason }) => privateFailures.push(reason)
+  });
+
+  try {
+    await waitFor(() => assert.equal(publicScopes.includes("readonly"), true));
+    await waitFor(() => assert.equal(privateFailures.includes("unauthorized"), true));
+  } finally {
+    publicProvider.destroy();
+    privateProvider.destroy();
+    publicDoc.destroy();
+    privateDoc.destroy();
+    await new Promise(resolve => setTimeout(resolve, 250));
   }
 });

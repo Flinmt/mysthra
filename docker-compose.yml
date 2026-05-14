@@ -11,4 +11,5 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - MASTER_PASSWORD=${MASTER_PASSWORD:?Set MASTER_PASSWORD before starting Mysthra}
-      - PUBLIC_READ=${PUBLIC_READ:-false}
+      - MAX_JSON_BODY_SIZE=${MAX_JSON_BODY_SIZE:-1mb}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-50mb}

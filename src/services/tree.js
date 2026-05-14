@@ -11,6 +11,18 @@ const {
 } = require("./collaboration");
 const { updateIndex, removeFromIndex } = require("./indexer");
 
+const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
+  "icon",
+  "isLocked",
+  "order",
+  "coverAssetPath",
+  "coverPositionX",
+  "coverPositionY",
+  "coverCrop",
+  "coverZoom",
+  "coverCroppedArea"
+]);
+
 async function getFileTree(worldName) {
   const safeName = validateWorldName(worldName);
   await ensureWorldStructure(safeName);
@@ -188,12 +200,21 @@ async function updateDocumentMetadata(worldName, docPath, metadata) {
   const safeName = validateWorldName(worldName);
   const safePath = validateRelativePath(docPath);
   const { pages: pagesDir } = getWorldPaths(safeName);
+  const nextMetadata = {};
+  for (const [key, value] of Object.entries(metadata || {})) {
+    if (!UPDATABLE_DOCUMENT_METADATA_FIELDS.has(key)) {
+      const error = new Error(`Document metadata field is not updatable: ${key}`);
+      error.code = "INVALID_DOCUMENT_METADATA";
+      throw error;
+    }
+    nextMetadata[key] = value;
+  }
   
   const currentMeta = await readDocumentMetadata(pagesDir, safePath);
-  const newMeta = { ...currentMeta, ...metadata };
+  const newMeta = { ...currentMeta, ...nextMetadata };
   await writeDocumentMetadata(pagesDir, safePath, newMeta);
 
-  if (Object.prototype.hasOwnProperty.call(metadata, "isLocked") && Boolean(currentMeta.isLocked) !== Boolean(newMeta.isLocked)) {
+  if (Object.prototype.hasOwnProperty.call(nextMetadata, "isLocked") && Boolean(currentMeta.isLocked) !== Boolean(newMeta.isLocked)) {
     await closeCollaborativeTabsForPath(safeName, pagesDir, safePath);
     await broadcastWorldLockUpdate(safeName, safePath, newMeta.isLocked);
   }
