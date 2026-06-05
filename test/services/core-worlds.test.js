@@ -211,6 +211,30 @@ test("document tree supports containers and editable tabs", async () => {
   assert.equal((await readDocument(worldName, tab.path)).content, "# Revised draft");
 });
 
+test("document creation stores accented tab names in metadata", async () => {
+  const worldName = "core-tree-accented-tabs";
+  const tabName = "Introdução";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const container = await createDocument(worldName, "Lore", "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${container.path}/${tabName}`, "# Boas-vindas", {
+    type: "tab",
+    contentType: "wiki",
+    name: tabName
+  });
+
+  assert.equal(tab.name, tabName);
+  assert.equal(tab.path.includes(tabName), false);
+  assert.equal((await readDocument(worldName, tab.path)).content, "# Boas-vindas");
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree[0].children[0].name, tabName);
+  assert.equal(tree[0].children[0].metadata.name, tabName);
+});
+
 test("document metadata changes do not move physical paths", async () => {
   const worldName = "core-tree-metadata";
   await resetWorld(worldName);

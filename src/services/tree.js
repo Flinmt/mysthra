@@ -105,19 +105,41 @@ async function writeDocumentMetadata(pagesDir, safePath, metadata) {
   await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
 }
 
+function createInvalidDocumentPathError(message, value) {
+  const error = new Error(message);
+  error.code = "INVALID_PATH";
+  error.value = value;
+  return error;
+}
+
+function parseDocumentCreationPath(docPath) {
+  if (typeof docPath !== "string" || docPath.trim() === "") {
+    throw createInvalidDocumentPathError("Document path must be a non-empty string", docPath);
+  }
+
+  const normalized = docPath.replace(/\\/g, "/").trim();
+  const segments = normalized.split("/").filter(Boolean);
+  const displayName = segments.at(-1)?.trim();
+
+  if (!displayName || displayName === "." || displayName === "..") {
+    throw createInvalidDocumentPathError("Document name is invalid", docPath);
+  }
+
+  const parentSegments = segments.slice(0, -1);
+  const parentPath = parentSegments.length ? validateRelativePath(parentSegments.join("/")) : "";
+
+  return { parentPath, displayName };
+}
+
 async function createDocument(worldName, docPath, content, metadata = {}) {
   const safeName = validateWorldName(worldName);
-  const rawPath = validateRelativePath(docPath);
+  const { parentPath, displayName } = parseDocumentCreationPath(docPath);
   await ensureWorldStructure(safeName);
   const { pages: pagesDir } = getWorldPaths(safeName);
   
-  // NOVO PADRÃO: Extraímos o nome de exibição do caminho enviado
-  const parentPath = path.dirname(rawPath);
-  const displayName = path.basename(rawPath);
   const uid = metadata.uid || crypto.randomUUID();
   
-  // O caminho físico será composto pelos UIDs dos pais + o novo UID
-  const safePath = (parentPath === "." ? uid : `${parentPath}/${uid}`).replace(/\\/g, "/");
+  const safePath = (parentPath ? `${parentPath}/${uid}` : uid).replace(/\\/g, "/");
   const fullDirPath = path.join(pagesDir, safePath);
   
   await fs.mkdir(fullDirPath, { recursive: true });

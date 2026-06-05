@@ -996,6 +996,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           metadata: {
             type: 'tab',
             contentType,
+            name: tabName,
             ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {})
           }
         })
@@ -1008,7 +1009,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           icon: null,
           type: 'tab',
           contentType,
-          metadata: { type: 'tab', contentType, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
+          metadata: { type: 'tab', contentType, name: tabName, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
         };
 
         if (contentType === 'wiki') {
