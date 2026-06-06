@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
@@ -32,64 +32,146 @@ import {
   updateTreeNodeMetadata
 } from './workspace/utils';
 
-const ICON_MAP = {
-  FileText,
-  Book,
-  BookOpen,
-  Scroll,
-  ScrollText,
-  Library,
-  Feather,
-  Map,
-  MapPin,
-  Compass,
-  Route,
-  Footprints,
-  Binoculars,
-  Castle,
-  Landmark,
-  Church,
-  House,
-  Home,
-  Tent,
-  Mountain,
-  Trees,
-  TreePine,
-  TreeDeciduous,
-  DoorOpen,
-  Crown,
-  Flag,
-  Sword,
-  Swords,
-  Shield,
-  Axe,
-  Hammer,
-  Pickaxe,
-  Skull,
-  Flame,
-  Eye,
-  Sparkles,
-  WandSparkles,
-  Ghost,
-  Drama,
-  Gem,
-  Diamond,
-  Coins,
-  Key,
-  LockKeyhole,
-  Star,
-  Moon,
-  Sun,
-  CloudLightning,
-  Ship,
-  Sailboat,
-  Anchor,
-  Waves,
-  Telescope,
-  Pyramid
-};
+const DOCUMENT_ICON_CATEGORIES = [
+  {
+    id: 'general',
+    labelKey: 'workspace.icon_category_general',
+    icons: [
+      { key: 'Folder', icon: Folder, aliases: ['folder', 'pasta', 'container', 'documento'] },
+      { key: 'FolderOpen', icon: FolderOpen, aliases: ['open folder', 'pasta aberta'] },
+      { key: 'FolderRoot', icon: FolderRoot, aliases: ['root', 'raiz'] },
+      { key: 'Folders', icon: Folders, aliases: ['folders', 'pastas', 'colecao'] },
+      { key: 'FolderHeart', icon: FolderHeart, aliases: ['favorite folder', 'pasta favorita', 'favorito'] },
+      { key: 'FileText', icon: FileText, aliases: ['file', 'arquivo', 'texto'] },
+      { key: 'File', icon: File, aliases: ['document', 'documento'] },
+      { key: 'Files', icon: Files, aliases: ['files', 'arquivos'] },
+      { key: 'Book', icon: Book, aliases: ['book', 'livro'] },
+      { key: 'BookOpen', icon: BookOpen, aliases: ['open book', 'livro aberto'] },
+      { key: 'Library', icon: Library, aliases: ['library', 'biblioteca'] },
+      { key: 'Notebook', icon: Notebook, aliases: ['notebook', 'caderno'] },
+      { key: 'NotebookTabs', icon: NotebookTabs, aliases: ['tabs', 'abas', 'caderno'] },
+      { key: 'NotebookText', icon: NotebookText, aliases: ['notes', 'notas'] },
+      { key: 'Scroll', icon: Scroll, aliases: ['scroll', 'pergaminho'] },
+      { key: 'ScrollText', icon: ScrollText, aliases: ['scroll text', 'pergaminho texto'] },
+      { key: 'Archive', icon: Archive, aliases: ['archive', 'arquivo morto'] },
+      { key: 'FolderArchive', icon: FolderArchive, aliases: ['archive folder', 'pasta arquivo'] },
+      { key: 'ClipboardList', icon: ClipboardList, aliases: ['list', 'lista', 'tarefas'] }
+    ]
+  },
+  {
+    id: 'world',
+    labelKey: 'workspace.icon_category_world',
+    icons: [
+      { key: 'Map', icon: Map, aliases: ['map', 'mapa'] },
+      { key: 'MapPin', icon: MapPin, aliases: ['pin', 'marcador', 'local'] },
+      { key: 'Compass', icon: Compass, aliases: ['compass', 'bussola'] },
+      { key: 'Route', icon: Route, aliases: ['route', 'rota', 'caminho'] },
+      { key: 'Landmark', icon: Landmark, aliases: ['landmark', 'marco', 'monumento'] },
+      { key: 'Castle', icon: Castle, aliases: ['castle', 'castelo', 'fortaleza'] },
+      { key: 'Church', icon: Church, aliases: ['church', 'igreja', 'templo'] },
+      { key: 'House', icon: House, aliases: ['house', 'casa'] },
+      { key: 'Home', icon: Home, aliases: ['home', 'inicio', 'lar'] },
+      { key: 'Building2', icon: Building2, aliases: ['building', 'predio', 'cidade'] },
+      { key: 'School', icon: School, aliases: ['school', 'escola', 'academia'] },
+      { key: 'Tent', icon: Tent, aliases: ['tent', 'tenda', 'acampamento'] },
+      { key: 'Mountain', icon: Mountain, aliases: ['mountain', 'montanha'] },
+      { key: 'Trees', icon: Trees, aliases: ['trees', 'arvores', 'floresta'] },
+      { key: 'TreePine', icon: TreePine, aliases: ['pine', 'pinheiro'] },
+      { key: 'TreeDeciduous', icon: TreeDeciduous, aliases: ['tree', 'arvore'] },
+      { key: 'DoorOpen', icon: DoorOpen, aliases: ['door', 'porta', 'entrada'] },
+      { key: 'Pyramid', icon: Pyramid, aliases: ['pyramid', 'piramide', 'ruinas'] }
+    ]
+  },
+  {
+    id: 'fantasy',
+    labelKey: 'workspace.icon_category_fantasy',
+    icons: [
+      { key: 'Sword', icon: Sword, aliases: ['sword', 'espada'] },
+      { key: 'Swords', icon: Swords, aliases: ['swords', 'espadas', 'batalha'] },
+      { key: 'Shield', icon: Shield, aliases: ['shield', 'escudo'] },
+      { key: 'Crown', icon: Crown, aliases: ['crown', 'coroa', 'rei', 'rainha'] },
+      { key: 'Skull', icon: Skull, aliases: ['skull', 'caveira', 'morte'] },
+      { key: 'Flame', icon: Flame, aliases: ['flame', 'fogo', 'chama'] },
+      { key: 'WandSparkles', icon: WandSparkles, aliases: ['wand', 'varinha', 'magia'] },
+      { key: 'Sparkles', icon: Sparkles, aliases: ['sparkles', 'brilho', 'magico'] },
+      { key: 'Gem', icon: Gem, aliases: ['gem', 'gema', 'joia'] },
+      { key: 'Diamond', icon: Diamond, aliases: ['diamond', 'diamante'] },
+      { key: 'Ghost', icon: Ghost, aliases: ['ghost', 'fantasma'] },
+      { key: 'Drama', icon: Drama, aliases: ['drama', 'mascara', 'teatro'] },
+      { key: 'Dices', icon: Dices, aliases: ['dice', 'dados', 'rpg'] },
+      { key: 'Gamepad2', icon: Gamepad2, aliases: ['game', 'jogo'] },
+      { key: 'Star', icon: Star, aliases: ['star', 'estrela', 'favorito'] },
+      { key: 'Zap', icon: Zap, aliases: ['zap', 'raio', 'energia'] }
+    ]
+  },
+  {
+    id: 'people',
+    labelKey: 'workspace.icon_category_people',
+    icons: [
+      { key: 'Users', icon: Users, aliases: ['users', 'usuarios', 'grupo'] },
+      { key: 'UsersRound', icon: UsersRound, aliases: ['people', 'pessoas', 'grupo'] },
+      { key: 'UserRound', icon: UserRound, aliases: ['person', 'pessoa', 'personagem'] },
+      { key: 'Flag', icon: Flag, aliases: ['flag', 'bandeira', 'faccao'] },
+      { key: 'Eye', icon: Eye, aliases: ['eye', 'olho', 'observador'] },
+      { key: 'Key', icon: Key, aliases: ['key', 'chave'] },
+      { key: 'LockKeyhole', icon: LockKeyhole, aliases: ['lock', 'cadeado', 'segredo'] },
+      { key: 'Coins', icon: Coins, aliases: ['coins', 'moedas', 'economia'] },
+      { key: 'Briefcase', icon: Briefcase, aliases: ['briefcase', 'maleta', 'profissao'] },
+      { key: 'Target', icon: Target, aliases: ['target', 'alvo', 'objetivo'] },
+      { key: 'Heart', icon: Heart, aliases: ['heart', 'coracao', 'relacao'] }
+    ]
+  },
+  {
+    id: 'nature',
+    labelKey: 'workspace.icon_category_nature',
+    icons: [
+      { key: 'Ship', icon: Ship, aliases: ['ship', 'navio'] },
+      { key: 'Sailboat', icon: Sailboat, aliases: ['sailboat', 'barco', 'veleiro'] },
+      { key: 'Anchor', icon: Anchor, aliases: ['anchor', 'ancora', 'porto'] },
+      { key: 'ShipWheel', icon: ShipWheel, aliases: ['wheel', 'leme'] },
+      { key: 'Waves', icon: Waves, aliases: ['waves', 'ondas', 'mar'] },
+      { key: 'Plane', icon: Plane, aliases: ['plane', 'aviao', 'viagem'] },
+      { key: 'Rocket', icon: Rocket, aliases: ['rocket', 'foguete', 'espaco'] },
+      { key: 'Moon', icon: Moon, aliases: ['moon', 'lua', 'noite'] },
+      { key: 'Sun', icon: Sun, aliases: ['sun', 'sol', 'dia'] },
+      { key: 'CloudLightning', icon: CloudLightning, aliases: ['storm', 'tempestade', 'trovao'] },
+      { key: 'Sprout', icon: Sprout, aliases: ['sprout', 'broto', 'planta'] },
+      { key: 'Feather', icon: Feather, aliases: ['feather', 'pena'] },
+      { key: 'Footprints', icon: Footprints, aliases: ['footprints', 'pegadas'] },
+      { key: 'Binoculars', icon: Binoculars, aliases: ['binoculars', 'binoculos', 'exploracao'] },
+      { key: 'Telescope', icon: Telescope, aliases: ['telescope', 'telescopio'] },
+      { key: 'Waypoints', icon: Waypoints, aliases: ['waypoints', 'pontos', 'jornada'] }
+    ]
+  },
+  {
+    id: 'systems',
+    labelKey: 'workspace.icon_category_systems',
+    icons: [
+      { key: 'Database', icon: Database, aliases: ['database', 'banco', 'dados'] },
+      { key: 'Layers', icon: Layers, aliases: ['layers', 'camadas'] },
+      { key: 'Boxes', icon: Boxes, aliases: ['boxes', 'caixas', 'modulos'] },
+      { key: 'Box', icon: Box, aliases: ['box', 'caixa'] },
+      { key: 'Package', icon: Package, aliases: ['package', 'pacote'] },
+      { key: 'FileArchive', icon: FileArchive, aliases: ['archive file', 'arquivo'] },
+      { key: 'FileBox', icon: FileBox, aliases: ['box file', 'arquivo caixa'] },
+      { key: 'FileHeart', icon: FileHeart, aliases: ['heart file', 'arquivo importante'] },
+      { key: 'FileImage', icon: FileImage, aliases: ['image file', 'imagem'] },
+      { key: 'FileLock', icon: FileLock, aliases: ['locked file', 'arquivo trancado'] },
+      { key: 'FilePenLine', icon: FilePenLine, aliases: ['edit file', 'editar'] },
+      { key: 'FileSearch', icon: FileSearch, aliases: ['search file', 'pesquisar'] },
+      { key: 'Shapes', icon: Shapes, aliases: ['shapes', 'formas'] },
+      { key: 'Palette', icon: Palette, aliases: ['palette', 'paleta', 'cor'] },
+      { key: 'Axe', icon: Axe, aliases: ['axe', 'machado'] },
+      { key: 'Hammer', icon: Hammer, aliases: ['hammer', 'martelo'] },
+      { key: 'Pickaxe', icon: Pickaxe, aliases: ['pickaxe', 'picareta'] }
+    ]
+  }
+];
 
-const DOCUMENT_ICON_OPTIONS = Object.keys(ICON_MAP);
+const DOCUMENT_ICON_OPTIONS = DOCUMENT_ICON_CATEGORIES.flatMap(category =>
+  category.icons.map(icon => ({ ...icon, categoryId: category.id, categoryLabelKey: category.labelKey }))
+);
+const ICON_MAP = Object.fromEntries(DOCUMENT_ICON_OPTIONS.map(({ key, icon }) => [key, icon]));
 
 function getDocumentIcon(icon) {
   return ICON_MAP[icon] || Folder;
@@ -97,6 +179,14 @@ function getDocumentIcon(icon) {
 
 function getTabTypeIcon(contentType) {
   return contentType === 'map' ? Map : Book;
+}
+
+function normalizeIconSearch(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
@@ -420,6 +510,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [viewMode, setViewMode] = useState('edit'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
+  const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
   const [assetTree, setAssetTree] = useState([]);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -1330,12 +1421,18 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
+  const closeDocumentIconPicker = useCallback(() => {
+    setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
+    setIconSearchQuery('');
+  }, []);
+
   const openDocumentIconPicker = (event) => {
     if (isVisitor || !selectedContainer) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const pickerWidth = 336;
-    const pickerHeight = 392;
+    const pickerWidth = 420;
+    const pickerHeight = 520;
     const viewportPadding = 12;
+    setIconSearchQuery('');
     setDocumentIconPicker({
       isOpen: true,
       top: Math.min(
@@ -1358,7 +1455,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         body: JSON.stringify({ path: selectedContainer.path, metadata: { icon } })
       });
       if (res.ok) {
-        setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
+        closeDocumentIconPicker();
         setSelectedContainer(prev => prev ? { ...prev, icon, metadata: { ...prev.metadata, icon } } : prev);
         await fetchTree();
       } else {
@@ -1405,6 +1502,25 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     return filterNodes(assetTree);
   }, [assetSearchQuery, assetTree]);
+  const filteredDocumentIconCategories = useMemo(() => {
+    const query = normalizeIconSearch(iconSearchQuery);
+    if (!query) return DOCUMENT_ICON_CATEGORIES;
+
+    return DOCUMENT_ICON_CATEGORIES
+      .map(category => ({
+        ...category,
+        icons: category.icons.filter(icon => {
+          const searchableText = normalizeIconSearch([
+            icon.key,
+            category.id,
+            ...(icon.aliases || [])
+          ].join(' '));
+          return searchableText.includes(query);
+        })
+      }))
+      .filter(category => category.icons.length > 0);
+  }, [iconSearchQuery]);
+  const filteredDocumentIconCount = filteredDocumentIconCategories.reduce((total, category) => total + category.icons.length, 0);
 
   const assetMoveTargets = useMemo(() => {
     const sourceNode = assetMovePrompt.node;
@@ -2844,7 +2960,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       {/* Modals & Overlays */}
       {documentIconPicker.isOpen && (
         <>
-          <div className="icon-picker-backdrop" onClick={() => setDocumentIconPicker({ isOpen: false, top: 0, left: 0 })} />
+          <div className="icon-picker-backdrop" onClick={closeDocumentIconPicker} />
           <div
             className="icon-selector-dropdown glass-panel"
             style={{ top: documentIconPicker.top, left: documentIconPicker.left }}
@@ -2854,18 +2970,59 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               <span>{t('workspace.change_icon')}</span>
               <strong>{selectedContainer?.name}</strong>
             </div>
-            <div className="icon-selector-grid">
-              {DOCUMENT_ICON_OPTIONS.map(key => (
+            <div className="icon-selector-search">
+              <Search size={15} />
+              <input
+                value={iconSearchQuery}
+                onChange={event => setIconSearchQuery(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    if (iconSearchQuery) setIconSearchQuery('');
+                    else closeDocumentIconPicker();
+                  }
+                }}
+                placeholder={t('workspace.icon_search_placeholder')}
+                autoFocus
+              />
+              {iconSearchQuery && (
                 <button
-                  key={key}
                   type="button"
-                  className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
-                  onClick={() => handleDocumentIconSelect(key)}
-                  title={key}
+                  onClick={() => setIconSearchQuery('')}
+                  title={t('common.clear')}
                 >
-                  {React.createElement(ICON_MAP[key], { size: 19 })}
+                  <X size={13} />
                 </button>
-              ))}
+              )}
+            </div>
+            <div className="icon-selector-body">
+              {filteredDocumentIconCount === 0 ? (
+                <div className="icon-selector-empty">
+                  <Search size={20} />
+                  <strong>{t('workspace.icon_search_empty')}</strong>
+                  <span>{t('workspace.icon_search_empty_hint')}</span>
+                </div>
+              ) : (
+                filteredDocumentIconCategories.map(category => (
+                  <section key={category.id} className="icon-selector-category">
+                    <div className="icon-selector-category-title">
+                      <span>{t(category.labelKey)}</span>
+                    </div>
+                    <div className="icon-selector-grid">
+                      {category.icons.map(({ key, icon: Icon }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
+                          onClick={() => handleDocumentIconSelect(key)}
+                          title={key}
+                        >
+                          <Icon size={19} />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
             </div>
           </div>
         </>
