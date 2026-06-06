@@ -5762,7 +5762,7 @@ body {
   background: rgba(15, 23, 42, 0.88);
 }
 
-.editor-lock-toggle {
+.editor-permissions-toggle {
   width: 31px;
   height: 31px;
   display: inline-flex;
@@ -5778,19 +5778,15 @@ body {
   transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.16s, box-shadow 0.16s;
 }
 
-.editor-lock-toggle:hover,
-.editor-lock-toggle.unlocked {
+.editor-permissions-toggle:hover {
   color: white;
   border-color: rgba(167, 139, 250, 0.34);
   background: rgba(139, 92, 246, 0.2);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.2);
-}
-
-.editor-lock-toggle:hover {
   transform: translateY(-1px);
 }
 
-.editor-lock-toggle:disabled {
+.editor-permissions-toggle:disabled {
   cursor: not-allowed;
   opacity: 0.62;
 }
@@ -7130,6 +7126,82 @@ body {
   height: 1px;
   margin: 16px 0;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.document-permissions-modal {
+  width: min(860px, calc(100vw - 28px));
+}
+
+.document-permissions-body {
+  gap: 14px;
+}
+
+.document-permissions-inherit {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 139, 250, 0.13);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.024);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.document-permissions-inherit input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-color);
+}
+
+.document-permissions-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(46vh, 420px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.document-permissions-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+  background: rgba(8, 10, 15, 0.34);
+}
+
+.document-permissions-row strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-permissions-row .user-admin-role-segments {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.document-permissions-row .user-admin-role-segments.segments-visitor button {
+  grid-column: span 2;
+}
+
+.document-permissions-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 820px) {
+  .document-permissions-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .duplicate-scope-grid {

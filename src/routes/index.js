@@ -20,6 +20,9 @@ const {
   updateWorld,
   deleteWorld,
   getFileTree,
+  getVisibleFileTree,
+  getDocumentAccess,
+  assertDocumentAccess,
   createDocument,
   createDocumentPlaceholder,
   readDocument,
@@ -90,11 +93,12 @@ function getErrorStatusCode(error) {
   if (error.code === "WORLD_NOT_FOUND") return 404;
   if (error.code === "DOCUMENT_NOT_FOUND") return 404;
   if (error.code === "USER_NOT_FOUND") return 404;
+  if (error.code === "FORBIDDEN") return 403;
   return 500;
 }
 
 function getErrorMessage(error, statusCode) {
-  if (statusCode === 400 || statusCode === 404 || statusCode === 409 || statusCode === 413) {
+  if (statusCode === 400 || statusCode === 403 || statusCode === 404 || statusCode === 409 || statusCode === 413) {
     return error.message;
   }
   return "Internal Server Error";
@@ -120,6 +124,20 @@ function getPublicUser(user) {
     username: user.username,
     isAdmin: Boolean(user.isAdmin)
   };
+}
+
+function getVisitorUser() {
+  return { userId: "visitor", username: "Visitor", isVisitor: true };
+}
+
+function getDocumentRequestUser(currentUser, isPublicGet) {
+  return currentUser || (isPublicGet ? getVisitorUser() : null);
+}
+
+function getParentPathFromCreationPath(documentPath) {
+  const normalized = String(documentPath || "").replace(/\\/g, "/").trim();
+  const segments = normalized.split("/").filter(Boolean);
+  return segments.slice(0, -1).join("/");
 }
 
 function sendForbidden(response) {
@@ -548,7 +566,7 @@ async function router(request, response) {
         const worldId = getWorldIdFromPath(request.url);
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
         if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
-        const tree = await getFileTree(worldId);
+        const tree = await getVisibleFileTree(worldId, getDocumentRequestUser(currentUser, isPublicGet));
         return sendJson(response, 200, { items: tree });
       } catch (error) {
         const statusCode = getErrorStatusCode(error);
@@ -675,6 +693,8 @@ async function router(request, response) {
         try {
           const body = await parseJsonBody(request);
           if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
+          const parentPath = getParentPathFromCreationPath(body.path);
+          if (parentPath) await assertDocumentAccess(worldId, parentPath, currentUser, "write");
           const result = await createDocument(worldId, body.path, body.content || "", {
             ...body.metadata,
             createdBy: currentUser?.userId || body.metadata?.createdBy,
@@ -693,6 +713,7 @@ async function router(request, response) {
           const queryParams = getQueryParams(request.url);
           const filePath = queryParams.get("path");
           if (!filePath) return sendJson(response, 400, { error: "Missing path parameter" });
+          await assertDocumentAccess(worldId, filePath, getDocumentRequestUser(currentUser, isPublicGet), "read");
           const result = await readDocument(worldId, filePath);
           return sendJson(response, 200, result);
         } catch (error) {
@@ -705,6 +726,7 @@ async function router(request, response) {
         try {
           const body = await parseJsonBody(request);
           if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
+          await assertDocumentAccess(worldId, body.path, currentUser, "write");
           const result = await updateDocumentContent(worldId, body.path, body.content || "");
           return sendJson(response, 200, result);
         } catch (error) {
@@ -718,12 +740,53 @@ async function router(request, response) {
           const queryParams = getQueryParams(request.url);
           const filePath = queryParams.get("path");
           if (!filePath) return sendJson(response, 400, { error: "Missing path parameter" });
+          await assertDocumentAccess(worldId, filePath, currentUser, "admin");
           const result = await deleteDocument(worldId, filePath);
           return sendJson(response, 200, result);
         } catch (error) {
           const statusCode = getErrorStatusCode(error);
           return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
         }
+      }
+    }
+
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/documents\/permissions$/)) {
+      try {
+        const worldId = getWorldIdFromPath(request.url);
+        if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
+        const queryParams = getQueryParams(request.url);
+        const filePath = queryParams.get("path");
+        if (!filePath) return sendJson(response, 400, { error: "Missing path parameter" });
+        await assertDocumentAccess(worldId, filePath, currentUser, "admin");
+        const tree = await getFileTree(worldId);
+        const findNode = (nodes) => {
+          for (const node of nodes) {
+            if (node.path === filePath) return node;
+            const child = findNode(node.children || []);
+            if (child) return child;
+          }
+          return null;
+        };
+        const node = findNode(tree);
+        const members = await Promise.all((await listWorldMembers(worldId)).map(async (member) => ({
+          ...member,
+          documentAccess: await getDocumentAccess(worldId, filePath, {
+            userId: member.userId,
+            username: member.user?.username
+          })
+        })));
+        const visitorAccess = await getDocumentAccess(worldId, filePath, {
+          userId: "visitor", username: "Visitor", isVisitor: true
+        });
+        return sendJson(response, 200, {
+          permissions: node?.metadata?.permissions || null,
+          members,
+          visitorAccess
+        });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
       }
     }
 
@@ -734,6 +797,8 @@ async function router(request, response) {
         if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
+        const parentPath = getParentPathFromCreationPath(body.path);
+        if (parentPath) await assertDocumentAccess(worldId, parentPath, currentUser, "write");
         const result = await createDocumentPlaceholder(worldId, body.path, {
           ...body.metadata,
           createdBy: currentUser?.userId || body.metadata?.createdBy,
@@ -754,6 +819,7 @@ async function router(request, response) {
         if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path || !body.newName) return sendJson(response, 400, { error: "Missing path or newName" });
+        await assertDocumentAccess(worldId, body.path, currentUser, "write");
         const result = await renameDocument(worldId, body.path, body.newName);
         return sendJson(response, 200, result);
       } catch (error) {
@@ -771,6 +837,8 @@ async function router(request, response) {
         if (!body.sourcePath || body.targetParentPath === undefined) {
           return sendJson(response, 400, { error: "Missing sourcePath or targetParentPath" });
         }
+        await assertDocumentAccess(worldId, body.sourcePath, currentUser, "write");
+        if (body.targetParentPath) await assertDocumentAccess(worldId, body.targetParentPath, currentUser, "write");
         const result = await moveDocument(worldId, body.sourcePath, body.targetParentPath || "");
         return sendJson(response, 200, result);
       } catch (error) {
@@ -786,6 +854,9 @@ async function router(request, response) {
         if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
+        await assertDocumentAccess(worldId, body.path, currentUser, "read");
+        const duplicateParentPath = path.dirname(body.path) === "." ? "" : path.dirname(body.path).replace(/\\/g, "/");
+        if (duplicateParentPath) await assertDocumentAccess(worldId, duplicateParentPath, currentUser, "write");
         const result = await duplicateDocument(worldId, body.path, {
           includeChildren: Boolean(body.includeChildren),
           name: body.name,
@@ -809,6 +880,12 @@ async function router(request, response) {
         if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path || !body.metadata) return sendJson(response, 400, { error: "Missing path or metadata" });
+        await assertDocumentAccess(
+          worldId,
+          body.path,
+          currentUser,
+          Object.prototype.hasOwnProperty.call(body.metadata, "permissions") ? "admin" : "write"
+        );
         const result = await updateDocumentMetadata(worldId, body.path, body.metadata);
         return sendJson(response, 200, result);
       } catch (error) {

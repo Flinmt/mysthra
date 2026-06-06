@@ -5,6 +5,10 @@ const users = require("./users");
 const collaboration = require("./collaboration");
 const {
   getFileTree,
+  getVisibleFileTree,
+  getDocumentAccess,
+  assertDocumentAccess,
+  hasDocumentAccessLevel,
   createDocument,
   createDocumentPlaceholder,
   readDocument,
@@ -23,6 +27,10 @@ module.exports = {
   ...users,
   ...collaboration,
   getFileTree,
+  getVisibleFileTree,
+  getDocumentAccess,
+  assertDocumentAccess,
+  hasDocumentAccessLevel,
   createDocument,
   createDocumentPlaceholder,
   readDocument,
