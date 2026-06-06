@@ -17,8 +17,12 @@ const {
   duplicateAsset,
   duplicateDocument,
   listAssets,
+  listWorldMembers,
   listWorlds,
   getFileTree,
+  getDocumentAccess,
+  getVisibleFileTree,
+  getWorldRole,
   getPathByUid,
   isWorldPublicReadable,
   moveAsset,
@@ -31,6 +35,7 @@ const {
   setHomePage,
   updateDocumentContent,
   updateDocumentMetadata,
+  updateWorldMemberRole,
   updateWorld
 } = require("../../src/services");
 
@@ -180,6 +185,89 @@ test("world members filter common user world access", async () => {
   const adminWorlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
   assert.equal(adminWorlds.some((world) => world.id === worldA), true);
   assert.equal(adminWorlds.some((world) => world.id === worldB), true);
+});
+
+test("world members support per-world admin roles", async () => {
+  const worldName = "core-members-roles";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const member = await createUser({ username: `member-role-${Date.now()}`, password: "secret-pass" });
+  const admin = await createUser({ username: `admin-role-${Date.now()}`, password: "secret-pass" });
+
+  await addWorldMember(worldName, member.id);
+  await addWorldMember(worldName, admin.id, "admin");
+
+  let members = await listWorldMembers(worldName);
+  assert.equal(members.find((item) => item.userId === member.id).role, "member");
+  assert.equal(members.find((item) => item.userId === admin.id).role, "admin");
+
+  assert.equal(await getWorldRole(worldName, { userId: member.id, username: member.username }), "member");
+  assert.equal(await getWorldRole(worldName, { userId: admin.id, username: admin.username }), "world-admin");
+  assert.equal(await getWorldRole(worldName, { userId: "admin", username: "admin", isAdmin: true }), "global-admin");
+
+  members = await updateWorldMemberRole(worldName, member.id, "admin");
+  assert.equal(members.find((item) => item.userId === member.id).role, "admin");
+  assert.equal(await getWorldRole(worldName, { userId: member.id, username: member.username }), "world-admin");
+});
+
+test("document permissions default to world member write access", async () => {
+  const worldName = "core-document-permissions-default";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const member = await createUser({ username: `doc-default-${Date.now()}`, password: "secret-pass" });
+  await addWorldMember(worldName, member.id);
+  const container = await createDocument(worldName, "Lore", "", { type: "container", ownerUserId: member.id });
+
+  assert.equal(await getDocumentAccess(worldName, container.path, { userId: member.id, username: member.username }), "admin");
+});
+
+test("document permissions restrict and inherit per user", async () => {
+  const worldName = "core-document-permissions-acl";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const owner = await createUser({ username: `doc-owner-${Date.now()}`, password: "secret-pass" });
+  const reader = await createUser({ username: `doc-reader-${Date.now()}`, password: "secret-pass" });
+  const writer = await createUser({ username: `doc-writer-${Date.now()}`, password: "secret-pass" });
+  const blocked = await createUser({ username: `doc-blocked-${Date.now()}`, password: "secret-pass" });
+  await addWorldMember(worldName, owner.id);
+  await addWorldMember(worldName, reader.id);
+  await addWorldMember(worldName, writer.id);
+  await addWorldMember(worldName, blocked.id);
+
+  const container = await createDocument(worldName, "Private", "", { type: "container", ownerUserId: owner.id });
+  const tab = await createDocument(worldName, `${container.path}/Notes`, "Secret", { type: "tab", contentType: "wiki", ownerUserId: owner.id });
+
+  await updateDocumentMetadata(worldName, container.path, {
+    permissions: {
+      inherit: false,
+      users: {
+        [reader.id]: "read",
+        [writer.id]: "write"
+      }
+    }
+  });
+
+  assert.equal(await getDocumentAccess(worldName, tab.path, { userId: reader.id, username: reader.username }), "read");
+  assert.equal(await getDocumentAccess(worldName, tab.path, { userId: writer.id, username: writer.username }), "write");
+  assert.equal(await getDocumentAccess(worldName, tab.path, { userId: blocked.id, username: blocked.username }), "none");
+  assert.equal(await getDocumentAccess(worldName, container.path, { userId: owner.id, username: owner.username }), "admin");
+
+  await updateDocumentMetadata(worldName, tab.path, {
+    permissions: {
+      inherit: true,
+      users: {
+        [reader.id]: "admin"
+      }
+    }
+  });
+
+  assert.equal(await getDocumentAccess(worldName, tab.path, { userId: reader.id, username: reader.username }), "admin");
+
+  const visibleTree = await getVisibleFileTree(worldName, { userId: blocked.id, username: blocked.username });
+  assert.equal(visibleTree.some((node) => node.path === container.path), false);
 });
 
 test("document tree supports containers and editable tabs", async () => {

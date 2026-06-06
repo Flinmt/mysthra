@@ -94,15 +94,11 @@ async function resolveTabRoom(room) {
     throw error;
   }
 
-  const parentPath = path.dirname(safePath) === "." ? "" : path.dirname(safePath).replace(/\\/g, "/");
-  const parentMetadata = parentPath ? await readDocumentMetadata(pagesDir, parentPath) : {};
-
   return {
     ...room,
     path: safePath,
     pagesDir,
-    indexPath: path.join(pagesDir, safePath, "index.md"),
-    isLocked: Boolean(parentMetadata.isLocked || metadata.isLocked)
+    indexPath: path.join(pagesDir, safePath, "index.md")
   };
 }
 
@@ -169,6 +165,16 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
     }
 
     const resolvedRoom = await resolveTabRoom(room);
+    const { getDocumentAccess, hasDocumentAccessLevel } = require("./tree");
+    const visitor = { userId: "visitor", username: "Visitor", isVisitor: true };
+    const access = await getDocumentAccess(room.worldId, resolvedRoom.path, visitor);
+    if (!hasDocumentAccessLevel(access, "read")) {
+      debugCollaboration("auth-reject", { documentName, userId: "visitor", reason: "forbidden" });
+      const error = new Error("Forbidden");
+      error.reason = "forbidden";
+      error.code = 4403;
+      throw error;
+    }
     connectionConfig.readOnly = true;
     debugCollaboration("auth", { documentName, userId: "visitor", scope: "readonly" });
     return { room: resolvedRoom, user: { userId: "visitor", username: "Visitor", isVisitor: true } };
@@ -189,7 +195,16 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   }
 
   const resolvedRoom = await resolveTabRoom(room);
-  if (resolvedRoom.isLocked) {
+  const { getDocumentAccess, hasDocumentAccessLevel } = require("./tree");
+  const access = await getDocumentAccess(room.worldId, resolvedRoom.path, user);
+  if (!hasDocumentAccessLevel(access, "read")) {
+    debugCollaboration("auth-reject", { documentName, userId: user.userId, reason: "forbidden" });
+    const error = new Error("Forbidden");
+    error.reason = "forbidden";
+    error.code = 4403;
+    throw error;
+  }
+  if (!hasDocumentAccessLevel(access, "write")) {
     connectionConfig.readOnly = true;
   }
   debugCollaboration("auth", {
@@ -214,7 +229,12 @@ async function updateConnectionLockState(documentName, connection) {
     }
     throw error;
   }
-  connection.readOnly = Boolean(connection.context?.user?.isVisitor || resolvedRoom.isLocked);
+  const { getDocumentAccess, hasDocumentAccessLevel } = require("./tree");
+  const access = await getDocumentAccess(room.worldId, resolvedRoom.path, connection.context?.user).catch(() => "none");
+  connection.readOnly = Boolean(
+    connection.context?.user?.isVisitor ||
+    !hasDocumentAccessLevel(access, "write")
+  );
 }
 
 async function resolveStorableTabRoom(room) {
@@ -260,23 +280,6 @@ function closeCollaborationRoom(worldName, tabUid) {
   activeCollaborationServer.closeConnections(`world:${safeWorldName}:tab:${safeTabUid}`);
 }
 
-async function broadcastWorldLockUpdate(worldName, documentPath, isLocked) {
-  if (!activeCollaborationServer) return;
-  const safeWorldName = validateWorldName(worldName);
-  const safeDocumentPath = validateRelativePath(documentPath);
-  const directConnection = await activeCollaborationServer.openDirectConnection(`world:${safeWorldName}:presence`);
-  try {
-    directConnection.document?.broadcastStateless(JSON.stringify({
-      type: "document-lock",
-      worldId: safeWorldName,
-      path: safeDocumentPath,
-      isLocked: Boolean(isLocked)
-    }));
-  } finally {
-    await directConnection.disconnect();
-  }
-}
-
 async function broadcastWorldTreeUpdate(worldName, details = {}) {
   if (!activeCollaborationServer) return;
   const safeWorldName = validateWorldName(worldName);
@@ -313,7 +316,6 @@ async function copyCollaborationState(worldName, sourceMetadata, targetMetadata)
 module.exports = {
   BLOCKNOTE_FRAGMENT,
   COLLABORATION_PATH,
-  broadcastWorldLockUpdate,
   broadcastWorldTreeUpdate,
   closeCollaborationRoom,
   copyCollaborationState,

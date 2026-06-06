@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
+import DropdownSelect from './DropdownSelect';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -28,8 +29,7 @@ import {
   normalizeCoverArea,
   orderTreeWithHome,
   pathParent,
-  prepareAssetUpload,
-  updateTreeNodeMetadata
+  prepareAssetUpload
 } from './workspace/utils';
 
 const DOCUMENT_ICON_CATEGORIES = [
@@ -404,6 +404,8 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
   const isHome = worldData?.homePage === node.path;
   const visibleChildren = isSearching ? (node.children || []) : getTreeChildren(node);
   const showChildren = isOpen || isSearching;
+  const canWriteNode = !isVisitor && hasDocumentAccess(node.metadata?.currentUserAccess, 'write');
+  const canAdminNode = !isVisitor && hasDocumentAccess(node.metadata?.currentUserAccess, 'admin');
   
   useEffect(() => {
     if (isRenaming) setEditValue(node.name);
@@ -417,9 +419,9 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
     <li className="tree-document">
       <div 
         className={`tree-node ${isSelected ? 'selected' : ''}`}
-        draggable={!isRenaming && !isVisitor}
+        draggable={!isRenaming && canWriteNode}
         onContextMenu={(e) => {
-          if (isVisitor) return;
+          if (!canWriteNode) return;
           if (isRenaming) return;
           e.preventDefault();
           e.stopPropagation();
@@ -465,7 +467,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
           )}
         </div>
         <div className="tree-node-actions">
-          {!isVisitor && (
+          {canWriteNode && (
             <>
               <button
                 className="node-action-btn"
@@ -481,13 +483,15 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
               >
                 <Edit2 size={14} />
               </button>
-              <button
-                className="node-action-btn danger"
-                onClick={(e) => { e.stopPropagation(); onDelete(node); }}
-                title={t('common.delete')}
-              >
-                <Trash2 size={14} />
-              </button>
+              {canAdminNode && (
+                <button
+                  className="node-action-btn danger"
+                  onClick={(e) => { e.stopPropagation(); onDelete(node); }}
+                  title={t('common.delete')}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </>
           )}
         </div>
@@ -495,6 +499,12 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
       {showChildren && visibleChildren.length > 0 && <FileTree nodes={visibleChildren} onFileSelect={onFileSelect} selectedFile={selectedFile} onCreateChild={onCreateChild} onContextMenu={onContextMenu} renamingPath={renamingPath} onRename={onRename} onRequestRename={onRequestRename} onDelete={onDelete} isSearching={isSearching} isVisitor={isVisitor} worldData={worldData} />}
     </li>
   );
+}
+
+const DOCUMENT_ACCESS_RANK = { none: 0, read: 1, write: 2, admin: 3 };
+
+function hasDocumentAccess(access, required) {
+  return (DOCUMENT_ACCESS_RANK[access] || 0) >= (DOCUMENT_ACCESS_RANK[required] || 0);
 }
 
 export default function WorldWorkspace({ params, isVisitor = false, currentUser = null }) {
@@ -531,6 +541,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [worldActionsMenu, setWorldActionsMenu] = useState(false);
   const [membersPanel, setMembersPanel] = useState({ isOpen: false, loading: false, members: [], users: [], userId: '', username: '', password: '', error: '' });
+  const [documentPermissionsPanel, setDocumentPermissionsPanel] = useState({ isOpen: false, loading: false, members: [], visitorAccess: "none", draft: { inherit: true, users: {} }, error: '' });
   const [worldPresenceUsers, setWorldPresenceUsers] = useState([]);
   const [activeTabVisitorCount, setActiveTabVisitorCount] = useState(0);
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
@@ -607,12 +618,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [addToast, t, worldId]);
 
   const fetchMembersPanelData = useCallback(async () => {
-    if (!currentUser?.isAdmin) return;
+    if (!worldData?.canManageMembers) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const [membersRes, usersRes] = await Promise.all([
         fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`),
-        fetch('/api/users')
+        fetch(`/api/worlds/${encodeURIComponent(worldId)}/available-users`)
       ]);
       if (!membersRes.ok || !usersRes.ok) {
         setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
@@ -630,10 +641,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     } catch {
       setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
     }
-  }, [currentUser?.isAdmin, t, worldId]);
+  }, [t, worldData?.canManageMembers, worldId]);
 
   const openMembersPanel = () => {
-    if (!currentUser?.isAdmin) return;
+    if (!worldData?.canManageMembers) return;
     setMembersPanel(prev => ({ ...prev, isOpen: true, error: '' }));
     fetchMembersPanelData();
   };
@@ -644,17 +655,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (message.worldId !== worldId) return;
       if (message.type === 'document-tree') {
         fetchTree();
-        return;
-      }
-      if (message.type !== 'document-lock') return;
-      const metadata = { isLocked: Boolean(message.isLocked) };
-      setTree(prev => updateTreeNodeMetadata(prev, message.path, metadata));
-      setSelectedContainer(prev => {
-        if (!prev || prev.path !== message.path) return prev;
-        return { ...prev, metadata: { ...prev.metadata, ...metadata } };
-      });
-      if (selectedContainerPathRef.current === message.path) {
-        setViewMode(message.isLocked ? 'view' : 'edit');
       }
     } catch {
       // Ignore stateless messages not produced by Mysthra.
@@ -731,7 +731,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, []);
 
   const saveDocument = useCallback(async (silent = true) => {
-    if (!activeTab || isVisitor) return false;
+    if (!activeTab || isVisitor || !hasDocumentAccess(activeTab.metadata?.currentUserAccess, 'write')) return false;
     const savedPath = activeTab.path;
     const savedContent = latestContentRef.current;
     setSaveStatus('saving');
@@ -774,8 +774,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
     setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
-    setViewMode(selectedContainer?.metadata?.isLocked ? 'view' : 'edit');
-  }, [selectedContainer?.uid, selectedContainer?.name, selectedContainer?.metadata?.isLocked]);
+    setViewMode('edit');
+  }, [selectedContainer?.uid, selectedContainer?.name]);
 
   useEffect(() => {
     if (!activeTab || isVisitor || !isDirty || isCollaborativeContentType(activeTab.contentType)) return;
@@ -1042,12 +1042,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const openTabCreationPanel = () => {
-    if (isVisitor || !selectedContainer) return;
+    if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
     setTabCreationPanel({ isOpen: true, name: getUniqueTabName(), contentType: 'wiki', mapFile: null });
   };
 
   const handleCreateTabInline = async () => {
-    if (isVisitor || !selectedContainer) return;
+    if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
     const tabName = tabCreationPanel.name.trim();
     if (!tabName) return;
     if (isDirty) {
@@ -1237,7 +1237,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const addExistingMember = async () => {
-    if (!currentUser?.isAdmin || !membersPanel.userId) return;
+    if (!worldData?.canManageMembers || !membersPanel.userId) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
@@ -1258,7 +1258,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const createAndAddMember = async () => {
-    if (!currentUser?.isAdmin || !membersPanel.username.trim() || !membersPanel.password) return;
+    if (!worldData?.canManageMembers || !membersPanel.username.trim() || !membersPanel.password) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
@@ -1289,7 +1289,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeMember = async (userId) => {
-    if (!currentUser?.isAdmin) return;
+    if (!worldData?.canManageMembers) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
@@ -1304,6 +1304,87 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const updateMemberRole = async (userId, role) => {
+    if (!worldData?.canManageMembers) return;
+    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
+      } else {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
+      }
+    } catch {
+      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const openDocumentPermissionsPanel = async () => {
+    if (!selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'admin')) return;
+    setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: true, loading: true, error: '' }));
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/permissions?path=${encodeURIComponent(selectedContainer.path)}`);
+      if (!res.ok) {
+        setDocumentPermissionsPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
+        return;
+      }
+      const data = await res.json();
+      const permissions = data.permissions || { inherit: true, users: {} };
+      setDocumentPermissionsPanel({
+        isOpen: true,
+        loading: false,
+        members: data.members || [],
+        visitorAccess: data.visitorAccess || "none",
+        draft: {
+          inherit: permissions.inherit !== false,
+          users: permissions.users || {}
+        },
+        error: ''
+      });
+    } catch {
+      setDocumentPermissionsPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const setDocumentPermissionUserAccess = (userId, access) => {
+    setDocumentPermissionsPanel(prev => {
+      const users = { ...(prev.draft.users || {}) };
+      users[userId] = access;
+      return { ...prev, draft: { ...prev.draft, users } };
+    });
+  };
+
+  const saveDocumentPermissions = async () => {
+    if (!selectedContainer) return;
+    setDocumentPermissionsPanel(prev => ({ ...prev, loading: true, error: '' }));
+    const users = Object.fromEntries(Object.entries(documentPermissionsPanel.draft.users || {}).filter(([, access]) => ['none', 'read', 'write', 'admin'].includes(access)));
+    const permissions = documentPermissionsPanel.draft.inherit && Object.keys(users).length === 0
+      ? null
+      : { inherit: documentPermissionsPanel.draft.inherit, users };
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata: { permissions } })
+      });
+      if (!res.ok) {
+        setDocumentPermissionsPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
+        return;
+      }
+      await fetchTree();
+      setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false, loading: false }));
+      addToast(t('common.saved'), 'success');
+    } catch {
+      setDocumentPermissionsPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
     }
   };
 
@@ -1427,7 +1508,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, []);
 
   const openDocumentIconPicker = (event) => {
-    if (isVisitor || !selectedContainer) return;
+    if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const pickerWidth = 420;
     const pickerHeight = 520;
@@ -1969,10 +2050,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
-  const updateSelectedContainerMetadata = (metadata) => {
-    setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
-  };
-
   const updateActiveTabMetadata = (metadata) => {
     setActiveTab(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
   };
@@ -1994,42 +2071,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     } catch {
       addToast(t('common.error'), 'error');
       return false;
-    }
-  };
-
-  const saveSelectedContainerMetadata = async (metadata) => {
-    if (!selectedContainer) return false;
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: selectedContainer.path, metadata })
-      });
-      if (!res.ok) {
-        addToast(t('common.error'), 'error');
-        return false;
-      }
-      await fetchTree();
-      return true;
-    } catch {
-      addToast(t('common.error'), 'error');
-      return false;
-    }
-  };
-
-  const toggleDocumentLock = async () => {
-    if (isVisitor || !selectedContainer) return;
-
-    const previousMode = viewMode;
-    const nextIsLocked = viewMode === 'edit';
-    const nextMode = nextIsLocked ? 'view' : 'edit';
-    setViewMode(nextMode);
-    updateSelectedContainerMetadata({ isLocked: nextIsLocked });
-
-    const saved = await saveSelectedContainerMetadata({ isLocked: nextIsLocked });
-    if (!saved) {
-      setViewMode(previousMode);
-      updateSelectedContainerMetadata({ isLocked: previousMode !== 'edit' });
     }
   };
 
@@ -2227,8 +2268,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
-  const isAdmin = Boolean(currentUser?.isAdmin);
-  const isDocumentUnlocked = !isVisitor && viewMode === 'edit';
+  const canManageMembers = Boolean(worldData?.canManageMembers);
+  const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
+  const canWriteSelectedContainer = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'write');
+  const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write');
+  const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
   const saveStatusLabel = saveStatus === 'saving'
@@ -2270,15 +2314,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           )}
         </div>
       )}
-      <button
-        type="button"
-        className={`editor-lock-toggle ${isDocumentUnlocked ? 'unlocked' : ''}`}
-        onClick={toggleDocumentLock}
-        disabled={!selectedContainer}
-        title={isDocumentUnlocked ? t('workspace.lock_document') : t('workspace.unlock_document')}
-      >
-        {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
-      </button>
+      {selectedContainer && canManageDocumentPermissions && (
+        <button
+          type="button"
+          className="editor-permissions-toggle"
+          onClick={openDocumentPermissionsPanel}
+          title={t('workspace.document_permissions')}
+        >
+          <Shield size={16} />
+        </button>
+      )}
       {selectedContainer && (
         <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
           <button
@@ -2301,7 +2346,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                   <span>{t('workspace.share_tab')}</span>
                 </button>
               )}
-              {activeTab && !isMapTab && (
+              {activeTab && !isMapTab && canWriteActiveTab && (
                 <>
                   <button
                     type="button"
@@ -2351,10 +2396,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     <div className="editor-page-title-row">
       <button
         type="button"
-        className={`editor-page-icon ${selectedContainer && !isVisitor ? 'is-editable' : ''}`}
-        onClick={openDocumentIconPicker}
-        disabled={!selectedContainer || isVisitor}
-        title={selectedContainer && !isVisitor ? t('workspace.change_icon') : undefined}
+          className={`editor-page-icon ${selectedContainer && canWriteSelectedContainer ? 'is-editable' : ''}`}
+          onClick={openDocumentIconPicker}
+          disabled={!selectedContainer || !canWriteSelectedContainer}
+          title={selectedContainer && canWriteSelectedContainer ? t('workspace.change_icon') : undefined}
       >
         {React.createElement(getDocumentIcon(selectedContainer?.icon), { size: 20 })}
       </button>
@@ -2381,9 +2426,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         ) : (
           <h1
             onDoubleClick={() => {
-              if (!isVisitor) setPageTitleEdit({ isEditing: true, value: selectedContainer.name });
+              if (canWriteSelectedContainer) setPageTitleEdit({ isEditing: true, value: selectedContainer.name });
             }}
-            title={!isVisitor ? t('workspace.rename_title_hint') : undefined}
+            title={canWriteSelectedContainer ? t('workspace.rename_title_hint') : undefined}
           >
             {selectedContainer?.name || t('workspace.select_document')}
           </h1>
@@ -2420,7 +2465,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`}
             onClick={() => selectTab(tab)}
             onContextMenu={event => {
-              if (isVisitor) return;
+              if (isVisitor || !hasDocumentAccess(tab.metadata?.currentUserAccess, 'write')) return;
               event.preventDefault();
               event.stopPropagation();
               setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
@@ -2431,7 +2476,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </button>
         )
       ))}
-      {!isVisitor && (
+      {!isVisitor && canWriteSelectedContainer && (
         <button
           type="button"
           className="editor-tab-add"
@@ -2456,7 +2501,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <ArrowLeft size={18} />
               </button>
             )}
-            {isAdmin && (
+            {canManageMembers && (
               <button className="sidebar-icon-button" onClick={openMembersPanel} title={t('workspace.manage_members')}>
                 <Users size={18} />
               </button>
@@ -2693,7 +2738,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
               <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && activeTab?.contentType === 'wiki' && (
+                {!isVisitor && selectedContainer && activeTab?.contentType === 'wiki' && canWriteActiveTab && (
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -2846,7 +2891,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
                         isVisitor={isVisitor}
-                        locked={Boolean(selectedContainer?.metadata?.isLocked)}
+                        locked={!canWriteActiveTab}
                         initialMapAssetPath={activeTab.metadata?.mapBackgroundAssetPath}
                         documentTree={tree}
                         assetImages={assetImages}
@@ -2900,11 +2945,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                       />
                       ) : (
                       <WikiBlockEditor
-                        key={`${activeTab.path}:${selectedContainer?.metadata?.isLocked ? 'locked' : 'unlocked'}`}
+                        key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
                         contentKey={activeTab.path}
                         content={fileContent}
                         editable={isDocumentUnlocked && !isVisitor}
-                        locked={Boolean(selectedContainer?.metadata?.isLocked)}
+                        locked={!canWriteActiveTab}
                         worldId={worldId}
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
@@ -2933,7 +2978,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <div className="editor-placeholder muted">
                       <Book size={48} />
                       <p>Esta página não possui abas de conteúdo.</p>
-                      {!isVisitor && (
+                      {!isVisitor && canWriteSelectedContainer && (
                         <button
                           type="button"
                           className="btn-secondary"
@@ -3347,87 +3392,186 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       )}
 
       {membersPanel.isOpen && (
-        <div className="duplicate-modal-overlay" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}>
-          <div className="modal-content glass-panel duplicate-modal" onClick={event => event.stopPropagation()}>
-            <button
-              type="button"
-              className="duplicate-modal-close"
-              onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}
-              aria-label={t('common.cancel')}
-            >
-              <X size={16} />
-            </button>
-            <div className="duplicate-modal-header">
-              <div className="duplicate-modal-icon">
-                <Users size={22} />
-              </div>
+        <div className="modal-backdrop" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}>
+          <div className="user-admin-modal members-admin-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="user-admin-modal-header">
               <div>
-                <h3>{t('workspace.world_members')}</h3>
+                <h2>{t('workspace.world_members')}</h2>
                 <p>{t('workspace.world_members_hint')}</p>
               </div>
+              <button type="button" className="user-admin-close" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))} disabled={membersPanel.loading} aria-label={t('common.cancel')}>
+                ×
+              </button>
             </div>
 
-            <div className="members-panel-section">
-              <div className="context-menu-section-label">{t('workspace.current_members')}</div>
-              {membersPanel.members.length === 0 ? (
-                <span className="context-menu-empty">{t('workspace.no_members')}</span>
-              ) : (
-                <div className="members-list">
-                  {membersPanel.members.map(member => (
-                    <div key={member.userId} className="member-row">
-                      <span>{member.user?.username || member.userId}</span>
-                      <button type="button" className="node-action-btn danger" onClick={() => removeMember(member.userId)} disabled={membersPanel.loading}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
+            <div className="user-admin-modal-body members-admin-grid">
+              <div className="user-admin-directory">
+                <div className="user-admin-section-title">{t('workspace.current_members')}</div>
+                {membersPanel.members.length === 0 ? (
+                  <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
+                ) : (
+                  <div className="user-admin-list members-list">
+                    {membersPanel.members.map(member => (
+                      <div key={member.userId} className="member-row">
+                        <div className="member-row-main">
+                          <strong>{member.user?.username || member.userId}</strong>
+                        </div>
+                        <div className="member-row-actions">
+                          <div className="user-admin-role-segments" aria-label={t('workspace.member_role')}>
+                            {[
+                              ['member', t('workspace.member_role_member')],
+                              ['admin', t('workspace.member_role_admin')]
+                            ].map(([nextRole, label]) => (
+                              <button key={nextRole} type="button" className={member.role === nextRole ? 'active' : ''} disabled={membersPanel.loading} onClick={() => {
+                                if (nextRole !== member.role) updateMemberRole(member.userId, nextRole)
+                              }}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <button type="button" className="user-admin-text-danger" onClick={() => removeMember(member.userId)} disabled={membersPanel.loading}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="members-add-card">
+                <div className="user-admin-section-title">{t('workspace.add_existing_member')}</div>
+                <div className="member-form-row">
+                  <DropdownSelect
+                    value={membersPanel.userId}
+                    onChange={userId => setMembersPanel(prev => ({ ...prev, userId }))}
+                    options={availableUsers.map(user => ({ value: user.id, label: user.username }))}
+                    placeholder={t('workspace.select_user')}
+                    disabled={membersPanel.loading || availableUsers.length === 0}
+                  />
+                  <button type="button" className="user-admin-secondary" onClick={addExistingMember} disabled={membersPanel.loading || !membersPanel.userId}>
+                    {t('common.add')}
+                  </button>
                 </div>
-              )}
-            </div>
 
-            <div className="members-panel-section">
-              <div className="context-menu-section-label">{t('workspace.add_existing_member')}</div>
-              <div className="member-form-row">
-                <select
-                  value={membersPanel.userId}
-                  onChange={event => setMembersPanel(prev => ({ ...prev, userId: event.target.value }))}
-                  disabled={membersPanel.loading || availableUsers.length === 0}
-                >
-                  <option value="">{t('workspace.select_user')}</option>
-                  {availableUsers.map(user => (
-                    <option key={user.id} value={user.id}>{user.username}</option>
-                  ))}
-                </select>
-                <button type="button" className="btn-secondary" onClick={addExistingMember} disabled={membersPanel.loading || !membersPanel.userId}>
-                  {t('common.add')}
-                </button>
+                <div className="members-create-divider" />
+
+                <div className="user-admin-section-title">{t('workspace.create_member_user')}</div>
+                <div className="user-admin-form-stack">
+                  <input
+                    type="text"
+                    value={membersPanel.username}
+                    onChange={event => setMembersPanel(prev => ({ ...prev, username: event.target.value }))}
+                    placeholder={t('login.username_placeholder')}
+                    disabled={membersPanel.loading}
+                  />
+                  <input
+                    type="password"
+                    value={membersPanel.password}
+                    onChange={event => setMembersPanel(prev => ({ ...prev, password: event.target.value }))}
+                    placeholder={t('login.password_placeholder')}
+                    disabled={membersPanel.loading}
+                  />
+                  <button type="button" className="user-admin-primary" onClick={createAndAddMember} disabled={membersPanel.loading || !membersPanel.username.trim() || !membersPanel.password}>
+                    {t('workspace.create_and_add_member')}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="members-panel-section">
-              <div className="context-menu-section-label">{t('workspace.create_member_user')}</div>
-              <div className="member-form-stack">
+            {membersPanel.error && <div className="user-admin-error">{membersPanel.error}</div>}
+          </div>
+        </div>
+      )}
+
+      {documentPermissionsPanel.isOpen && selectedContainer && (
+        <div className="modal-backdrop" onClick={() => setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false }))}>
+          <div className="user-admin-modal document-permissions-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="user-admin-modal-header">
+              <div>
+                <h2>{t('workspace.document_permissions')}</h2>
+                <p>{selectedContainer.name}</p>
+              </div>
+              <button type="button" className="user-admin-close" onClick={() => setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false }))} disabled={documentPermissionsPanel.loading} aria-label={t('common.cancel')}>
+                ×
+              </button>
+            </div>
+
+            <div className="user-admin-modal-body document-permissions-body">
+              <label className="document-permissions-inherit">
                 <input
-                  type="text"
-                  value={membersPanel.username}
-                  onChange={event => setMembersPanel(prev => ({ ...prev, username: event.target.value }))}
-                  placeholder={t('login.username_placeholder')}
-                  disabled={membersPanel.loading}
+                  type="checkbox"
+                  checked={documentPermissionsPanel.draft.inherit}
+                  onChange={event => setDocumentPermissionsPanel(prev => ({ ...prev, draft: { ...prev.draft, inherit: event.target.checked } }))}
+                  disabled={documentPermissionsPanel.loading}
                 />
-                <input
-                  type="password"
-                  value={membersPanel.password}
-                  onChange={event => setMembersPanel(prev => ({ ...prev, password: event.target.value }))}
-                  placeholder={t('login.password_placeholder')}
-                  disabled={membersPanel.loading}
-                />
-                <button type="button" className="btn-primary" onClick={createAndAddMember} disabled={membersPanel.loading || !membersPanel.username.trim() || !membersPanel.password}>
-                  {t('workspace.create_and_add_member')}
+                <span>{t('workspace.document_permissions_inherit')}</span>
+              </label>
+
+              <div className="user-admin-section-title">{t('workspace.document_permissions_users')}</div>
+              <div className="document-permissions-list">
+                {documentPermissionsPanel.loading ? (
+                  <div className="user-admin-empty compact">{t('common.loading')}</div>
+                ) : documentPermissionsPanel.members.length === 0 ? (
+                  <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
+                ) : (
+                  documentPermissionsPanel.members.map(member => {
+                    const userId = member.userId;
+                    const hasExplicitAccess = Object.prototype.hasOwnProperty.call(documentPermissionsPanel.draft.users || {}, userId);
+                    const access = hasExplicitAccess ? documentPermissionsPanel.draft.users[userId] : (member.documentAccess || 'none');
+                    return (
+                      <div key={userId} className="document-permissions-row">
+                        <strong>{member.user?.username || userId}</strong>
+                  <div className="user-admin-role-segments" aria-label={t('workspace.document_permissions')}>
+                          {[
+                            ['none', t('dashboard.no_access')],
+                            ['read', t('workspace.document_access_read')],
+                            ['write', t('workspace.document_access_write')],
+                            ['admin', t('workspace.document_access_admin')]
+                          ].map(([nextAccess, label]) => (
+                            <button key={nextAccess} type="button" className={access === nextAccess ? 'active' : ''} disabled={documentPermissionsPanel.loading} onClick={() => setDocumentPermissionUserAccess(userId, nextAccess)}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="user-admin-section-title">{t('workspace.document_permissions_visitors')}</div>
+                  <div className="document-permissions-list">
+                <div className="document-permissions-row">
+                  <strong>{t('workspace.document_permissions_visitors')}</strong>
+                  <div className="user-admin-role-segments segments-visitor" aria-label={t('workspace.document_permissions')}>
+                    {[
+                      ['none', t('dashboard.no_access')],
+                      ['read', t('workspace.document_access_read')]
+                    ].map(([nextAccess, label]) => {
+                      const hasExplicitAccess = Object.prototype.hasOwnProperty.call(documentPermissionsPanel.draft.users || {}, 'visitor');
+                      const access = hasExplicitAccess ? documentPermissionsPanel.draft.users.visitor : documentPermissionsPanel.visitorAccess;
+                      return (
+                        <button key={nextAccess} type="button" className={access === nextAccess ? 'active' : ''} disabled={documentPermissionsPanel.loading} onClick={() => setDocumentPermissionUserAccess('visitor', nextAccess)}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {documentPermissionsPanel.error && <div className="user-admin-error">{documentPermissionsPanel.error}</div>}
+
+              <div className="document-permissions-actions">
+                <button type="button" className="user-admin-secondary" onClick={() => setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false }))} disabled={documentPermissionsPanel.loading}>
+                  {t('common.cancel')}
+                </button>
+                <button type="button" className="user-admin-primary" onClick={saveDocumentPermissions} disabled={documentPermissionsPanel.loading}>
+                  {documentPermissionsPanel.loading ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </div>
-
-            {membersPanel.error && <div className="error-msg">{membersPanel.error}</div>}
           </div>
         </div>
       )}
@@ -3441,31 +3585,39 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           >
             {contextMenu.node ? (
               <>
-                <button onClick={() => { createDocumentInline(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Plus size={14} /> {t('workspace.create_document')}
-                </button>
-                {isAdmin && isRootContainer(contextMenu.node) && worldData?.homePage !== contextMenu.node.path && (
+                {hasDocumentAccess(contextMenu.node.metadata?.currentUserAccess, 'write') && (
+                  <button onClick={() => { createDocumentInline(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                    <Plus size={14} /> {t('workspace.create_document')}
+                  </button>
+                )}
+                {canManageMembers && isRootContainer(contextMenu.node) && worldData?.homePage !== contextMenu.node.path && (
                   <button onClick={() => { updateHomePage(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                     <Home size={14} /> {t('workspace.set_home_page')}
                   </button>
                 )}
-                {isAdmin && isRootContainer(contextMenu.node) && worldData?.homePage === contextMenu.node.path && (
+                {canManageMembers && isRootContainer(contextMenu.node) && worldData?.homePage === contextMenu.node.path && (
                   <button onClick={() => { updateHomePage(null); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                     <Home size={14} /> {t('workspace.unset_home_page')}
                   </button>
                 )}
-                <button onClick={() => { openDuplicatePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Copy size={14} /> {t('workspace.duplicate_document')}
-                </button>
-                <button onClick={() => { openDocumentMovePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <MoveRight size={14} /> {t('workspace.move_document')}
-                </button>
-                <button onClick={() => { setRenamingPath(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Edit2 size={14} /> {t('common.rename')}
-                </button>
-                <button className="danger" onClick={() => { handleDelete(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Trash2 size={14} /> {t('common.delete')}
-                </button>
+                {hasDocumentAccess(contextMenu.node.metadata?.currentUserAccess, 'write') && (
+                  <>
+                    <button onClick={() => { openDuplicatePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                      <Copy size={14} /> {t('workspace.duplicate_document')}
+                    </button>
+                    <button onClick={() => { openDocumentMovePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                      <MoveRight size={14} /> {t('workspace.move_document')}
+                    </button>
+                    <button onClick={() => { setRenamingPath(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                      <Edit2 size={14} /> {t('common.rename')}
+                    </button>
+                  </>
+                )}
+                {hasDocumentAccess(contextMenu.node.metadata?.currentUserAccess, 'admin') && (
+                  <button className="danger" onClick={() => { handleDelete(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                    <Trash2 size={14} /> {t('common.delete')}
+                  </button>
+                )}
               </>
             ) : (
               <button onClick={() => { setContextMenu(prev => ({ ...prev, isOpen: false })); createDocumentInline(); }}>
@@ -3483,31 +3635,37 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
             onClick={(event) => event.stopPropagation()}
           >
-            <button
-              onClick={() => {
-                setRenamingTab({ path: tabContextMenu.node.path, value: tabContextMenu.node.name });
-                setTabContextMenu(prev => ({ ...prev, isOpen: false }));
-              }}
-            >
-              <Edit2 size={14} /> {t('common.rename')}
-            </button>
-            <button
-              onClick={() => {
-                duplicateTab(tabContextMenu.node);
-                setTabContextMenu(prev => ({ ...prev, isOpen: false }));
-              }}
-            >
-              <Copy size={14} /> {t('workspace.duplicate_tab')}
-            </button>
-            <button
-              className="danger"
-              onClick={() => {
-                handleDelete(tabContextMenu.node);
-                setTabContextMenu(prev => ({ ...prev, isOpen: false }));
-              }}
-            >
-              <Trash2 size={14} /> {t('workspace.delete_tab')}
-            </button>
+            {hasDocumentAccess(tabContextMenu.node.metadata?.currentUserAccess, 'write') && (
+              <>
+                <button
+                  onClick={() => {
+                    setRenamingTab({ path: tabContextMenu.node.path, value: tabContextMenu.node.name });
+                    setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+                  }}
+                >
+                  <Edit2 size={14} /> {t('common.rename')}
+                </button>
+                <button
+                  onClick={() => {
+                    duplicateTab(tabContextMenu.node);
+                    setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+                  }}
+                >
+                  <Copy size={14} /> {t('workspace.duplicate_tab')}
+                </button>
+              </>
+            )}
+            {hasDocumentAccess(tabContextMenu.node.metadata?.currentUserAccess, 'admin') && (
+              <button
+                className="danger"
+                onClick={() => {
+                  handleDelete(tabContextMenu.node);
+                  setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+                }}
+              >
+                <Trash2 size={14} /> {t('workspace.delete_tab')}
+              </button>
+            )}
           </div>
         </div>
       )}

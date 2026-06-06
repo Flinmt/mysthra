@@ -3,7 +3,6 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { getWorldPaths, resolveWorldRoot, validateRelativePath, ensureWorldStructure, validateWorldName } = require("../data/filesystem");
 const {
-  broadcastWorldLockUpdate,
   broadcastWorldTreeUpdate,
   closeCollaborationRoom,
   copyCollaborationState,
@@ -13,7 +12,7 @@ const { updateIndex, removeFromIndex } = require("./indexer");
 
 const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "icon",
-  "isLocked",
+  "permissions",
   "order",
   "coverAssetPath",
   "coverPositionX",
@@ -22,6 +21,43 @@ const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "coverZoom",
   "coverCroppedArea"
 ]);
+
+const DOCUMENT_ACCESS_LEVELS = ["none", "read", "write", "admin"];
+const DOCUMENT_ACCESS_RANK = new Map(DOCUMENT_ACCESS_LEVELS.map((level, index) => [level, index]));
+
+function normalizeDocumentAccessLevel(level) {
+  return DOCUMENT_ACCESS_RANK.has(level) ? level : "none";
+}
+
+function hasDocumentAccessLevel(access, required) {
+  return (DOCUMENT_ACCESS_RANK.get(access) || 0) >= (DOCUMENT_ACCESS_RANK.get(required) || 0);
+}
+
+function normalizeDocumentPermissions(permissions) {
+  if (!permissions || typeof permissions !== "object" || Array.isArray(permissions)) return null;
+  const users = {};
+  for (const [userId, access] of Object.entries(permissions.users || {})) {
+    if (!userId) continue;
+    let level = normalizeDocumentAccessLevel(access);
+    if (userId === "visitor" && level !== "none") level = "read";
+    users[userId] = level;
+  }
+  return {
+    inherit: permissions.inherit !== false,
+    users
+  };
+}
+
+function getAncestorPaths(safePath) {
+  const parts = safePath.split("/").filter(Boolean);
+  return parts.map((_, index) => parts.slice(0, index + 1).join("/"));
+}
+
+function createForbiddenError(message = "Forbidden") {
+  const error = new Error(message);
+  error.code = "FORBIDDEN";
+  throw error;
+}
 
 async function getFileTree(worldName) {
   const safeName = validateWorldName(worldName);
@@ -87,6 +123,82 @@ async function getFileTree(worldName) {
   }
   
   return walk(pagesDir);
+}
+
+async function getEffectiveDocumentPermissions(pagesDir, safePath) {
+  const paths = getAncestorPaths(safePath);
+  let users = {};
+  let hasRules = false;
+
+  for (const currentPath of paths) {
+    const metadata = await readDocumentMetadata(pagesDir, currentPath);
+    const permissions = normalizeDocumentPermissions(metadata.permissions);
+    if (!permissions) continue;
+    const nonVisitorEntries = Object.entries(permissions.users).filter(([k]) => k !== "visitor");
+    if (nonVisitorEntries.length > 0) hasRules = true;
+    if (!permissions.inherit) users = {};
+    users = { ...users, ...permissions.users };
+  }
+
+  return { hasRules, users };
+}
+
+async function getDocumentAccess(worldName, docPath, user = null) {
+  const safeName = validateWorldName(worldName);
+  const safePath = validateRelativePath(docPath);
+  await ensureWorldStructure(safeName);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  const metadata = await readDocumentMetadata(pagesDir, safePath);
+  const { getWorldRole } = require("./worlds");
+  const worldRole = await getWorldRole(safeName, user);
+
+  if (worldRole === "global-admin" || worldRole === "world-admin") return "admin";
+  if (user?.userId && metadata.ownerUserId === user.userId) return "admin";
+
+  const effectivePermissions = await getEffectiveDocumentPermissions(pagesDir, safePath);
+  if (user?.isVisitor) {
+    const visitorAccess = effectivePermissions.users["visitor"];
+    if (visitorAccess) return DOCUMENT_ACCESS_RANK.has(visitorAccess) && DOCUMENT_ACCESS_RANK.get(visitorAccess) >= DOCUMENT_ACCESS_RANK.get("read") ? "read" : "none";
+    return effectivePermissions.hasRules ? "none" : "read";
+  }
+
+  if (user?.userId && Object.prototype.hasOwnProperty.call(effectivePermissions.users, user.userId)) {
+    return normalizeDocumentAccessLevel(effectivePermissions.users[user.userId]);
+  }
+
+  if (effectivePermissions.hasRules) return "none";
+  if (worldRole === "member") return "write";
+  return "none";
+}
+
+async function assertDocumentAccess(worldName, docPath, user, requiredAccess) {
+  const access = await getDocumentAccess(worldName, docPath, user);
+  if (!hasDocumentAccessLevel(access, requiredAccess)) createForbiddenError();
+  return access;
+}
+
+async function filterDocumentTreeByAccess(worldName, tree, user = null) {
+  const filtered = [];
+  for (const node of tree) {
+    const children = await filterDocumentTreeByAccess(worldName, node.children || [], user);
+    const access = await getDocumentAccess(worldName, node.path, user).catch(() => "none");
+    if (hasDocumentAccessLevel(access, "read") || children.length > 0) {
+      filtered.push({
+        ...node,
+        metadata: {
+          ...node.metadata,
+          currentUserAccess: access
+        },
+        children
+      });
+    }
+  }
+  return filtered;
+}
+
+async function getVisibleFileTree(worldName, user = null) {
+  const tree = await getFileTree(worldName);
+  return filterDocumentTreeByAccess(worldName, tree, user);
 }
 
 async function readDocumentMetadata(pagesDir, safePath) {
@@ -229,16 +341,17 @@ async function updateDocumentMetadata(worldName, docPath, metadata) {
       error.code = "INVALID_DOCUMENT_METADATA";
       throw error;
     }
-    nextMetadata[key] = value;
+    nextMetadata[key] = key === "permissions" && value !== null
+      ? normalizeDocumentPermissions(value)
+      : value;
   }
   
   const currentMeta = await readDocumentMetadata(pagesDir, safePath);
   const newMeta = { ...currentMeta, ...nextMetadata };
   await writeDocumentMetadata(pagesDir, safePath, newMeta);
 
-  if (Object.prototype.hasOwnProperty.call(nextMetadata, "isLocked") && Boolean(currentMeta.isLocked) !== Boolean(newMeta.isLocked)) {
+  if (Object.prototype.hasOwnProperty.call(nextMetadata, "permissions")) {
     await closeCollaborativeTabsForPath(safeName, pagesDir, safePath);
-    await broadcastWorldLockUpdate(safeName, safePath, newMeta.isLocked);
   }
   await broadcastWorldTreeUpdate(safeName, { action: "metadata", path: safePath });
   
@@ -547,6 +660,10 @@ async function duplicateDocument(worldName, docPath, options = {}) {
 
 module.exports = {
   getFileTree,
+  getVisibleFileTree,
+  getDocumentAccess,
+  assertDocumentAccess,
+  hasDocumentAccessLevel,
   createDocument,
   createDocumentPlaceholder,
   readDocument,

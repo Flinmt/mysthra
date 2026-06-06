@@ -19,8 +19,27 @@ const THUMBNAIL_TYPES = {
   ".webp": "image/webp"
 };
 
+const WORLD_MEMBER_ROLES = new Set(["member", "admin"]);
+
+function normalizeWorldMemberRole(role) {
+  return WORLD_MEMBER_ROLES.has(role) ? role : "member";
+}
+
+function normalizeWorldMember(member) {
+  return {
+    ...member,
+    role: normalizeWorldMemberRole(member?.role)
+  };
+}
+
 function isWorldMemberConfig(worldData, userId) {
   return Array.isArray(worldData?.members) && worldData.members.some((member) => member.userId === userId);
+}
+
+function isWorldAdminConfig(worldData, userId) {
+  return Array.isArray(worldData?.members) && worldData.members.some((member) => (
+    member.userId === userId && normalizeWorldMemberRole(member.role) === "admin"
+  ));
 }
 
 function normalizePublicRead(value) {
@@ -243,6 +262,21 @@ async function isWorldMember(worldId, userId) {
   return isWorldMemberConfig(worldData, userId);
 }
 
+async function isWorldAdmin(worldId, userId) {
+  const worldData = await getWorldConfig(worldId);
+  return isWorldAdminConfig(worldData, userId);
+}
+
+async function getWorldRole(worldId, user = null) {
+  if (user?.isAdmin) return "global-admin";
+  if (!user?.userId) return "none";
+
+  const worldData = await getWorldConfig(worldId);
+  if (isWorldAdminConfig(worldData, user.userId)) return "world-admin";
+  if (isWorldMemberConfig(worldData, user.userId)) return "member";
+  return "none";
+}
+
 async function isWorldPublicReadable(worldId) {
   const worldData = await getWorldConfig(worldId);
   return normalizePublicRead(worldData.publicRead);
@@ -254,13 +288,13 @@ async function listWorldMembers(worldId) {
   const detailedMembers = await Promise.all(
     members.map(async (member) => {
       const user = await getUserById(member.userId);
-      return user ? { ...member, user } : null;
+      return user ? { ...normalizeWorldMember(member), user } : null;
     })
   );
   return detailedMembers.filter(Boolean);
 }
 
-async function addWorldMember(worldId, userId) {
+async function addWorldMember(worldId, userId, role = "member") {
   const user = await getUserById(userId);
   if (!user || user.disabled) {
     const error = new Error("User not found");
@@ -270,9 +304,29 @@ async function addWorldMember(worldId, userId) {
 
   const worldData = await readWorldConfigById(worldId);
   const members = Array.isArray(worldData.members) ? worldData.members : [];
-  if (!members.some((member) => member.userId === userId)) {
-    members.push({ userId, addedAt: Date.now() });
+  const nextRole = normalizeWorldMemberRole(role);
+  const existingMember = members.find((member) => member.userId === userId);
+  if (existingMember) {
+    existingMember.role = nextRole;
+  } else {
+    members.push({ userId, role: nextRole, addedAt: Date.now() });
   }
+  worldData.members = members;
+  await writeWorldConfig(worldId, worldData);
+  return listWorldMembers(worldId);
+}
+
+async function updateWorldMemberRole(worldId, userId, role) {
+  const worldData = await readWorldConfigById(worldId);
+  const members = Array.isArray(worldData.members) ? worldData.members : [];
+  const member = members.find((item) => item.userId === userId);
+  if (!member) {
+    const error = new Error("User not found");
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  member.role = normalizeWorldMemberRole(role);
   worldData.members = members;
   await writeWorldConfig(worldId, worldData);
   return listWorldMembers(worldId);
@@ -351,9 +405,12 @@ module.exports = {
   getWorldThumbnail,
   getWorldConfig,
   isWorldMember,
+  isWorldAdmin,
+  getWorldRole,
   isWorldPublicReadable,
   listWorldMembers,
   addWorldMember,
+  updateWorldMemberRole,
   removeWorldMember,
   removeUserFromAllWorlds,
   saveWorldThumbnail,
