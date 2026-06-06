@@ -5762,6 +5762,7 @@ body {
   background: rgba(15, 23, 42, 0.88);
 }
 
+.editor-preview-toggle,
 .editor-permissions-toggle,
 .editor-document-lock {
   width: 31px;
@@ -5779,6 +5780,8 @@ body {
   transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.16s, box-shadow 0.16s;
 }
 
+.editor-preview-toggle:hover,
+.editor-preview-toggle.active,
 .editor-permissions-toggle:hover,
 .editor-document-lock:hover {
   color: white;
@@ -5788,6 +5791,7 @@ body {
   transform: translateY(-1px);
 }
 
+.editor-preview-toggle:disabled,
 .editor-permissions-toggle:disabled,
 .editor-document-lock:disabled {
   cursor: not-allowed;
@@ -6086,6 +6090,43 @@ body {
   overflow: auto;
 }
 
+.markdown-html-editor {
+  min-height: 420px;
+  padding: 10px 0 64px;
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.markdown-html-source {
+  width: 100%;
+  min-height: 420px;
+  resize: none;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: rgba(248, 250, 252, 0.94);
+  caret-color: #c4b5fd;
+  background: transparent;
+  outline: none;
+  font: 0.95rem/1.65 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.markdown-html-source:focus {
+  background: transparent;
+}
+
+.markdown-html-source::placeholder {
+  color: rgba(148, 163, 184, 0.54);
+}
+
+.markdown-html-preview {
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .context-menu-section-label {
   padding: 8px 12px 6px;
   color: rgba(148, 163, 184, 0.78);
@@ -6186,7 +6227,7 @@ body {
 
 .tab-type-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 

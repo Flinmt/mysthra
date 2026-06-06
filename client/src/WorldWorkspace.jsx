@@ -4,6 +4,7 @@ import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sw
 import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
+import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
 import DropdownSelect from './DropdownSelect';
 import {
@@ -178,7 +179,9 @@ function getDocumentIcon(icon) {
 }
 
 function getTabTypeIcon(contentType) {
-  return contentType === 'map' ? Map : Book;
+  if (contentType === 'map') return Map;
+  if (contentType === 'markdown') return FilePenLine;
+  return Book;
 }
 
 function normalizeIconSearch(value = '') {
@@ -803,6 +806,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   useEffect(() => {
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
+    setViewMode('edit');
   }, [activeTab?.uid]);
 
   useEffect(() => {
@@ -2279,7 +2283,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
-  const activeCoverPath = activeTab?.contentType === 'wiki' ? activeTab?.metadata?.coverAssetPath : null;
+  const activeCoverPath = activeTab && activeTab.contentType !== 'map' ? activeTab?.metadata?.coverAssetPath : null;
   const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
     ? coverReposition.x
@@ -2290,6 +2294,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
+  const isMarkdownTab = activeTab?.contentType === 'markdown';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
   const isDocumentOwner = Boolean(currentUser?.userId && selectedContainer?.metadata?.ownerUserId === currentUser?.userId);
@@ -2338,6 +2343,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
           )}
         </div>
+      )}
+      {activeTab && isMarkdownTab && canWriteActiveTab && (
+        <button
+          type="button"
+          className={`editor-preview-toggle ${viewMode === 'edit' ? 'active' : ''}`}
+          onClick={() => setViewMode(prev => (prev === 'edit' ? 'view' : 'edit'))}
+          title={viewMode === 'edit' ? t('workspace.markdown_preview_mode') : t('workspace.markdown_edit_mode')}
+        >
+          {viewMode === 'edit' ? <Eye size={16} /> : <Edit2 size={16} />}
+        </button>
       )}
       {selectedContainer && canLockDocument && (
         <button
@@ -2773,7 +2788,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
               <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && activeTab?.contentType === 'wiki' && canWriteActiveTab && (
+                {!isVisitor && selectedContainer && activeTab && !isMapTab && canWriteActiveTab && (
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -2872,6 +2887,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           <Map size={22} />
                           <strong>{t('workspace.tab_type_map')}</strong>
                           <span>{t('workspace.tab_type_map_hint')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-type-card ${tabCreationPanel.contentType === 'markdown' ? 'active' : ''}`}
+                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'markdown' }))}
+                        >
+                          <FilePenLine size={22} />
+                          <strong>{t('workspace.tab_type_markdown')}</strong>
+                          <span>{t('workspace.tab_type_markdown_hint')}</span>
                         </button>
                       </div>
 
@@ -2977,6 +3001,23 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                             error: t('workspace.collaboration_error')
                           }
                         }}
+                      />
+                      ) : activeTab.contentType === 'markdown' ? (
+                      <MarkdownHtmlEditor
+                        key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
+                        content={fileContent}
+                        editable={isDocumentUnlocked && !isVisitor}
+                        locked={!canWriteActiveTab}
+                        mode={viewMode === 'edit' ? 'edit' : 'preview'}
+                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
+                        currentUser={currentUser}
+                        isVisitor={isVisitor}
+                        labels={{
+                          sourceLabel: t('workspace.markdown_source_label'),
+                          sourcePlaceholder: t('workspace.markdown_source_placeholder'),
+                          previewTitle: t('workspace.markdown_preview_title')
+                        }}
+                        onCollaborationSaveState={handleCollaborationSaveState}
                       />
                       ) : (
                       <WikiBlockEditor
@@ -3168,6 +3209,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                   >
                     <Map size={20} />
                     <span style={{ fontSize: '0.75rem' }}>Mapa</span>
+                  </button>
+                  <button 
+                    onClick={() => setPrompt({ ...prompt, contentType: 'markdown' })}
+                    style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      padding: '12px', 
+                      background: prompt.contentType === 'markdown' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
+                      border: 'none', 
+                      borderRadius: 8, 
+                      color: 'white', 
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <FilePenLine size={20} />
+                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_markdown')}</span>
                   </button>
                 </div>
               </div>

@@ -45,7 +45,7 @@ test("parseCollaborationRoom accepts presence and wiki tab room names", () => {
   );
 });
 
-test("resolveTabRoom accepts wiki and map tabs only", async () => {
+test("resolveTabRoom accepts collaborative tab content types only", async () => {
   const worldName = `collab-map-world-${Date.now()}`;
   createdWorlds.add(worldName);
   await createWorld({ name: worldName });
@@ -58,6 +58,10 @@ test("resolveTabRoom accepts wiki and map tabs only", async () => {
     type: "tab",
     contentType: "map"
   });
+  const markdownTab = await createDocument(worldName, "Markdown Tab", "", {
+    type: "tab",
+    contentType: "markdown"
+  });
   const invalidTab = await createDocument(worldName, "Secret Tab", "", {
     type: "tab",
     contentType: "secret"
@@ -65,6 +69,7 @@ test("resolveTabRoom accepts wiki and map tabs only", async () => {
 
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: wikiTab.uid })).tabUid, wikiTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: mapTab.uid })).tabUid, mapTab.uid);
+  assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: markdownTab.uid })).tabUid, markdownTab.uid);
 
   await assert.rejects(
     () => resolveTabRoom({ type: "tab", worldId: worldName, tabUid: invalidTab.uid }),
@@ -156,7 +161,7 @@ async function waitFor(assertion, timeoutMs = 2500) {
   let lastError;
   while (Date.now() - start < timeoutMs) {
     try {
-      assertion();
+      await assertion();
       return;
     } catch (error) {
       lastError = error;

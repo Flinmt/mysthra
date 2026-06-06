@@ -10,6 +10,21 @@ const {
 } = require("./collaboration");
 const { updateIndex, removeFromIndex } = require("./indexer");
 
+const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["wiki", "markdown"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown"]);
+
+function getTabContentType(metadata = {}) {
+  return metadata.contentType || (metadata.type === "tab" ? "wiki" : null);
+}
+
+function isFileBackedTab(metadata = {}) {
+  return metadata.type === "tab" && FILE_BACKED_TAB_CONTENT_TYPES.has(getTabContentType(metadata));
+}
+
+function isCollaborativeTab(metadata = {}) {
+  return metadata.type === "tab" && COLLABORATIVE_TAB_CONTENT_TYPES.has(getTabContentType(metadata));
+}
+
 const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "icon",
   "permissions",
@@ -271,7 +286,7 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
   await fs.mkdir(fullDirPath, { recursive: true });
   
   // Se for uma aba do tipo WIKI, salvamos o arquivo de conteúdo Markdown
-  if (metadata.type === "tab" && (metadata.contentType === "wiki" || !metadata.contentType)) {
+  if (isFileBackedTab(metadata)) {
     const indexPath = path.join(fullDirPath, "index.md");
     await fs.writeFile(indexPath, content || "", "utf-8");
   }
@@ -422,17 +437,13 @@ async function collectDocumentMetadataWithPaths(pagesDir, safePath) {
   return entriesWithPaths;
 }
 
-async function collectWikiTabMetadata(pagesDir, safePath) {
+async function collectCollaborativeTabMetadata(pagesDir, safePath) {
   const entries = await collectDocumentMetadata(pagesDir, safePath);
-  return entries.filter((metadata) =>
-    metadata?.uid &&
-    metadata.type === "tab" &&
-    (!metadata.contentType || metadata.contentType === "wiki")
-  );
+  return entries.filter((metadata) => metadata?.uid && isCollaborativeTab(metadata));
 }
 
 async function closeCollaborativeTabsForPath(worldName, pagesDir, safePath) {
-  const tabs = await collectWikiTabMetadata(pagesDir, safePath).catch(() => []);
+  const tabs = await collectCollaborativeTabMetadata(pagesDir, safePath).catch(() => []);
   for (const tab of tabs) {
     closeCollaborationRoom(worldName, tab.uid);
   }
@@ -448,7 +459,7 @@ async function deleteDocument(worldName, docPath) {
   try {
     const metadataEntries = await collectDocumentMetadata(pagesDir, safePath);
     for (const metadata of metadataEntries) {
-      if (metadata?.uid && metadata.type === "tab" && (!metadata.contentType || metadata.contentType === "wiki")) {
+      if (metadata?.uid && isCollaborativeTab(metadata)) {
         closeCollaborationRoom(safeName, metadata.uid);
       }
     }

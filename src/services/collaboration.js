@@ -14,7 +14,7 @@ const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
 const BLOCKNOTE_FRAGMENT = "blocknote";
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown"]);
 
 let activeCollaborationServer = null;
 
@@ -98,6 +98,7 @@ async function resolveTabRoom(room) {
     ...room,
     path: safePath,
     pagesDir,
+    metadata,
     indexPath: path.join(pagesDir, safePath, "index.md")
   };
 }
@@ -135,8 +136,9 @@ async function loadCollaborationDocument(document, room) {
 async function storeCollaborationDocument(document, room) {
   await ensureWorldStructure(room.worldId);
   await fs.mkdir(getWorldYjsRoot(room.worldId), { recursive: true });
+  const statePath = getTabStatePath(room.worldId, room.tabUid);
   const state = Buffer.from(Y.encodeStateAsUpdate(document));
-  await fs.writeFile(getTabStatePath(room.worldId, room.tabUid), state);
+  await fs.writeFile(statePath, state);
   debugCollaboration("store", {
     room: `world:${room.worldId}:tab:${room.tabUid}`,
     bytes: state.length
@@ -261,9 +263,11 @@ function createCollaborationServer() {
     async onAuthenticate({ documentName, requestHeaders, connectionConfig }) {
       return authorizeRoom(documentName, requestHeaders, connectionConfig);
     },
-    async onLoadDocument({ document, context }) {
-      if (context.room?.type !== "tab") return;
-      await loadCollaborationDocument(document, context.room);
+    async onLoadDocument({ document, documentName, context }) {
+      const room = context.room || parseCollaborationRoom(documentName);
+      if (room.type !== "tab") return;
+      const resolvedRoom = await resolveTabRoom(room);
+      await loadCollaborationDocument(document, resolvedRoom);
     },
     async beforeHandleMessage({ documentName, connection }) {
       await updateConnectionLockState(documentName, connection);
