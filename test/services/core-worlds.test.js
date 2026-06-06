@@ -19,7 +19,10 @@ const {
   listAssets,
   listWorlds,
   getFileTree,
+  getPathByUid,
+  isWorldPublicReadable,
   moveAsset,
+  moveDocument,
   readDocument,
   renameAsset,
   renameDocument,
@@ -58,6 +61,7 @@ test("createWorld stores lean world metadata", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, worldName);
   assert.equal(world.description, "A world in migration");
+  assert.equal(world.publicRead, false);
   assert.equal("thumbnailUrl" in world, false);
 
   const config = JSON.parse(
@@ -79,6 +83,23 @@ test("updateWorld only updates world profile fields", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, "Renamed World");
   assert.equal(world.description, "Updated");
+  assert.equal(world.publicRead, false);
+});
+
+test("world public visitor access is stored per world", async () => {
+  const worldName = "core-world-public-read";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  assert.equal(await isWorldPublicReadable(worldName), false);
+
+  let world = await updateWorld(worldName, { publicRead: true });
+  assert.equal(world.publicRead, true);
+  assert.equal(await isWorldPublicReadable(worldName), true);
+
+  world = await updateWorld(worldName, { publicRead: false });
+  assert.equal(world.publicRead, false);
+  assert.equal(await isWorldPublicReadable(worldName), false);
 });
 
 test("saveWorldThumbnail stores thumbnail metadata", async () => {
@@ -192,6 +213,30 @@ test("document tree supports containers and editable tabs", async () => {
   assert.equal((await readDocument(worldName, tab.path)).content, "# Revised draft");
 });
 
+test("document creation stores accented tab names in metadata", async () => {
+  const worldName = "core-tree-accented-tabs";
+  const tabName = "Introdução";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const container = await createDocument(worldName, "Lore", "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${container.path}/${tabName}`, "# Boas-vindas", {
+    type: "tab",
+    contentType: "wiki",
+    name: tabName
+  });
+
+  assert.equal(tab.name, tabName);
+  assert.equal(tab.path.includes(tabName), false);
+  assert.equal((await readDocument(worldName, tab.path)).content, "# Boas-vindas");
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree[0].children[0].name, tabName);
+  assert.equal(tree[0].children[0].metadata.name, tabName);
+});
+
 test("document metadata changes do not move physical paths", async () => {
   const worldName = "core-tree-metadata";
   await resetWorld(worldName);
@@ -206,10 +251,139 @@ test("document metadata changes do not move physical paths", async () => {
   assert.equal(renamed.name, "Places");
 
   const result = await updateDocumentMetadata(worldName, document.path, {
-    icon: "Castle"
+    icon: "Castle",
+    order: 2
   });
   assert.equal(result.metadata.name, "Places");
   assert.equal(result.metadata.icon, "Castle");
+  assert.equal(result.metadata.order, 2);
+});
+
+test("document metadata updates reject structural fields", async () => {
+  const worldName = "core-tree-metadata-guards";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const document = await createDocument(worldName, "Locations", "", {
+    type: "container"
+  });
+
+  await assert.rejects(
+    () => updateDocumentMetadata(worldName, document.path, {
+      uid: "forged",
+      type: "tab",
+      contentType: "map",
+      ownerUserId: "admin"
+    }),
+    { code: "INVALID_DOCUMENT_METADATA" }
+  );
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree[0].uid, document.uid);
+  assert.equal(tree[0].type, "container");
+  assert.equal(tree[0].contentType, null);
+});
+
+test("moveDocument moves containers with children and updates tab index paths", async () => {
+  const worldName = "core-tree-move";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const source = await createDocument(worldName, "Source", "", {
+    type: "container"
+  });
+  const target = await createDocument(worldName, "Target", "", {
+    type: "container"
+  });
+  const child = await createDocument(worldName, `${source.path}/Child`, "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${child.path}/Overview`, "# Moved", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  const moved = await moveDocument(worldName, source.path, target.path);
+  assert.equal(moved.previousPath, source.path);
+  assert.equal(moved.path, `${target.path}/${source.uid}`);
+
+  const tree = await getFileTree(worldName);
+  const targetNode = tree.find(node => node.path === target.path);
+  const movedNode = targetNode.children.find(node => node.uid === source.uid);
+  assert.equal(movedNode.name, "Source");
+  assert.equal(movedNode.children[0].name, "Child");
+  assert.equal(movedNode.children[0].children[0].name, "Overview");
+  assert.equal(await getPathByUid(worldName, tab.uid), `${moved.path}/${child.uid}/${tab.uid}`);
+  assert.equal((await readDocument(worldName, getPathByUid(worldName, tab.uid))).content, "# Moved");
+});
+
+test("moveDocument moves nested containers to the root", async () => {
+  const worldName = "core-tree-move-root";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const parent = await createDocument(worldName, "Parent", "", {
+    type: "container"
+  });
+  const child = await createDocument(worldName, `${parent.path}/Child`, "", {
+    type: "container"
+  });
+
+  const moved = await moveDocument(worldName, child.path, "");
+  assert.equal(moved.path, child.uid);
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree.some(node => node.path === child.uid && node.name === "Child"), true);
+});
+
+test("moveDocument rejects tabs and recursive targets", async () => {
+  const worldName = "core-tree-move-guards";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const source = await createDocument(worldName, "Source", "", {
+    type: "container"
+  });
+  const child = await createDocument(worldName, `${source.path}/Child`, "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${source.path}/Overview`, "# Notes", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  await assert.rejects(
+    () => moveDocument(worldName, tab.path, ""),
+    { code: "INVALID_PATH" }
+  );
+  await assert.rejects(
+    () => moveDocument(worldName, source.path, source.path),
+    { code: "INVALID_PATH" }
+  );
+  await assert.rejects(
+    () => moveDocument(worldName, source.path, child.path),
+    { code: "INVALID_PATH" }
+  );
+});
+
+test("moveDocument clears home page when home leaves the root", async () => {
+  const worldName = "core-tree-move-home";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const home = await createDocument(worldName, "Home", "", {
+    type: "container"
+  });
+  const target = await createDocument(worldName, "Target", "", {
+    type: "container"
+  });
+  await setHomePage(worldName, home.path);
+
+  const moved = await moveDocument(worldName, home.path, target.path);
+  assert.equal(moved.homePage, null);
+
+  const worlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  assert.equal(worlds.find(world => world.id === worldName).homePage, null);
 });
 
 test("deleteDocument removes a document subtree", async () => {
@@ -400,11 +574,11 @@ test("asset service migrates legacy Assets directory into lowercase assets", asy
   const currentAssetsPath = path.join(worldRoot, "assets");
   await fs.mkdir(path.join(legacyAssetsPath, "Folder"), { recursive: true });
   await fs.mkdir(path.join(currentAssetsPath, "Folder"), { recursive: true });
-  const [legacyRealPath, currentRealPath] = await Promise.all([
-    fs.realpath(legacyAssetsPath),
-    fs.realpath(currentAssetsPath)
+  const [legacyStat, currentStat] = await Promise.all([
+    fs.stat(legacyAssetsPath),
+    fs.stat(currentAssetsPath)
   ]);
-  const isCaseInsensitiveAssetsPath = legacyRealPath.toLowerCase() === currentRealPath.toLowerCase();
+  const isCaseInsensitiveAssetsPath = legacyStat.dev === currentStat.dev && legacyStat.ino === currentStat.ino;
 
   await fs.writeFile(path.join(legacyAssetsPath, "Folder", "map.webp"), "legacy", "utf-8");
   if (!isCaseInsensitiveAssetsPath) {

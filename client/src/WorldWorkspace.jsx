@@ -1,107 +1,177 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Columns2, Columns3 } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, Lock, LockKeyhole, Unlock, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { BlockNoteSchema, combineByGroup } from '@blocknote/core';
-import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core/extensions';
-import * as blockNoteLocales from '@blocknote/core/locales';
-import {
-  AddBlockButton,
-  AddCommentButton,
-  AddTiptapCommentButton,
-  BasicTextStyleButton,
-  BlockTypeSelect,
-  CreateLinkButton,
-  DragHandleButton,
-  DragHandleMenu,
-  FileCaptionButton,
-  FileDeleteButton,
-  FileDownloadButton,
-  FilePreviewButton,
-  FileRenameButton,
-  FileReplaceButton,
-  FormattingToolbar,
-  FormattingToolbarController,
-  NestBlockButton,
-  RemoveBlockItem,
-  SideMenu,
-  SideMenuController,
-  SuggestionMenuController,
-  TableCellMergeButton,
-  TableColumnHeaderItem,
-  TableRowHeaderItem,
-  TextAlignButton,
-  UnnestBlockButton,
-  getDefaultReactSlashMenuItems,
-  useCreateBlockNote,
-  useDictionary
-} from '@blocknote/react';
-import { BlockNoteView } from '@blocknote/mantine';
-import { blocksToYXmlFragment } from '@blocknote/core/yjs';
-import { locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column';
-import '@blocknote/mantine/style.css';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
+import WikiBlockEditor from './workspace/WikiBlockEditor';
+import {
+  clampCoverPosition,
+  copyTextToClipboard,
+  findAssetByPath,
+  findNodeByPath,
+  findNodeByUid,
+  formatAssetSize,
+  getAssetFolders,
+  getAssetImages,
+  getCoverBackgroundVars,
+  getDocumentContainers,
+  getFileBaseName,
+  getFileExtension,
+  getFirstOrderedTab,
+  getTreeChildren,
+  getTabsForNode,
+  isCollaborativeContentType,
+  isInvalidAssetMoveTarget,
+  isInvalidDocumentMoveTarget,
+  isRootContainer,
+  normalizeCoverArea,
+  orderTreeWithHome,
+  pathParent,
+  prepareAssetUpload,
+  updateTreeNodeMetadata
+} from './workspace/utils';
 
-const ICON_MAP = {
-  FileText,
-  Book,
-  BookOpen,
-  Scroll,
-  ScrollText,
-  Library,
-  Feather,
-  Map,
-  MapPin,
-  Compass,
-  Route,
-  Footprints,
-  Binoculars,
-  Castle,
-  Landmark,
-  Church,
-  House,
-  Home,
-  Tent,
-  Mountain,
-  Trees,
-  TreePine,
-  TreeDeciduous,
-  DoorOpen,
-  Crown,
-  Flag,
-  Sword,
-  Swords,
-  Shield,
-  Axe,
-  Hammer,
-  Pickaxe,
-  Skull,
-  Flame,
-  Eye,
-  Sparkles,
-  WandSparkles,
-  Ghost,
-  Drama,
-  Gem,
-  Diamond,
-  Coins,
-  Key,
-  LockKeyhole,
-  Star,
-  Moon,
-  Sun,
-  CloudLightning,
-  Ship,
-  Sailboat,
-  Anchor,
-  Waves,
-  Telescope,
-  Pyramid
-};
+const DOCUMENT_ICON_CATEGORIES = [
+  {
+    id: 'general',
+    labelKey: 'workspace.icon_category_general',
+    icons: [
+      { key: 'Folder', icon: Folder, aliases: ['folder', 'pasta', 'container', 'documento'] },
+      { key: 'FolderOpen', icon: FolderOpen, aliases: ['open folder', 'pasta aberta'] },
+      { key: 'FolderRoot', icon: FolderRoot, aliases: ['root', 'raiz'] },
+      { key: 'Folders', icon: Folders, aliases: ['folders', 'pastas', 'colecao'] },
+      { key: 'FolderHeart', icon: FolderHeart, aliases: ['favorite folder', 'pasta favorita', 'favorito'] },
+      { key: 'FileText', icon: FileText, aliases: ['file', 'arquivo', 'texto'] },
+      { key: 'File', icon: File, aliases: ['document', 'documento'] },
+      { key: 'Files', icon: Files, aliases: ['files', 'arquivos'] },
+      { key: 'Book', icon: Book, aliases: ['book', 'livro'] },
+      { key: 'BookOpen', icon: BookOpen, aliases: ['open book', 'livro aberto'] },
+      { key: 'Library', icon: Library, aliases: ['library', 'biblioteca'] },
+      { key: 'Notebook', icon: Notebook, aliases: ['notebook', 'caderno'] },
+      { key: 'NotebookTabs', icon: NotebookTabs, aliases: ['tabs', 'abas', 'caderno'] },
+      { key: 'NotebookText', icon: NotebookText, aliases: ['notes', 'notas'] },
+      { key: 'Scroll', icon: Scroll, aliases: ['scroll', 'pergaminho'] },
+      { key: 'ScrollText', icon: ScrollText, aliases: ['scroll text', 'pergaminho texto'] },
+      { key: 'Archive', icon: Archive, aliases: ['archive', 'arquivo morto'] },
+      { key: 'FolderArchive', icon: FolderArchive, aliases: ['archive folder', 'pasta arquivo'] },
+      { key: 'ClipboardList', icon: ClipboardList, aliases: ['list', 'lista', 'tarefas'] }
+    ]
+  },
+  {
+    id: 'world',
+    labelKey: 'workspace.icon_category_world',
+    icons: [
+      { key: 'Map', icon: Map, aliases: ['map', 'mapa'] },
+      { key: 'MapPin', icon: MapPin, aliases: ['pin', 'marcador', 'local'] },
+      { key: 'Compass', icon: Compass, aliases: ['compass', 'bussola'] },
+      { key: 'Route', icon: Route, aliases: ['route', 'rota', 'caminho'] },
+      { key: 'Landmark', icon: Landmark, aliases: ['landmark', 'marco', 'monumento'] },
+      { key: 'Castle', icon: Castle, aliases: ['castle', 'castelo', 'fortaleza'] },
+      { key: 'Church', icon: Church, aliases: ['church', 'igreja', 'templo'] },
+      { key: 'House', icon: House, aliases: ['house', 'casa'] },
+      { key: 'Home', icon: Home, aliases: ['home', 'inicio', 'lar'] },
+      { key: 'Building2', icon: Building2, aliases: ['building', 'predio', 'cidade'] },
+      { key: 'School', icon: School, aliases: ['school', 'escola', 'academia'] },
+      { key: 'Tent', icon: Tent, aliases: ['tent', 'tenda', 'acampamento'] },
+      { key: 'Mountain', icon: Mountain, aliases: ['mountain', 'montanha'] },
+      { key: 'Trees', icon: Trees, aliases: ['trees', 'arvores', 'floresta'] },
+      { key: 'TreePine', icon: TreePine, aliases: ['pine', 'pinheiro'] },
+      { key: 'TreeDeciduous', icon: TreeDeciduous, aliases: ['tree', 'arvore'] },
+      { key: 'DoorOpen', icon: DoorOpen, aliases: ['door', 'porta', 'entrada'] },
+      { key: 'Pyramid', icon: Pyramid, aliases: ['pyramid', 'piramide', 'ruinas'] }
+    ]
+  },
+  {
+    id: 'fantasy',
+    labelKey: 'workspace.icon_category_fantasy',
+    icons: [
+      { key: 'Sword', icon: Sword, aliases: ['sword', 'espada'] },
+      { key: 'Swords', icon: Swords, aliases: ['swords', 'espadas', 'batalha'] },
+      { key: 'Shield', icon: Shield, aliases: ['shield', 'escudo'] },
+      { key: 'Crown', icon: Crown, aliases: ['crown', 'coroa', 'rei', 'rainha'] },
+      { key: 'Skull', icon: Skull, aliases: ['skull', 'caveira', 'morte'] },
+      { key: 'Flame', icon: Flame, aliases: ['flame', 'fogo', 'chama'] },
+      { key: 'WandSparkles', icon: WandSparkles, aliases: ['wand', 'varinha', 'magia'] },
+      { key: 'Sparkles', icon: Sparkles, aliases: ['sparkles', 'brilho', 'magico'] },
+      { key: 'Gem', icon: Gem, aliases: ['gem', 'gema', 'joia'] },
+      { key: 'Diamond', icon: Diamond, aliases: ['diamond', 'diamante'] },
+      { key: 'Ghost', icon: Ghost, aliases: ['ghost', 'fantasma'] },
+      { key: 'Drama', icon: Drama, aliases: ['drama', 'mascara', 'teatro'] },
+      { key: 'Dices', icon: Dices, aliases: ['dice', 'dados', 'rpg'] },
+      { key: 'Gamepad2', icon: Gamepad2, aliases: ['game', 'jogo'] },
+      { key: 'Star', icon: Star, aliases: ['star', 'estrela', 'favorito'] },
+      { key: 'Zap', icon: Zap, aliases: ['zap', 'raio', 'energia'] }
+    ]
+  },
+  {
+    id: 'people',
+    labelKey: 'workspace.icon_category_people',
+    icons: [
+      { key: 'Users', icon: Users, aliases: ['users', 'usuarios', 'grupo'] },
+      { key: 'UsersRound', icon: UsersRound, aliases: ['people', 'pessoas', 'grupo'] },
+      { key: 'UserRound', icon: UserRound, aliases: ['person', 'pessoa', 'personagem'] },
+      { key: 'Flag', icon: Flag, aliases: ['flag', 'bandeira', 'faccao'] },
+      { key: 'Eye', icon: Eye, aliases: ['eye', 'olho', 'observador'] },
+      { key: 'Key', icon: Key, aliases: ['key', 'chave'] },
+      { key: 'LockKeyhole', icon: LockKeyhole, aliases: ['lock', 'cadeado', 'segredo'] },
+      { key: 'Coins', icon: Coins, aliases: ['coins', 'moedas', 'economia'] },
+      { key: 'Briefcase', icon: Briefcase, aliases: ['briefcase', 'maleta', 'profissao'] },
+      { key: 'Target', icon: Target, aliases: ['target', 'alvo', 'objetivo'] },
+      { key: 'Heart', icon: Heart, aliases: ['heart', 'coracao', 'relacao'] }
+    ]
+  },
+  {
+    id: 'nature',
+    labelKey: 'workspace.icon_category_nature',
+    icons: [
+      { key: 'Ship', icon: Ship, aliases: ['ship', 'navio'] },
+      { key: 'Sailboat', icon: Sailboat, aliases: ['sailboat', 'barco', 'veleiro'] },
+      { key: 'Anchor', icon: Anchor, aliases: ['anchor', 'ancora', 'porto'] },
+      { key: 'ShipWheel', icon: ShipWheel, aliases: ['wheel', 'leme'] },
+      { key: 'Waves', icon: Waves, aliases: ['waves', 'ondas', 'mar'] },
+      { key: 'Plane', icon: Plane, aliases: ['plane', 'aviao', 'viagem'] },
+      { key: 'Rocket', icon: Rocket, aliases: ['rocket', 'foguete', 'espaco'] },
+      { key: 'Moon', icon: Moon, aliases: ['moon', 'lua', 'noite'] },
+      { key: 'Sun', icon: Sun, aliases: ['sun', 'sol', 'dia'] },
+      { key: 'CloudLightning', icon: CloudLightning, aliases: ['storm', 'tempestade', 'trovao'] },
+      { key: 'Sprout', icon: Sprout, aliases: ['sprout', 'broto', 'planta'] },
+      { key: 'Feather', icon: Feather, aliases: ['feather', 'pena'] },
+      { key: 'Footprints', icon: Footprints, aliases: ['footprints', 'pegadas'] },
+      { key: 'Binoculars', icon: Binoculars, aliases: ['binoculars', 'binoculos', 'exploracao'] },
+      { key: 'Telescope', icon: Telescope, aliases: ['telescope', 'telescopio'] },
+      { key: 'Waypoints', icon: Waypoints, aliases: ['waypoints', 'pontos', 'jornada'] }
+    ]
+  },
+  {
+    id: 'systems',
+    labelKey: 'workspace.icon_category_systems',
+    icons: [
+      { key: 'Database', icon: Database, aliases: ['database', 'banco', 'dados'] },
+      { key: 'Layers', icon: Layers, aliases: ['layers', 'camadas'] },
+      { key: 'Boxes', icon: Boxes, aliases: ['boxes', 'caixas', 'modulos'] },
+      { key: 'Box', icon: Box, aliases: ['box', 'caixa'] },
+      { key: 'Package', icon: Package, aliases: ['package', 'pacote'] },
+      { key: 'FileArchive', icon: FileArchive, aliases: ['archive file', 'arquivo'] },
+      { key: 'FileBox', icon: FileBox, aliases: ['box file', 'arquivo caixa'] },
+      { key: 'FileHeart', icon: FileHeart, aliases: ['heart file', 'arquivo importante'] },
+      { key: 'FileImage', icon: FileImage, aliases: ['image file', 'imagem'] },
+      { key: 'FileLock', icon: FileLock, aliases: ['locked file', 'arquivo trancado'] },
+      { key: 'FilePenLine', icon: FilePenLine, aliases: ['edit file', 'editar'] },
+      { key: 'FileSearch', icon: FileSearch, aliases: ['search file', 'pesquisar'] },
+      { key: 'Shapes', icon: Shapes, aliases: ['shapes', 'formas'] },
+      { key: 'Palette', icon: Palette, aliases: ['palette', 'paleta', 'cor'] },
+      { key: 'Axe', icon: Axe, aliases: ['axe', 'machado'] },
+      { key: 'Hammer', icon: Hammer, aliases: ['hammer', 'martelo'] },
+      { key: 'Pickaxe', icon: Pickaxe, aliases: ['pickaxe', 'picareta'] }
+    ]
+  }
+];
 
-const DOCUMENT_ICON_OPTIONS = Object.keys(ICON_MAP);
-const WIKI_BLOCKNOTE_SCHEMA = withMultiColumn(BlockNoteSchema.create());
+const DOCUMENT_ICON_OPTIONS = DOCUMENT_ICON_CATEGORIES.flatMap(category =>
+  category.icons.map(icon => ({ ...icon, categoryId: category.id, categoryLabelKey: category.labelKey }))
+);
+const ICON_MAP = Object.fromEntries(DOCUMENT_ICON_OPTIONS.map(({ key, icon }) => [key, icon]));
 
 function getDocumentIcon(icon) {
   return ICON_MAP[icon] || Folder;
@@ -111,748 +181,12 @@ function getTabTypeIcon(contentType) {
   return contentType === 'map' ? Map : Book;
 }
 
-function getBlockNoteLocaleKey(language = 'en') {
-  const normalized = String(language || 'en').toLowerCase();
-  if (normalized === 'zh-tw' || normalized === 'zh_tw') return 'zhTW';
-  return normalized.split('-')[0] || 'en';
-}
-
-function mergeBlockNoteDictionaries(base, extension) {
-  const merged = { ...base };
-  for (const [key, value] of Object.entries(extension || {})) {
-    if (
-      value
-      && typeof value === 'object'
-      && !Array.isArray(value)
-      && base?.[key]
-      && typeof base[key] === 'object'
-      && !Array.isArray(base[key])
-    ) {
-      merged[key] = mergeBlockNoteDictionaries(base[key], value);
-    } else {
-      merged[key] = value;
-    }
-  }
-  return merged;
-}
-
-function getBlockNoteDictionary(language = 'en') {
-  const localeKey = getBlockNoteLocaleKey(language);
-  const coreDictionary = blockNoteLocales[localeKey] || blockNoteLocales.en;
-  const multiColumnDictionary = multiColumnLocales[localeKey] || multiColumnLocales.en;
-  return mergeBlockNoteDictionaries(coreDictionary, multiColumnDictionary);
-}
-
-function createColumnListBlock(columnCount) {
-  return {
-    type: 'columnList',
-    children: Array.from({ length: columnCount }, () => ({
-      type: 'column',
-      children: [{ type: 'paragraph' }]
-    }))
-  };
-}
-
-function getMythraMultiColumnSlashMenuItems(editor, dictionary) {
-  const slashMenu = dictionary?.slash_menu || {};
-  const twoColumns = slashMenu.two_columns || {
-    title: 'Duas Colunas',
-    subtext: 'Duas colunas lado a lado',
-    aliases: ['colunas', 'linha', 'dividir'],
-    group: slashMenu.heading?.group || 'Blocos básicos'
-  };
-  const threeColumns = slashMenu.three_columns || {
-    title: 'Três Colunas',
-    subtext: 'Três colunas lado a lado',
-    aliases: ['colunas', 'linha', 'dividir'],
-    group: slashMenu.heading?.group || 'Blocos básicos'
-  };
-
-  return [
-    {
-      ...twoColumns,
-      icon: <Columns2 size={18} />,
-      onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, createColumnListBlock(2))
-    },
-    {
-      ...threeColumns,
-      icon: <Columns3 size={18} />,
-      onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, createColumnListBlock(3))
-    }
-  ];
-}
-
-function MythraDragHandleMenu() {
-  const dict = useDictionary();
-
-  return (
-    <DragHandleMenu>
-      <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
-      <TableRowHeaderItem>
-        {dict.drag_handle.header_row_menuitem}
-      </TableRowHeaderItem>
-      <TableColumnHeaderItem>
-        {dict.drag_handle.header_column_menuitem}
-      </TableColumnHeaderItem>
-    </DragHandleMenu>
-  );
-}
-
-function MythraSideMenu() {
-  return (
-    <SideMenu>
-      <AddBlockButton />
-      <DragHandleButton dragHandleMenu={MythraDragHandleMenu} />
-    </SideMenu>
-  );
-}
-
-function MythraFormattingToolbar() {
-  return (
-    <FormattingToolbar>
-      <BlockTypeSelect />
-      <TableCellMergeButton />
-      <FileCaptionButton />
-      <FileReplaceButton />
-      <FileRenameButton />
-      <FileDeleteButton />
-      <FileDownloadButton />
-      <FilePreviewButton />
-      <BasicTextStyleButton basicTextStyle="bold" />
-      <BasicTextStyleButton basicTextStyle="italic" />
-      <BasicTextStyleButton basicTextStyle="underline" />
-      <BasicTextStyleButton basicTextStyle="strike" />
-      <TextAlignButton textAlignment="left" />
-      <TextAlignButton textAlignment="center" />
-      <TextAlignButton textAlignment="right" />
-      <NestBlockButton />
-      <UnnestBlockButton />
-      <CreateLinkButton />
-      <AddCommentButton />
-      <AddTiptapCommentButton />
-    </FormattingToolbar>
-  );
-}
-
-const AUDIO_EXTENSIONS = new Set(['mp3', 'ogg', 'wav', 'm4a', 'mp4']);
-
-function getTreeChildren(node) {
-  // Retorna apenas filhos que são containers para a Sidebar
-  return (node.children || []).filter(child => child.type === 'container');
-}
-
-function getTabsForNode(node) {
-  // Retorna apenas filhos que são tabs para o Workspace
-  return (node?.children || []).filter(child => child.type === 'tab');
-}
-
-function getFirstOrderedTab(node) {
-  return [...getTabsForNode(node)].sort((left, right) => {
-    const leftOrder = left.metadata?.order ?? 999;
-    const rightOrder = right.metadata?.order ?? 999;
-    if (leftOrder !== rightOrder) return leftOrder - rightOrder;
-    return left.name.localeCompare(right.name);
-  })[0] || null;
-}
-
-function isCollaborativeContentType(contentType) {
-  return contentType === 'wiki' || contentType === 'map';
-}
-
-function isRootContainer(node) {
-  return node?.type === 'container' && !String(node.path || '').includes('/');
-}
-
-function orderTreeWithHome(nodes = [], homePagePath = '') {
-  if (!homePagePath) return nodes;
-  const homeIndex = nodes.findIndex(node => isRootContainer(node) && node.path === homePagePath);
-  if (homeIndex <= 0) return nodes;
-  const nextNodes = [...nodes];
-  const [homeNode] = nextNodes.splice(homeIndex, 1);
-  return [homeNode, ...nextNodes];
-}
-
-function findNodeByPath(nodes = [], targetPath = '') {
-  for (const node of nodes) {
-    if (node.path === targetPath) return node;
-    const childMatch = findNodeByPath(node.children || [], targetPath);
-    if (childMatch) return childMatch;
-  }
-  return null;
-}
-
-function findAssetByPath(nodes = [], targetPath = '') {
-  for (const node of nodes) {
-    if (node.path === targetPath) return node;
-    const childMatch = findAssetByPath(node.children || [], targetPath);
-    if (childMatch) return childMatch;
-  }
-  return null;
-}
-
-function getAssetFolders(nodes = []) {
-  const folders = [];
-  const walk = (items) => {
-    for (const item of items) {
-      if (item.type !== 'folder') continue;
-      folders.push(item);
-      walk(item.children || []);
-    }
-  };
-  walk(nodes);
-  return folders;
-}
-
-function getAssetImages(nodes = []) {
-  const images = [];
-  const walk = (items) => {
-    for (const item of items) {
-      if (item.type === 'folder') {
-        walk(item.children || []);
-        continue;
-      }
-      if (item.mediaType === 'image') images.push(item);
-    }
-  };
-  walk(nodes);
-  return images;
-}
-
-function isInvalidAssetMoveTarget(sourceNode, targetPath) {
-  if (!sourceNode || sourceNode.type !== 'folder') return false;
-  return targetPath === sourceNode.path || targetPath.startsWith(`${sourceNode.path}/`);
-}
-
-function getFileExtension(filename = '') {
-  return filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
-}
-
-function getFileBaseName(filename = '') {
-  const dotIndex = filename.lastIndexOf('.');
-  return dotIndex > 0 ? filename.slice(0, dotIndex) : filename;
-}
-
-function pathParent(assetPath = '') {
-  const normalized = String(assetPath || '').replace(/\\/g, '/');
-  const index = normalized.lastIndexOf('/');
-  return index > 0 ? normalized.slice(0, index) : '';
-}
-
-function formatAssetSize(size = 0) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function parseBlockNoteContent(content = '') {
-  if (!content.trim()) return null;
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed)) return parsed;
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function clampCoverPosition(value) {
-  const position = Number(value);
-  if (!Number.isFinite(position)) return 50;
-  return Math.min(100, Math.max(0, position));
-}
-
-function normalizeCoverArea(area) {
-  if (!area || typeof area !== 'object') return null;
-  const x = Number(area.x);
-  const y = Number(area.y);
-  const width = Number(area.width);
-  const height = Number(area.height);
-  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
-  return {
-    x: Math.min(100, Math.max(0, x)),
-    y: Math.min(100, Math.max(0, y)),
-    width: Math.min(100, Math.max(1, width)),
-    height: Math.min(100, Math.max(1, height))
-  };
-}
-
-function getCoverBackgroundVars(area, fallbackPositionX, fallbackPositionY) {
-  const hasExplicitPosition = fallbackPositionX !== undefined || fallbackPositionY !== undefined;
-  const positionX = clampCoverPosition(fallbackPositionX ?? 50);
-  const positionY = clampCoverPosition(fallbackPositionY ?? 50);
-  if (hasExplicitPosition) {
-    return {
-      '--editor-cover-bg-position': `${positionX}% ${positionY}%`,
-      '--editor-cover-bg-size': 'cover'
-    };
-  }
-
-  const normalized = normalizeCoverArea(area);
-  if (!normalized) {
-    return {
-      '--editor-cover-bg-position': `center ${positionY}%`,
-      '--editor-cover-bg-size': 'cover'
-    };
-  }
-  const maxX = Math.max(0, 100 - normalized.width);
-  const maxY = Math.max(0, 100 - normalized.height);
-  const cropPositionX = maxX > 0 ? (normalized.x / maxX) * 100 : 50;
-  const cropPositionY = maxY > 0 ? (normalized.y / maxY) * 100 : 50;
-  return {
-    '--editor-cover-bg-position': `${Math.min(100, Math.max(0, cropPositionX))}% ${Math.min(100, Math.max(0, cropPositionY))}%`,
-    '--editor-cover-bg-size': `${10000 / normalized.width}% ${10000 / normalized.height}%`
-  };
-}
-
-function updateTreeNodeMetadata(nodes = [], targetPath = '', metadata = {}) {
-  return nodes.map(node => {
-    const nextChildren = node.children ? updateTreeNodeMetadata(node.children, targetPath, metadata) : node.children;
-    if (node.path !== targetPath) {
-      return nextChildren === node.children ? node : { ...node, children: nextChildren };
-    }
-    return {
-      ...node,
-      metadata: { ...node.metadata, ...metadata },
-      children: nextChildren
-    };
-  });
-}
-
-async function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand('copy');
-  document.body.removeChild(textarea);
-  if (!copied) throw new Error('Copy failed');
-}
-
-function WikiBlockEditor({
-  content,
-  contentKey,
-  editable,
-  locked,
-  worldId,
-  collaborationRoom,
-  currentUser,
-  isVisitor = false,
-  assetImages = [],
-  getAssetUrl,
-  onRequestAssets,
-  labels,
-  onVisitorCountChange,
-  onCollaborationSaveState,
-  onChange
-}) {
-  const { i18n } = useTranslation();
-  const [imageContextMenu, setImageContextMenu] = useState({ isOpen: false, x: 0, y: 0 });
-  const collaborationRoomState = useCollaborationRoom({
-    roomName: collaborationRoom,
-    currentUser,
-    isVisitor,
-    locked
-  });
-  const {
-    doc: collaborationDoc,
-    provider: collaborationProvider,
-    user: collaborationUser,
-    readOnly: collaborationServerReadOnly,
-    synced: collaborationSynced,
-    saveStatus: collaborationSaveStatus,
-    dirty: collaborationDirty,
-    awarenessStates: collaborationAwarenessStates,
-    setAwarenessField: setCollaborationAwarenessField
-  } = collaborationRoomState;
-  const collaborationFragment = useMemo(
-    () => collaborationDoc?.getXmlFragment('blocknote') || null,
-    [collaborationDoc]
-  );
-  const collaborationState = useMemo(() => {
-    if (!collaborationFragment || !collaborationDoc || !collaborationProvider) return null;
-    return {
-      doc: collaborationDoc,
-      provider: collaborationProvider,
-      fragment: collaborationFragment
-    };
-  }, [collaborationDoc, collaborationFragment, collaborationProvider]);
-  const collaborationReadOnly = Boolean(locked || collaborationServerReadOnly);
-  const initialBlocks = useMemo(() => collaborationState ? null : parseBlockNoteContent(content), [collaborationState, content]);
-  const initialContentRef = useRef(content);
-  const isLoadingRef = useRef(true);
-  const onChangeRef = useRef(onChange);
-  const emitFrameRef = useRef(null);
-  const legacyMigrationRef = useRef('');
-  const dictionary = useMemo(() => getBlockNoteDictionary(i18n.language), [i18n.language]);
-  const editor = useCreateBlockNote(
-    {
-      schema: WIKI_BLOCKNOTE_SCHEMA,
-      dictionary,
-      dropCursor: multiColumnDropCursor,
-      ...(collaborationState
-        ? {
-          collaboration: {
-            fragment: collaborationState.fragment,
-            user: collaborationUser,
-            provider: collaborationState.provider,
-            showCursorLabels: 'activity'
-          }
-        }
-        : initialBlocks ? { initialContent: initialBlocks } : {}),
-      uploadFile: async (file) => {
-        const prepared = await prepareAssetUpload(file);
-        if (!prepared.contentType.startsWith('image/')) {
-          throw new Error('Only images can be uploaded to image blocks');
-        }
-        const query = new URLSearchParams({
-          path: '',
-          filename: prepared.filename
-        });
-        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
-          method: 'POST',
-          headers: { 'Content-Type': prepared.contentType },
-          body: prepared.blob
-        });
-        if (!res.ok) throw new Error('Failed to upload image');
-        const uploaded = await res.json();
-        await onRequestAssets?.();
-        return getAssetUrl(uploaded.path);
-      }
-    },
-    [contentKey, collaborationRoom, collaborationProvider, dictionary]
-  );
-  const getSlashMenuItems = useCallback(
-    async (query) => {
-      try {
-        return filterSuggestionItems(
-          combineByGroup(
-            getDefaultReactSlashMenuItems(editor),
-            getMythraMultiColumnSlashMenuItems(editor, dictionary)
-          ),
-          query
-        );
-      } catch {
-        return filterSuggestionItems(getDefaultReactSlashMenuItems(editor), query);
-      }
-    },
-    [dictionary, editor]
-  );
-
-  useEffect(() => {
-    if (!collaborationState) {
-      onVisitorCountChange?.(0);
-      onCollaborationSaveState?.({ status: 'saved', dirty: false });
-      return;
-    }
-    if (isVisitor) {
-      setCollaborationAwarenessField('visitor', { viewing: true });
-    }
-    const count = collaborationAwarenessStates.filter(state => state?.visitor?.viewing).length;
-    onVisitorCountChange?.(count);
-    onCollaborationSaveState?.({
-      status: collaborationSaveStatus,
-      dirty: collaborationDirty
-    });
-  }, [
-    collaborationAwarenessStates,
-    collaborationDirty,
-    collaborationSaveStatus,
-    collaborationState,
-    isVisitor,
-    onCollaborationSaveState,
-    onVisitorCountChange,
-    setCollaborationAwarenessField
-  ]);
-
-  const insertImageBlock = useCallback((url, name = '') => {
-    const cursorBlock = editor.getTextCursorPosition().block;
-    editor.insertBlocks(
-      [{
-        type: 'image',
-        props: {
-          url,
-          name
-        }
-      }],
-      cursorBlock,
-      'after'
-    );
-    editor.focus();
-  }, [editor]);
-
-  const uploadAndInsertImage = useCallback(async (file) => {
-    const prepared = await prepareAssetUpload(file);
-    if (!prepared.contentType.startsWith('image/')) return;
-    const query = new URLSearchParams({
-      path: '',
-      filename: prepared.filename
-    });
-    const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': prepared.contentType },
-      body: prepared.blob
-    });
-    if (!res.ok) throw new Error('Failed to upload image');
-    const uploaded = await res.json();
-    await onRequestAssets?.();
-    insertImageBlock(getAssetUrl(uploaded.path), uploaded.name || prepared.filename);
-  }, [getAssetUrl, insertImageBlock, onRequestAssets, worldId]);
-
-  const emitEditorDocument = useCallback(() => {
-    if (collaborationState) return;
-    if (isLoadingRef.current || !editable) return;
-    onChangeRef.current(JSON.stringify(editor.document));
-    if (emitFrameRef.current) {
-      window.cancelAnimationFrame(emitFrameRef.current);
-    }
-    emitFrameRef.current = window.requestAnimationFrame(() => {
-      emitFrameRef.current = null;
-      onChangeRef.current(JSON.stringify(editor.document));
-    });
-  }, [collaborationState, editable, editor]);
-
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
-
-  useEffect(() => {
-    return () => {
-      if (emitFrameRef.current) {
-        window.cancelAnimationFrame(emitFrameRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!imageContextMenu.isOpen) return undefined;
-    const close = () => setImageContextMenu(prev => ({ ...prev, isOpen: false }));
-    window.addEventListener('click', close);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [imageContextMenu.isOpen]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadLegacyMarkdown = async () => {
-      if (collaborationState) {
-        isLoadingRef.current = false;
-        return;
-      }
-      const source = initialContentRef.current || '';
-      const nativeBlocks = parseBlockNoteContent(source);
-      if (nativeBlocks) {
-        isLoadingRef.current = false;
-        return;
-      }
-
-      if (!source.trim()) {
-        isLoadingRef.current = false;
-        return;
-      }
-
-      try {
-        const blocks = await editor.tryParseMarkdownToBlocks(source);
-        if (isCancelled) return;
-        editor.replaceBlocks(editor.document, blocks);
-        isLoadingRef.current = false;
-        emitEditorDocument();
-      } catch {
-        isLoadingRef.current = false;
-      }
-    };
-
-    loadLegacyMarkdown();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [collaborationState, contentKey, editor, emitEditorDocument]);
-
-  useEffect(() => {
-    if (!collaborationState || !collaborationSynced || collaborationServerReadOnly) return;
-    if (legacyMigrationRef.current === contentKey) return;
-    if (collaborationState.fragment.length > 0) return;
-    const source = initialContentRef.current || '';
-    if (!source.trim()) return;
-
-    let isCancelled = false;
-    const migrateLegacyContent = async () => {
-      try {
-        const nativeBlocks = parseBlockNoteContent(source);
-        const blocks = nativeBlocks || await editor.tryParseMarkdownToBlocks(source);
-        if (isCancelled || !Array.isArray(blocks) || blocks.length === 0 || collaborationState.fragment.length > 0) return;
-        collaborationState.doc.transact(() => {
-          if (collaborationState.fragment.length === 0) {
-            blocksToYXmlFragment(editor, blocks, collaborationState.fragment);
-          }
-        });
-        legacyMigrationRef.current = contentKey;
-      } catch {
-        legacyMigrationRef.current = contentKey;
-      }
-    };
-
-    migrateLegacyContent();
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    collaborationServerReadOnly,
-    collaborationSynced,
-    collaborationState,
-    contentKey,
-    editor
-  ]);
-
-  return (
-    <div
-      className="wiki-block-editor"
-      onContextMenu={async (event) => {
-        if (!editable) return;
-        event.preventDefault();
-        await onRequestAssets?.();
-        setImageContextMenu({ isOpen: true, x: event.clientX, y: event.clientY });
-      }}
-      onDragOver={(event) => {
-        if (!editable) return;
-        const hasImageAsset = event.dataTransfer.types.includes('application/x-mythra-asset-image');
-        const hasImageFile = Array.from(event.dataTransfer.items || []).some(item => item.kind === 'file' && item.type.startsWith('image/'));
-        if (hasImageAsset || hasImageFile) {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'copy';
-        }
-      }}
-      onDrop={async (event) => {
-        if (!editable) return;
-        const assetPayload = event.dataTransfer.getData('application/x-mythra-asset-image');
-        if (assetPayload) {
-          event.preventDefault();
-          try {
-            const asset = JSON.parse(assetPayload);
-            insertImageBlock(getAssetUrl(asset.path), asset.name);
-          } catch {
-            // Ignore invalid drag payloads from outside the app.
-          }
-          return;
-        }
-
-        const imageFiles = Array.from(event.dataTransfer.files || []).filter(file => file.type.startsWith('image/'));
-        if (imageFiles.length === 0) return;
-        event.preventDefault();
-        for (const file of imageFiles) {
-          await uploadAndInsertImage(file);
-        }
-      }}
-    >
-      {editable && imageContextMenu.isOpen && (
-        <div
-          className="context-menu glass-panel wiki-image-context-menu"
-          style={{ top: imageContextMenu.y, left: imageContextMenu.x }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="context-menu-section-label">{labels.insertImage}</div>
-          {assetImages.length === 0 ? (
-            <span className="context-menu-empty">{labels.noAssetImages}</span>
-          ) : (
-            assetImages.map(asset => (
-              <button
-                key={asset.path}
-                type="button"
-                onClick={() => {
-                  insertImageBlock(getAssetUrl(asset.path), asset.name);
-                  setImageContextMenu(prev => ({ ...prev, isOpen: false }));
-                }}
-              >
-                <img className="context-menu-thumb" src={getAssetUrl(asset.path)} alt="" />
-                <span>{asset.name}</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-      <BlockNoteView
-        editor={editor}
-        editable={editable && !collaborationReadOnly}
-        theme="dark"
-        slashMenu={false}
-        sideMenu={false}
-        formattingToolbar={false}
-        onChange={emitEditorDocument}
-      >
-        <SideMenuController sideMenu={MythraSideMenu} />
-        <FormattingToolbarController formattingToolbar={MythraFormattingToolbar} />
-        <SuggestionMenuController
-          triggerCharacter="/"
-          getItems={getSlashMenuItems}
-        />
-      </BlockNoteView>
-    </div>
-  );
-}
-
-function convertImageToWebp(file) {
-  return new Promise((resolve, reject) => {
-    const image = new window.Image();
-    const objectUrl = URL.createObjectURL(file);
-    image.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const context = canvas.getContext('2d');
-      context.drawImage(image, 0, 0);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(objectUrl);
-        if (!blob) {
-          reject(new Error('Could not convert image'));
-          return;
-        }
-        resolve(blob);
-      }, 'image/webp', 0.86);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Could not read image'));
-    };
-    image.src = objectUrl;
-  });
-}
-
-async function prepareAssetUpload(file) {
-  const extension = getFileExtension(file.name);
-  const isGif = extension === 'gif' || file.type === 'image/gif';
-
-  if (file.type.startsWith('image/') && !isGif) {
-    const blob = await convertImageToWebp(file);
-    return {
-      blob,
-      filename: `${getFileBaseName(file.name)}.webp`,
-      contentType: 'image/webp'
-    };
-  }
-
-  if (isGif) {
-    return { blob: file, filename: file.name, contentType: file.type || 'image/gif' };
-  }
-
-  if (file.type.startsWith('audio/') && AUDIO_EXTENSIONS.has(extension)) {
-    return { blob: file, filename: file.name, contentType: file.type || 'application/octet-stream' };
-  }
-
-  throw new Error('Unsupported asset type');
+function normalizeIconSearch(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
@@ -1176,6 +510,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [viewMode, setViewMode] = useState('edit'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
+  const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
   const [assetTree, setAssetTree] = useState([]);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -1199,6 +534,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [worldPresenceUsers, setWorldPresenceUsers] = useState([]);
   const [activeTabVisitorCount, setActiveTabVisitorCount] = useState(0);
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
+  const [documentMovePrompt, setDocumentMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
@@ -1230,11 +566,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/tree`);
       if (res.ok) {
         const data = await res.json();
-        setTree(data.items || []);
+        const items = data.items || [];
+        setTree(items);
+        return items;
       }
     } catch {
       addToast(t('common.error'), 'error');
     }
+    return null;
   }, [addToast, t, worldId]);
 
   const fetchWorldData = useCallback(async () => {
@@ -1755,6 +1094,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           metadata: {
             type: 'tab',
             contentType,
+            name: tabName,
             ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {})
           }
         })
@@ -1767,7 +1107,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           icon: null,
           type: 'tab',
           contentType,
-          metadata: { type: 'tab', contentType, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
+          metadata: { type: 'tab', contentType, name: tabName, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
         };
 
         if (contentType === 'wiki') {
@@ -2081,12 +1421,18 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
+  const closeDocumentIconPicker = useCallback(() => {
+    setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
+    setIconSearchQuery('');
+  }, []);
+
   const openDocumentIconPicker = (event) => {
     if (isVisitor || !selectedContainer) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const pickerWidth = 336;
-    const pickerHeight = 392;
+    const pickerWidth = 420;
+    const pickerHeight = 520;
     const viewportPadding = 12;
+    setIconSearchQuery('');
     setDocumentIconPicker({
       isOpen: true,
       top: Math.min(
@@ -2109,7 +1455,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         body: JSON.stringify({ path: selectedContainer.path, metadata: { icon } })
       });
       if (res.ok) {
-        setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
+        closeDocumentIconPicker();
         setSelectedContainer(prev => prev ? { ...prev, icon, metadata: { ...prev.metadata, icon } } : prev);
         await fetchTree();
       } else {
@@ -2156,6 +1502,25 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     return filterNodes(assetTree);
   }, [assetSearchQuery, assetTree]);
+  const filteredDocumentIconCategories = useMemo(() => {
+    const query = normalizeIconSearch(iconSearchQuery);
+    if (!query) return DOCUMENT_ICON_CATEGORIES;
+
+    return DOCUMENT_ICON_CATEGORIES
+      .map(category => ({
+        ...category,
+        icons: category.icons.filter(icon => {
+          const searchableText = normalizeIconSearch([
+            icon.key,
+            category.id,
+            ...(icon.aliases || [])
+          ].join(' '));
+          return searchableText.includes(query);
+        })
+      }))
+      .filter(category => category.icons.length > 0);
+  }, [iconSearchQuery]);
+  const filteredDocumentIconCount = filteredDocumentIconCategories.reduce((total, category) => total + category.icons.length, 0);
 
   const assetMoveTargets = useMemo(() => {
     const sourceNode = assetMovePrompt.node;
@@ -2173,6 +1538,22 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }))
     ];
   }, [assetMovePrompt.node, assetTree, t]);
+  const documentMoveTargets = useMemo(() => {
+    const sourceNode = documentMovePrompt.node;
+    return [
+      {
+        name: t('workspace.documents_root_target'),
+        path: '',
+        depth: 0,
+        disabled: isInvalidDocumentMoveTarget(sourceNode, '')
+      },
+      ...getDocumentContainers(tree).map(document => ({
+        ...document,
+        depth: document.path.split('/').length,
+        disabled: isInvalidDocumentMoveTarget(sourceNode, document.path)
+      }))
+    ];
+  }, [documentMovePrompt.node, tree, t]);
   const assetImages = useMemo(() => getAssetImages(assetTree), [assetTree]);
 
   const getUniqueDocumentName = (parentPath = '') => {
@@ -2315,6 +1696,53 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         setAssetDeletePrompt({ isOpen: false, node: null });
         await fetchAssets();
         addToast(t('common.deleted'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const openDocumentMovePrompt = (node) => {
+    if (isVisitor || !node || node.type !== 'container') return;
+    setDocumentMovePrompt({ isOpen: true, node, targetPath: pathParent(node.path) });
+  };
+
+  const confirmDocumentMove = async () => {
+    const node = documentMovePrompt.node;
+    if (isVisitor || !node) return;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourcePath: node.path,
+          targetParentPath: documentMovePrompt.targetPath
+        })
+      });
+      if (res.ok) {
+        const moved = await res.json();
+        setDocumentMovePrompt({ isOpen: false, node: null, targetPath: '' });
+        setSearchQuery('');
+        if (moved.homePage !== undefined) {
+          setWorldData(prev => prev ? { ...prev, homePage: moved.homePage } : prev);
+        }
+        const nextTree = await fetchTree();
+        const movedNode = nextTree ? findNodeByUid(nextTree, moved.uid) : null;
+        const isInsideMovedDocument = (item) => item?.path === moved.previousPath || item?.path?.startsWith(`${moved.previousPath}/`);
+        if (movedNode && isInsideMovedDocument(selectedContainer)) {
+          const nextSelected = selectedContainer.uid === moved.uid
+            ? movedNode
+            : findNodeByUid(movedNode.children || [], selectedContainer.uid);
+          if (nextSelected) setSelectedContainer(nextSelected);
+        }
+        if (movedNode && isInsideMovedDocument(activeTab)) {
+          const nextActiveTab = findNodeByUid(movedNode.children || [], activeTab.uid);
+          if (nextActiveTab) setActiveTab(nextActiveTab);
+        }
+        addToast(t('workspace.document_moved'), 'success');
       } else {
         addToast(t('common.error'), 'error');
       }
@@ -2606,19 +2034,41 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const shareWorld = async () => {
+    if (!worldData?.publicRead) {
+      addToast(t('workspace.share_world_public_required'), 'error');
+      setWorldActionsMenu(false);
+      return;
+    }
+
     const shareUrl = new URL(`/world/${encodeURIComponent(worldId)}`, window.location.origin);
     shareUrl.searchParams.set('view', 'true');
-    if (selectedContainer?.path) {
-      shareUrl.searchParams.set('document', selectedContainer.path);
-    }
-    if (activeTab?.path) {
-      shareUrl.searchParams.set('tab', activeTab.path);
-    }
     setWorldActionsMenu(false);
 
     try {
       await copyTextToClipboard(shareUrl.toString());
       addToast(t('workspace.share_world_copied'), 'success');
+    } catch {
+      addToast(t('workspace.share_world_failed'), 'error');
+    }
+  };
+
+  const shareCurrentTab = async () => {
+    if (!worldData?.publicRead) {
+      addToast(t('workspace.share_world_public_required'), 'error');
+      setWorldActionsMenu(false);
+      return;
+    }
+    if (!selectedContainer?.path || !activeTab?.path) return;
+
+    const shareUrl = new URL(`/world/${encodeURIComponent(worldId)}`, window.location.origin);
+    shareUrl.searchParams.set('view', 'true');
+    shareUrl.searchParams.set('document', selectedContainer.path);
+    shareUrl.searchParams.set('tab', activeTab.path);
+    setWorldActionsMenu(false);
+
+    try {
+      await copyTextToClipboard(shareUrl.toString());
+      addToast(t('workspace.share_tab_copied'), 'success');
     } catch {
       addToast(t('workspace.share_world_failed'), 'error');
     }
@@ -2829,7 +2279,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       >
         {isDocumentUnlocked ? <Unlock size={16} /> : <Lock size={16} />}
       </button>
-      {activeTab && (
+      {selectedContainer && (
         <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
           <button
             type="button"
@@ -2845,7 +2295,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <Share2 size={14} />
                 <span>{t('workspace.share_world')}</span>
               </button>
-              {!isMapTab && (
+              {activeTab && (
+                <button type="button" onClick={shareCurrentTab}>
+                  <Copy size={14} />
+                  <span>{t('workspace.share_tab')}</span>
+                </button>
+              )}
+              {activeTab && !isMapTab && (
                 <>
                   <button
                     type="button"
@@ -3504,7 +2960,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       {/* Modals & Overlays */}
       {documentIconPicker.isOpen && (
         <>
-          <div className="icon-picker-backdrop" onClick={() => setDocumentIconPicker({ isOpen: false, top: 0, left: 0 })} />
+          <div className="icon-picker-backdrop" onClick={closeDocumentIconPicker} />
           <div
             className="icon-selector-dropdown glass-panel"
             style={{ top: documentIconPicker.top, left: documentIconPicker.left }}
@@ -3514,18 +2970,59 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               <span>{t('workspace.change_icon')}</span>
               <strong>{selectedContainer?.name}</strong>
             </div>
-            <div className="icon-selector-grid">
-              {DOCUMENT_ICON_OPTIONS.map(key => (
+            <div className="icon-selector-search">
+              <Search size={15} />
+              <input
+                value={iconSearchQuery}
+                onChange={event => setIconSearchQuery(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    if (iconSearchQuery) setIconSearchQuery('');
+                    else closeDocumentIconPicker();
+                  }
+                }}
+                placeholder={t('workspace.icon_search_placeholder')}
+                autoFocus
+              />
+              {iconSearchQuery && (
                 <button
-                  key={key}
                   type="button"
-                  className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
-                  onClick={() => handleDocumentIconSelect(key)}
-                  title={key}
+                  onClick={() => setIconSearchQuery('')}
+                  title={t('common.clear')}
                 >
-                  {React.createElement(ICON_MAP[key], { size: 19 })}
+                  <X size={13} />
                 </button>
-              ))}
+              )}
+            </div>
+            <div className="icon-selector-body">
+              {filteredDocumentIconCount === 0 ? (
+                <div className="icon-selector-empty">
+                  <Search size={20} />
+                  <strong>{t('workspace.icon_search_empty')}</strong>
+                  <span>{t('workspace.icon_search_empty_hint')}</span>
+                </div>
+              ) : (
+                filteredDocumentIconCategories.map(category => (
+                  <section key={category.id} className="icon-selector-category">
+                    <div className="icon-selector-category-title">
+                      <span>{t(category.labelKey)}</span>
+                    </div>
+                    <div className="icon-selector-grid">
+                      {category.icons.map(({ key, icon: Icon }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
+                          onClick={() => handleDocumentIconSelect(key)}
+                          title={key}
+                        >
+                          <Icon size={19} />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
             </div>
           </div>
         </>
@@ -3664,6 +3161,58 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               <button type="button" className="delete-confirm-button" onClick={confirmDelete}>
                 <Trash2 size={16} />
                 <span>{t('workspace.delete_document_confirm')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {documentMovePrompt.isOpen && (
+        <div className="duplicate-modal-overlay" onClick={() => setDocumentMovePrompt({ isOpen: false, node: null, targetPath: '' })}>
+          <div className="modal-content glass-panel duplicate-modal" onClick={event => event.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={() => setDocumentMovePrompt({ isOpen: false, node: null, targetPath: '' })}
+              title={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon">
+                <MoveRight size={20} />
+              </div>
+              <div>
+                <h3>{t('workspace.move_document')}</h3>
+                <p>{t('workspace.move_document_hint', { name: documentMovePrompt.node?.name })}</p>
+              </div>
+            </div>
+
+            <div className="asset-move-target-list">
+              {documentMoveTargets.map(target => (
+                <button
+                  key={target.path || '__root__'}
+                  type="button"
+                  className={`asset-move-target ${documentMovePrompt.targetPath === target.path ? 'selected' : ''}`}
+                  disabled={target.disabled}
+                  onClick={() => setDocumentMovePrompt(prev => ({ ...prev, targetPath: target.path }))}
+                  style={{ paddingLeft: 12 + target.depth * 16 }}
+                >
+                  <Folder size={15} />
+                  <span>{target.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="asset-folder-create-button"
+                onClick={confirmDocumentMove}
+                disabled={documentMoveTargets.find(target => target.path === documentMovePrompt.targetPath)?.disabled}
+              >
+                <MoveRight size={16} />
+                <span>{t('workspace.move_document_confirm')}</span>
               </button>
             </div>
           </div>
@@ -3907,6 +3456,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 )}
                 <button onClick={() => { openDuplicatePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Copy size={14} /> {t('workspace.duplicate_document')}
+                </button>
+                <button onClick={() => { openDocumentMovePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                  <MoveRight size={14} /> {t('workspace.move_document')}
                 </button>
                 <button onClick={() => { setRenamingPath(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Edit2 size={14} /> {t('common.rename')}

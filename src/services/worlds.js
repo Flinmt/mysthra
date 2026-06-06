@@ -23,6 +23,10 @@ function isWorldMemberConfig(worldData, userId) {
   return Array.isArray(worldData?.members) && worldData.members.some((member) => member.userId === userId);
 }
 
+function normalizePublicRead(value) {
+  return value === true;
+}
+
 async function readWorldConfigById(worldId) {
   const safeId = validateWorldName(worldId);
   const worldRoot = resolveWorldRoot(safeId);
@@ -127,6 +131,7 @@ async function createWorld(data) {
     displayName: name,
     description: description || "",
     createdAt: Date.now(),
+    publicRead: normalizePublicRead(data.publicRead),
     members: []
   };
 
@@ -154,6 +159,9 @@ async function updateWorld(worldId, data) {
 
   if (name) worldData.displayName = name;
   if (description !== undefined) worldData.description = description;
+  if (Object.prototype.hasOwnProperty.call(data, "publicRead")) {
+    worldData.publicRead = normalizePublicRead(data.publicRead);
+  }
 
   await fs.writeFile(configPath, JSON.stringify(worldData, null, 2), "utf-8");
   return worldData;
@@ -233,6 +241,11 @@ async function getWorldConfig(worldId) {
 async function isWorldMember(worldId, userId) {
   const worldData = await getWorldConfig(worldId);
   return isWorldMemberConfig(worldData, userId);
+}
+
+async function isWorldPublicReadable(worldId) {
+  const worldData = await getWorldConfig(worldId);
+  return normalizePublicRead(worldData.publicRead);
 }
 
 async function listWorldMembers(worldId) {
@@ -338,6 +351,7 @@ module.exports = {
   getWorldThumbnail,
   getWorldConfig,
   isWorldMember,
+  isWorldPublicReadable,
   listWorldMembers,
   addWorldMember,
   removeWorldMember,

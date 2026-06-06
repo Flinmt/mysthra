@@ -187,11 +187,11 @@ async function migrateLegacyAssetsDirectory(worldRoot, assetsDir) {
 
   const assetsExists = await pathExists(assetsDir);
   if (assetsExists) {
-    const [legacyRealPath, assetsRealPath] = await Promise.all([
-      fs.realpath(legacyAssetsDir),
-      fs.realpath(assetsDir)
+    const [legacyStat, assetsStat] = await Promise.all([
+      fs.stat(legacyAssetsDir),
+      fs.stat(assetsDir)
     ]);
-    if (legacyRealPath.toLowerCase() === assetsRealPath.toLowerCase()) return;
+    if (legacyStat.dev === assetsStat.dev && legacyStat.ino === assetsStat.ino) return;
   }
 
   if (!assetsExists) {

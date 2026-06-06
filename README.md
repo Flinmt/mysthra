@@ -65,7 +65,7 @@ The project is in beta and moving fast. The current focus is a solid writing/wor
 ### Visitor Mode
 
 - Public visitor links use `/world/:id?view=true`.
-- Visitor mode requires `PUBLIC_READ=true` on the server.
+- Visitor mode must be enabled per world with the "Public visitor link" setting.
 - Visitors are read-only.
 - Visitors see only the Wiki tree, not Assets or Templates UI.
 - Visitors cannot create, edit, upload, rename, delete, change covers, or unlock documents.
@@ -78,7 +78,7 @@ Mysthra stores data on disk under `data/` by default.
 
 - `data/users.json`: internal non-admin users.
 - `data/sessions.json`: active sessions with server-side expiration.
-- `data/worlds/<world>/world.json`: world metadata, members, thumbnail info, and home page.
+- `data/worlds/<world>/world.json`: world metadata, members, thumbnail info, home page, and per-world public visitor setting.
 - `data/worlds/<world>/documents`: document/container/tab content and metadata.
 - `data/worlds/<world>/assets`: uploaded media files.
 
@@ -102,7 +102,8 @@ Create a `.env` file in the repository root:
 PORT=3000
 ADMIN_USERNAME=admin
 MASTER_PASSWORD=change-this-password
-PUBLIC_READ=false
+MAX_JSON_BODY_SIZE=1mb
+MAX_UPLOAD_SIZE=50mb
 ```
 
 Important variables:
@@ -110,12 +111,13 @@ Important variables:
 - `PORT`: HTTP port used by the Node server.
 - `ADMIN_USERNAME`: global admin username. Defaults to `admin`.
 - `MASTER_PASSWORD`: password for the global admin. Required in production.
-- `PUBLIC_READ`: enables unauthenticated visitor access when set to `true`.
 
 Optional advanced variables:
 
 - `USERS_FILE`: custom path for the users JSON file.
 - `SESSION_FILE`: custom path for the sessions JSON file.
+- `MAX_JSON_BODY_SIZE`: maximum API JSON body size. Defaults to `1mb`.
+- `MAX_UPLOAD_SIZE`: maximum thumbnail/asset upload size. Defaults to `50mb`.
 
 ---
 
@@ -160,7 +162,6 @@ The repository includes a `docker-compose.yml` for self-hosting:
 
 ```bash
 export MASTER_PASSWORD=change-this-password
-export PUBLIC_READ=false
 docker-compose up -d
 ```
 
@@ -176,7 +177,7 @@ Persistent data is mounted at:
 ./data:/app/data
 ```
 
-Set `PUBLIC_READ=true` only if you want visitor links to work without login.
+Enable the public visitor link only on the worlds you want to share.
 
 ---
 
