@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Text, Image as KonvaImage, Group, Transformer, Path } from 'react-konva';
 import { Focus, Grid2X2, Grid3X3, Hexagon, Image, MapPin, Minus, MousePointer2, Plus, Trash2, Type, Upload, Users } from 'lucide-react';
+import DropdownSelect from './DropdownSelect';
 import { __iconNode as BookIconNode } from 'lucide-react/dist/esm/icons/book.mjs';
 import { __iconNode as CastleIconNode } from 'lucide-react/dist/esm/icons/castle.mjs';
 import { __iconNode as CircleHelpIconNode } from 'lucide-react/dist/esm/icons/circle-question-mark.mjs';
@@ -1154,36 +1155,35 @@ export default function MapEditor({
             </div>
           </div>
 
-          <label className="map-marker-field">
+            <label className="map-marker-field">
             <span>{labels.markerLinkedDocument || 'Linked document'}</span>
-            <select
+            <DropdownSelect
               value={editedMarker.props?.linkedDocumentPath || ''}
-              onChange={event => updateMarkerProps(editedMarker, {
-                linkedDocumentPath: event.target.value,
-                linkedTabPath: ''
-              })}
-            >
-              <option value="">{labels.markerNoLink || 'No link'}</option>
-              {linkDocuments.map(document => (
-                <option key={document.path} value={document.path}>
-                  {`${'  '.repeat(document.depth)}${document.name}`}
-                </option>
-              ))}
-            </select>
+              onChange={path => updateMarkerProps(editedMarker, { linkedDocumentPath: path, linkedTabPath: '' })}
+              options={[
+                { value: '', label: labels.markerNoLink || 'No link' },
+                ...linkDocuments.map(document => ({
+                  value: document.path,
+                  label: `${'  '.repeat(document.depth)}${document.name}`
+                }))
+              ]}
+            />
           </label>
 
           {editedMarker.props?.linkedDocumentPath && (
             <label className="map-marker-field">
               <span>{labels.markerLinkedTab || 'Linked tab'}</span>
-              <select
+              <DropdownSelect
                 value={editedMarker.props?.linkedTabPath || ''}
-                onChange={event => updateMarkerProps(editedMarker, { linkedTabPath: event.target.value })}
-              >
-                <option value="">{labels.markerDocumentDefaultTab || 'Document default tab'}</option>
-                {linkedTabs.map(tab => (
-                  <option key={tab.path} value={tab.path}>{tab.name}</option>
-                ))}
-              </select>
+                onChange={path => updateMarkerProps(editedMarker, { linkedTabPath: path })}
+                options={[
+                  { value: '', label: labels.markerDocumentDefaultTab || 'Document default tab' },
+                  ...linkedTabs.map(tab => ({
+                    value: tab.path,
+                    label: tab.name
+                  }))
+                ]}
+              />
             </label>
           )}
 

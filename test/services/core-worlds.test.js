@@ -17,8 +17,10 @@ const {
   duplicateAsset,
   duplicateDocument,
   listAssets,
+  listWorldMembers,
   listWorlds,
   getFileTree,
+  getWorldRole,
   getPathByUid,
   isWorldPublicReadable,
   moveAsset,
@@ -31,6 +33,7 @@ const {
   setHomePage,
   updateDocumentContent,
   updateDocumentMetadata,
+  updateWorldMemberRole,
   updateWorld
 } = require("../../src/services");
 
@@ -180,6 +183,30 @@ test("world members filter common user world access", async () => {
   const adminWorlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
   assert.equal(adminWorlds.some((world) => world.id === worldA), true);
   assert.equal(adminWorlds.some((world) => world.id === worldB), true);
+});
+
+test("world members support per-world admin roles", async () => {
+  const worldName = "core-members-roles";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const member = await createUser({ username: `member-role-${Date.now()}`, password: "secret-pass" });
+  const admin = await createUser({ username: `admin-role-${Date.now()}`, password: "secret-pass" });
+
+  await addWorldMember(worldName, member.id);
+  await addWorldMember(worldName, admin.id, "admin");
+
+  let members = await listWorldMembers(worldName);
+  assert.equal(members.find((item) => item.userId === member.id).role, "member");
+  assert.equal(members.find((item) => item.userId === admin.id).role, "admin");
+
+  assert.equal(await getWorldRole(worldName, { userId: member.id, username: member.username }), "member");
+  assert.equal(await getWorldRole(worldName, { userId: admin.id, username: admin.username }), "world-admin");
+  assert.equal(await getWorldRole(worldName, { userId: "admin", username: "admin", isAdmin: true }), "global-admin");
+
+  members = await updateWorldMemberRole(worldName, member.id, "admin");
+  assert.equal(members.find((item) => item.userId === member.id).role, "admin");
+  assert.equal(await getWorldRole(worldName, { userId: member.id, username: member.username }), "world-admin");
 });
 
 test("document tree supports containers and editable tabs", async () => {

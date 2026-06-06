@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
+import DropdownSelect from './DropdownSelect';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -607,12 +608,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [addToast, t, worldId]);
 
   const fetchMembersPanelData = useCallback(async () => {
-    if (!currentUser?.isAdmin) return;
+    if (!worldData?.canManageMembers) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const [membersRes, usersRes] = await Promise.all([
         fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`),
-        fetch('/api/users')
+        fetch(`/api/worlds/${encodeURIComponent(worldId)}/available-users`)
       ]);
       if (!membersRes.ok || !usersRes.ok) {
         setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
@@ -630,10 +631,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     } catch {
       setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
     }
-  }, [currentUser?.isAdmin, t, worldId]);
+  }, [t, worldData?.canManageMembers, worldId]);
 
   const openMembersPanel = () => {
-    if (!currentUser?.isAdmin) return;
+    if (!worldData?.canManageMembers) return;
     setMembersPanel(prev => ({ ...prev, isOpen: true, error: '' }));
     fetchMembersPanelData();
   };
@@ -1237,7 +1238,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const addExistingMember = async () => {
-    if (!currentUser?.isAdmin || !membersPanel.userId) return;
+    if (!worldData?.canManageMembers || !membersPanel.userId) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
@@ -1258,7 +1259,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const createAndAddMember = async () => {
-    if (!currentUser?.isAdmin || !membersPanel.username.trim() || !membersPanel.password) return;
+    if (!worldData?.canManageMembers || !membersPanel.username.trim() || !membersPanel.password) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
@@ -1289,11 +1290,32 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeMember = async (userId) => {
-    if (!currentUser?.isAdmin) return;
+    if (!worldData?.canManageMembers) return;
     setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
         method: 'DELETE'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
+      } else {
+        const data = await res.json();
+        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
+      }
+    } catch {
+      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const updateMemberRole = async (userId, role) => {
+    if (!worldData?.canManageMembers) return;
+    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role })
       });
       if (res.ok) {
         const data = await res.json();
@@ -2227,7 +2249,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
-  const isAdmin = Boolean(currentUser?.isAdmin);
+  const canManageMembers = Boolean(worldData?.canManageMembers);
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit';
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
@@ -2456,7 +2478,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <ArrowLeft size={18} />
               </button>
             )}
-            {isAdmin && (
+            {canManageMembers && (
               <button className="sidebar-icon-button" onClick={openMembersPanel} title={t('workspace.manage_members')}>
                 <Users size={18} />
               </button>
@@ -3347,87 +3369,94 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       )}
 
       {membersPanel.isOpen && (
-        <div className="duplicate-modal-overlay" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}>
-          <div className="modal-content glass-panel duplicate-modal" onClick={event => event.stopPropagation()}>
-            <button
-              type="button"
-              className="duplicate-modal-close"
-              onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}
-              aria-label={t('common.cancel')}
-            >
-              <X size={16} />
-            </button>
-            <div className="duplicate-modal-header">
-              <div className="duplicate-modal-icon">
-                <Users size={22} />
-              </div>
+        <div className="modal-backdrop" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}>
+          <div className="user-admin-modal members-admin-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="user-admin-modal-header">
               <div>
-                <h3>{t('workspace.world_members')}</h3>
+                <h2>{t('workspace.world_members')}</h2>
                 <p>{t('workspace.world_members_hint')}</p>
               </div>
+              <button type="button" className="user-admin-close" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))} disabled={membersPanel.loading} aria-label={t('common.cancel')}>
+                ×
+              </button>
             </div>
 
-            <div className="members-panel-section">
-              <div className="context-menu-section-label">{t('workspace.current_members')}</div>
-              {membersPanel.members.length === 0 ? (
-                <span className="context-menu-empty">{t('workspace.no_members')}</span>
-              ) : (
-                <div className="members-list">
-                  {membersPanel.members.map(member => (
-                    <div key={member.userId} className="member-row">
-                      <span>{member.user?.username || member.userId}</span>
-                      <button type="button" className="node-action-btn danger" onClick={() => removeMember(member.userId)} disabled={membersPanel.loading}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
+            <div className="user-admin-modal-body members-admin-grid">
+              <div className="user-admin-directory">
+                <div className="user-admin-section-title">{t('workspace.current_members')}</div>
+                {membersPanel.members.length === 0 ? (
+                  <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
+                ) : (
+                  <div className="user-admin-list members-list">
+                    {membersPanel.members.map(member => (
+                      <div key={member.userId} className="member-row">
+                        <div className="member-row-main">
+                          <strong>{member.user?.username || member.userId}</strong>
+                        </div>
+                        <div className="member-row-actions">
+                          <div className="user-admin-role-segments" aria-label={t('workspace.member_role')}>
+                            {[
+                              ['member', t('workspace.member_role_member')],
+                              ['admin', t('workspace.member_role_admin')]
+                            ].map(([nextRole, label]) => (
+                              <button key={nextRole} type="button" className={member.role === nextRole ? 'active' : ''} disabled={membersPanel.loading} onClick={() => {
+                                if (nextRole !== member.role) updateMemberRole(member.userId, nextRole)
+                              }}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <button type="button" className="user-admin-text-danger" onClick={() => removeMember(member.userId)} disabled={membersPanel.loading}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="members-add-card">
+                <div className="user-admin-section-title">{t('workspace.add_existing_member')}</div>
+                <div className="member-form-row">
+                  <DropdownSelect
+                    value={membersPanel.userId}
+                    onChange={userId => setMembersPanel(prev => ({ ...prev, userId }))}
+                    options={availableUsers.map(user => ({ value: user.id, label: user.username }))}
+                    placeholder={t('workspace.select_user')}
+                    disabled={membersPanel.loading || availableUsers.length === 0}
+                  />
+                  <button type="button" className="user-admin-secondary" onClick={addExistingMember} disabled={membersPanel.loading || !membersPanel.userId}>
+                    {t('common.add')}
+                  </button>
                 </div>
-              )}
-            </div>
 
-            <div className="members-panel-section">
-              <div className="context-menu-section-label">{t('workspace.add_existing_member')}</div>
-              <div className="member-form-row">
-                <select
-                  value={membersPanel.userId}
-                  onChange={event => setMembersPanel(prev => ({ ...prev, userId: event.target.value }))}
-                  disabled={membersPanel.loading || availableUsers.length === 0}
-                >
-                  <option value="">{t('workspace.select_user')}</option>
-                  {availableUsers.map(user => (
-                    <option key={user.id} value={user.id}>{user.username}</option>
-                  ))}
-                </select>
-                <button type="button" className="btn-secondary" onClick={addExistingMember} disabled={membersPanel.loading || !membersPanel.userId}>
-                  {t('common.add')}
-                </button>
+                <div className="members-create-divider" />
+
+                <div className="user-admin-section-title">{t('workspace.create_member_user')}</div>
+                <div className="user-admin-form-stack">
+                  <input
+                    type="text"
+                    value={membersPanel.username}
+                    onChange={event => setMembersPanel(prev => ({ ...prev, username: event.target.value }))}
+                    placeholder={t('login.username_placeholder')}
+                    disabled={membersPanel.loading}
+                  />
+                  <input
+                    type="password"
+                    value={membersPanel.password}
+                    onChange={event => setMembersPanel(prev => ({ ...prev, password: event.target.value }))}
+                    placeholder={t('login.password_placeholder')}
+                    disabled={membersPanel.loading}
+                  />
+                  <button type="button" className="user-admin-primary" onClick={createAndAddMember} disabled={membersPanel.loading || !membersPanel.username.trim() || !membersPanel.password}>
+                    {t('workspace.create_and_add_member')}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="members-panel-section">
-              <div className="context-menu-section-label">{t('workspace.create_member_user')}</div>
-              <div className="member-form-stack">
-                <input
-                  type="text"
-                  value={membersPanel.username}
-                  onChange={event => setMembersPanel(prev => ({ ...prev, username: event.target.value }))}
-                  placeholder={t('login.username_placeholder')}
-                  disabled={membersPanel.loading}
-                />
-                <input
-                  type="password"
-                  value={membersPanel.password}
-                  onChange={event => setMembersPanel(prev => ({ ...prev, password: event.target.value }))}
-                  placeholder={t('login.password_placeholder')}
-                  disabled={membersPanel.loading}
-                />
-                <button type="button" className="btn-primary" onClick={createAndAddMember} disabled={membersPanel.loading || !membersPanel.username.trim() || !membersPanel.password}>
-                  {t('workspace.create_and_add_member')}
-                </button>
-              </div>
-            </div>
-
-            {membersPanel.error && <div className="error-msg">{membersPanel.error}</div>}
+            {membersPanel.error && <div className="user-admin-error">{membersPanel.error}</div>}
           </div>
         </div>
       )}
@@ -3444,12 +3473,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <button onClick={() => { createDocumentInline(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Plus size={14} /> {t('workspace.create_document')}
                 </button>
-                {isAdmin && isRootContainer(contextMenu.node) && worldData?.homePage !== contextMenu.node.path && (
+                {canManageMembers && isRootContainer(contextMenu.node) && worldData?.homePage !== contextMenu.node.path && (
                   <button onClick={() => { updateHomePage(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                     <Home size={14} /> {t('workspace.set_home_page')}
                   </button>
                 )}
-                {isAdmin && isRootContainer(contextMenu.node) && worldData?.homePage === contextMenu.node.path && (
+                {canManageMembers && isRootContainer(contextMenu.node) && worldData?.homePage === contextMenu.node.path && (
                   <button onClick={() => { updateHomePage(null); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                     <Home size={14} /> {t('workspace.unset_home_page')}
                   </button>
