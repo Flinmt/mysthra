@@ -43,6 +43,15 @@ export function findNodeByPath(nodes = [], targetPath = '') {
   return null;
 }
 
+export function findNodeByUid(nodes = [], targetUid = '') {
+  for (const node of nodes) {
+    if (node.uid === targetUid) return node;
+    const childMatch = findNodeByUid(node.children || [], targetUid);
+    if (childMatch) return childMatch;
+  }
+  return null;
+}
+
 export function findAssetByPath(nodes = [], targetPath = '') {
   for (const node of nodes) {
     if (node.path === targetPath) return node;
@@ -65,6 +74,19 @@ export function getAssetFolders(nodes = []) {
   return folders;
 }
 
+export function getDocumentContainers(nodes = []) {
+  const containers = [];
+  const walk = (items) => {
+    for (const item of items) {
+      if (item.type !== 'container') continue;
+      containers.push(item);
+      walk(item.children || []);
+    }
+  };
+  walk(nodes);
+  return containers;
+}
+
 export function getAssetImages(nodes = []) {
   const images = [];
   const walk = (items) => {
@@ -83,6 +105,16 @@ export function getAssetImages(nodes = []) {
 export function isInvalidAssetMoveTarget(sourceNode, targetPath) {
   if (!sourceNode || sourceNode.type !== 'folder') return false;
   return targetPath === sourceNode.path || targetPath.startsWith(`${sourceNode.path}/`);
+}
+
+export function isInvalidDocumentMoveTarget(sourceNode, targetPath) {
+  if (!sourceNode || sourceNode.type !== 'container') return true;
+  const currentParent = pathParent(sourceNode.path);
+  return (
+    targetPath === currentParent ||
+    targetPath === sourceNode.path ||
+    targetPath.startsWith(`${sourceNode.path}/`)
+  );
 }
 
 export function getFileExtension(filename = '') {

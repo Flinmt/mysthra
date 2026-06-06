@@ -19,8 +19,10 @@ const {
   listAssets,
   listWorlds,
   getFileTree,
+  getPathByUid,
   isWorldPublicReadable,
   moveAsset,
+  moveDocument,
   readDocument,
   renameAsset,
   renameDocument,
@@ -280,6 +282,108 @@ test("document metadata updates reject structural fields", async () => {
   assert.equal(tree[0].uid, document.uid);
   assert.equal(tree[0].type, "container");
   assert.equal(tree[0].contentType, null);
+});
+
+test("moveDocument moves containers with children and updates tab index paths", async () => {
+  const worldName = "core-tree-move";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const source = await createDocument(worldName, "Source", "", {
+    type: "container"
+  });
+  const target = await createDocument(worldName, "Target", "", {
+    type: "container"
+  });
+  const child = await createDocument(worldName, `${source.path}/Child`, "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${child.path}/Overview`, "# Moved", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  const moved = await moveDocument(worldName, source.path, target.path);
+  assert.equal(moved.previousPath, source.path);
+  assert.equal(moved.path, `${target.path}/${source.uid}`);
+
+  const tree = await getFileTree(worldName);
+  const targetNode = tree.find(node => node.path === target.path);
+  const movedNode = targetNode.children.find(node => node.uid === source.uid);
+  assert.equal(movedNode.name, "Source");
+  assert.equal(movedNode.children[0].name, "Child");
+  assert.equal(movedNode.children[0].children[0].name, "Overview");
+  assert.equal(await getPathByUid(worldName, tab.uid), `${moved.path}/${child.uid}/${tab.uid}`);
+  assert.equal((await readDocument(worldName, getPathByUid(worldName, tab.uid))).content, "# Moved");
+});
+
+test("moveDocument moves nested containers to the root", async () => {
+  const worldName = "core-tree-move-root";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const parent = await createDocument(worldName, "Parent", "", {
+    type: "container"
+  });
+  const child = await createDocument(worldName, `${parent.path}/Child`, "", {
+    type: "container"
+  });
+
+  const moved = await moveDocument(worldName, child.path, "");
+  assert.equal(moved.path, child.uid);
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree.some(node => node.path === child.uid && node.name === "Child"), true);
+});
+
+test("moveDocument rejects tabs and recursive targets", async () => {
+  const worldName = "core-tree-move-guards";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const source = await createDocument(worldName, "Source", "", {
+    type: "container"
+  });
+  const child = await createDocument(worldName, `${source.path}/Child`, "", {
+    type: "container"
+  });
+  const tab = await createDocument(worldName, `${source.path}/Overview`, "# Notes", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  await assert.rejects(
+    () => moveDocument(worldName, tab.path, ""),
+    { code: "INVALID_PATH" }
+  );
+  await assert.rejects(
+    () => moveDocument(worldName, source.path, source.path),
+    { code: "INVALID_PATH" }
+  );
+  await assert.rejects(
+    () => moveDocument(worldName, source.path, child.path),
+    { code: "INVALID_PATH" }
+  );
+});
+
+test("moveDocument clears home page when home leaves the root", async () => {
+  const worldName = "core-tree-move-home";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const home = await createDocument(worldName, "Home", "", {
+    type: "container"
+  });
+  const target = await createDocument(worldName, "Target", "", {
+    type: "container"
+  });
+  await setHomePage(worldName, home.path);
+
+  const moved = await moveDocument(worldName, home.path, target.path);
+  assert.equal(moved.homePage, null);
+
+  const worlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  assert.equal(worlds.find(world => world.id === worldName).homePage, null);
 });
 
 test("deleteDocument removes a document subtree", async () => {

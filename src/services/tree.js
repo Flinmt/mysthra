@@ -1,7 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { getWorldPaths, validateRelativePath, ensureWorldStructure, validateWorldName } = require("../data/filesystem");
+const { getWorldPaths, resolveWorldRoot, validateRelativePath, ensureWorldStructure, validateWorldName } = require("../data/filesystem");
 const {
   broadcastWorldLockUpdate,
   broadcastWorldTreeUpdate,
@@ -270,6 +270,31 @@ async function collectDocumentMetadata(pagesDir, safePath) {
   return metadataEntries;
 }
 
+async function collectDocumentMetadataWithPaths(pagesDir, safePath) {
+  const fullPath = path.join(pagesDir, safePath);
+  const entriesWithPaths = [];
+
+  async function walk(currentPath) {
+    const metadata = await readDocumentMetadata(pagesDir, currentPath);
+    entriesWithPaths.push({ path: currentPath, metadata });
+
+    const currentFullPath = path.join(pagesDir, currentPath);
+    const entries = await fs.readdir(currentFullPath, { withFileTypes: true }).catch((error) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      await walk(`${currentPath}/${entry.name}`);
+    }
+  }
+
+  await fs.stat(fullPath);
+  await walk(safePath);
+  return entriesWithPaths;
+}
+
 async function collectWikiTabMetadata(pagesDir, safePath) {
   const entries = await collectDocumentMetadata(pagesDir, safePath);
   return entries.filter((metadata) =>
@@ -330,28 +355,91 @@ async function renameDocument(worldName, docPath, newName) {
   return { success: true, path: safePath, name: newName, uid: metadata.uid };
 }
 
-async function moveDocument(worldName, sourcePath, targetPath) {
+async function moveDocument(worldName, sourcePath, targetParentPath = "") {
   const safeName = validateWorldName(worldName);
   const safeSource = validateRelativePath(sourcePath);
-  const safeTarget = validateRelativePath(targetPath);
+  const safeTargetParent = targetParentPath ? validateRelativePath(targetParentPath) : "";
   const { pages: pagesDir } = getWorldPaths(safeName);
   
   const fullSource = path.join(pagesDir, safeSource);
-  const fullTarget = path.join(pagesDir, safeTarget);
   
   try {
-    const metadata = await readDocumentMetadata(pagesDir, safeSource);
+    const metadataEntries = await collectDocumentMetadataWithPaths(pagesDir, safeSource);
+    const metadata = metadataEntries[0]?.metadata || {};
+    if (metadata.type === "tab") {
+      const error = new Error("Tabs cannot be moved directly");
+      error.code = "INVALID_PATH";
+      throw error;
+    }
+
+    if (metadata.type && metadata.type !== "container") {
+      const error = new Error("Only container documents can be moved");
+      error.code = "INVALID_PATH";
+      throw error;
+    }
+
+    if (safeTargetParent) {
+      if (safeTargetParent === safeSource || safeTargetParent.startsWith(`${safeSource}/`)) {
+        const error = new Error("Document cannot be moved into itself or its descendants");
+        error.code = "INVALID_PATH";
+        throw error;
+      }
+
+      const targetParentMetadata = await readDocumentMetadata(pagesDir, safeTargetParent);
+      if (targetParentMetadata.type !== "container") {
+        const error = new Error("Document move target must be a container");
+        error.code = "INVALID_PATH";
+        throw error;
+      }
+    }
+
+    const currentParent = path.dirname(safeSource) === "." ? "" : path.dirname(safeSource).replace(/\\/g, "/");
+    if (currentParent === safeTargetParent) {
+      const error = new Error("Document is already in the target container");
+      error.code = "INVALID_PATH";
+      throw error;
+    }
+
+    const targetPath = safeTargetParent ? `${safeTargetParent}/${path.basename(safeSource)}` : path.basename(safeSource);
+    const fullTarget = path.join(pagesDir, targetPath);
+
     await fs.mkdir(path.dirname(fullTarget), { recursive: true });
     await fs.rename(fullSource, fullTarget);
     
-    if (metadata.uid) {
-      updateIndex(safeName, metadata.uid, safeTarget);
+    for (const entry of metadataEntries) {
+      if (!entry.metadata.uid) continue;
+      const nextPath = entry.path === safeSource
+        ? targetPath
+        : `${targetPath}/${entry.path.slice(safeSource.length + 1)}`;
+      updateIndex(safeName, entry.metadata.uid, nextPath);
     }
-    await broadcastWorldTreeUpdate(safeName, { action: "move", path: safeTarget, previousPath: safeSource });
+
+    let homePage;
+    const worldConfigPath = path.join(resolveWorldRoot(safeName), "world.json");
+    try {
+      const worldConfig = JSON.parse(await fs.readFile(worldConfigPath, "utf-8"));
+      homePage = worldConfig.homePage ?? null;
+      if (worldConfig.homePage === safeSource && safeTargetParent) {
+        worldConfig.homePage = null;
+        homePage = null;
+        await fs.writeFile(worldConfigPath, JSON.stringify(worldConfig, null, 2), "utf-8");
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    await broadcastWorldTreeUpdate(safeName, { action: "move", path: targetPath, previousPath: safeSource });
     
-    return { success: true, targetPath: safeTarget };
+    return { success: true, previousPath: safeSource, path: targetPath, targetPath, uid: metadata.uid, homePage };
   } catch (e) {
-    throw new Error("Failed to move document: " + e.message);
+    if (e.code === "ENOENT") {
+      const error = new Error("Document not found");
+      error.code = "DOCUMENT_NOT_FOUND";
+      throw error;
+    }
+    if (e.code) throw e;
+    const error = new Error("Failed to move document: " + e.message);
+    error.code = "DOCUMENT_MOVE_FAILED";
+    throw error;
   }
 }
 

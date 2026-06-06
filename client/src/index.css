@@ -12,12 +12,44 @@
   --error-color: #ef4444;
   --success-color: #10b981;
   --card-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  --scrollbar-size: 8px;
+  --scrollbar-track: rgba(255, 255, 255, 0.025);
+  --scrollbar-thumb: rgba(167, 139, 250, 0.24);
+  --scrollbar-thumb-hover: rgba(167, 139, 250, 0.42);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 body {
@@ -591,11 +623,6 @@ body {
   max-height: none;
   padding: 10px 8px 40px 0;
   overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.nexus-grid::-webkit-scrollbar {
-  display: none;
 }
 
 .nexus-card {
@@ -903,11 +930,6 @@ body {
   gap: 16px;
   padding: 20px 26px 26px;
   overflow: auto;
-  scrollbar-width: none;
-}
-
-.user-admin-modal-body::-webkit-scrollbar {
-  display: none;
 }
 
 .user-admin-create-card,
@@ -3692,6 +3714,16 @@ body {
   height: 2px;
 }
 
+.workspace-tab-bar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace-tab-bar::-webkit-scrollbar-thumb {
+  min-height: 0;
+  border: 0;
+  background: rgba(167, 139, 250, 0.28);
+}
+
 .workspace-tab-item {
   padding: 10px 20px;
   background: transparent;
@@ -4420,11 +4452,6 @@ body {
   height: 100%;
   overflow-y: auto;
   background: transparent;
-  scrollbar-width: none;
-}
-
-.editor-page-scroll::-webkit-scrollbar {
-  display: none;
 }
 
 .editor-page {
@@ -5441,12 +5468,7 @@ body {
   font: inherit;
   font-size: 1rem;
   line-height: 1.7;
-  scrollbar-width: none;
   transition: box-shadow 0.16s, padding-left 0.16s, color 0.16s;
-}
-
-.raw-editor::-webkit-scrollbar {
-  display: none;
 }
 
 .raw-editor:focus {

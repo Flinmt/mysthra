@@ -724,8 +724,10 @@ async function router(request, response) {
         if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
         if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
-        if (!body.sourcePath || !body.targetPath) return sendJson(response, 400, { error: "Missing sourcePath or targetPath" });
-        const result = await moveDocument(worldId, body.sourcePath, body.targetPath);
+        if (!body.sourcePath || body.targetParentPath === undefined) {
+          return sendJson(response, 400, { error: "Missing sourcePath or targetParentPath" });
+        }
+        const result = await moveDocument(worldId, body.sourcePath, body.targetParentPath || "");
         return sendJson(response, 200, result);
       } catch (error) {
         const statusCode = getErrorStatusCode(error);

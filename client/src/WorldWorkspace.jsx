@@ -10,10 +10,12 @@ import {
   copyTextToClipboard,
   findAssetByPath,
   findNodeByPath,
+  findNodeByUid,
   formatAssetSize,
   getAssetFolders,
   getAssetImages,
   getCoverBackgroundVars,
+  getDocumentContainers,
   getFileBaseName,
   getFileExtension,
   getFirstOrderedTab,
@@ -21,6 +23,7 @@ import {
   getTabsForNode,
   isCollaborativeContentType,
   isInvalidAssetMoveTarget,
+  isInvalidDocumentMoveTarget,
   isRootContainer,
   normalizeCoverArea,
   orderTreeWithHome,
@@ -440,6 +443,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [worldPresenceUsers, setWorldPresenceUsers] = useState([]);
   const [activeTabVisitorCount, setActiveTabVisitorCount] = useState(0);
   const [duplicatePrompt, setDuplicatePrompt] = useState({ isOpen: false, node: null });
+  const [documentMovePrompt, setDocumentMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
@@ -471,11 +475,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/tree`);
       if (res.ok) {
         const data = await res.json();
-        setTree(data.items || []);
+        const items = data.items || [];
+        setTree(items);
+        return items;
       }
     } catch {
       addToast(t('common.error'), 'error');
     }
+    return null;
   }, [addToast, t, worldId]);
 
   const fetchWorldData = useCallback(async () => {
@@ -1415,6 +1422,22 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }))
     ];
   }, [assetMovePrompt.node, assetTree, t]);
+  const documentMoveTargets = useMemo(() => {
+    const sourceNode = documentMovePrompt.node;
+    return [
+      {
+        name: t('workspace.documents_root_target'),
+        path: '',
+        depth: 0,
+        disabled: isInvalidDocumentMoveTarget(sourceNode, '')
+      },
+      ...getDocumentContainers(tree).map(document => ({
+        ...document,
+        depth: document.path.split('/').length,
+        disabled: isInvalidDocumentMoveTarget(sourceNode, document.path)
+      }))
+    ];
+  }, [documentMovePrompt.node, tree, t]);
   const assetImages = useMemo(() => getAssetImages(assetTree), [assetTree]);
 
   const getUniqueDocumentName = (parentPath = '') => {
@@ -1557,6 +1580,53 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         setAssetDeletePrompt({ isOpen: false, node: null });
         await fetchAssets();
         addToast(t('common.deleted'), 'success');
+      } else {
+        addToast(t('common.error'), 'error');
+      }
+    } catch {
+      addToast(t('common.error'), 'error');
+    }
+  };
+
+  const openDocumentMovePrompt = (node) => {
+    if (isVisitor || !node || node.type !== 'container') return;
+    setDocumentMovePrompt({ isOpen: true, node, targetPath: pathParent(node.path) });
+  };
+
+  const confirmDocumentMove = async () => {
+    const node = documentMovePrompt.node;
+    if (isVisitor || !node) return;
+
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourcePath: node.path,
+          targetParentPath: documentMovePrompt.targetPath
+        })
+      });
+      if (res.ok) {
+        const moved = await res.json();
+        setDocumentMovePrompt({ isOpen: false, node: null, targetPath: '' });
+        setSearchQuery('');
+        if (moved.homePage !== undefined) {
+          setWorldData(prev => prev ? { ...prev, homePage: moved.homePage } : prev);
+        }
+        const nextTree = await fetchTree();
+        const movedNode = nextTree ? findNodeByUid(nextTree, moved.uid) : null;
+        const isInsideMovedDocument = (item) => item?.path === moved.previousPath || item?.path?.startsWith(`${moved.previousPath}/`);
+        if (movedNode && isInsideMovedDocument(selectedContainer)) {
+          const nextSelected = selectedContainer.uid === moved.uid
+            ? movedNode
+            : findNodeByUid(movedNode.children || [], selectedContainer.uid);
+          if (nextSelected) setSelectedContainer(nextSelected);
+        }
+        if (movedNode && isInsideMovedDocument(activeTab)) {
+          const nextActiveTab = findNodeByUid(movedNode.children || [], activeTab.uid);
+          if (nextActiveTab) setActiveTab(nextActiveTab);
+        }
+        addToast(t('workspace.document_moved'), 'success');
       } else {
         addToast(t('common.error'), 'error');
       }
@@ -2940,6 +3010,58 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         </div>
       )}
 
+      {documentMovePrompt.isOpen && (
+        <div className="duplicate-modal-overlay" onClick={() => setDocumentMovePrompt({ isOpen: false, node: null, targetPath: '' })}>
+          <div className="modal-content glass-panel duplicate-modal" onClick={event => event.stopPropagation()}>
+            <button
+              type="button"
+              className="duplicate-modal-close"
+              onClick={() => setDocumentMovePrompt({ isOpen: false, node: null, targetPath: '' })}
+              title={t('common.cancel')}
+            >
+              <X size={16} />
+            </button>
+            <div className="duplicate-modal-header">
+              <div className="duplicate-modal-icon">
+                <MoveRight size={20} />
+              </div>
+              <div>
+                <h3>{t('workspace.move_document')}</h3>
+                <p>{t('workspace.move_document_hint', { name: documentMovePrompt.node?.name })}</p>
+              </div>
+            </div>
+
+            <div className="asset-move-target-list">
+              {documentMoveTargets.map(target => (
+                <button
+                  key={target.path || '__root__'}
+                  type="button"
+                  className={`asset-move-target ${documentMovePrompt.targetPath === target.path ? 'selected' : ''}`}
+                  disabled={target.disabled}
+                  onClick={() => setDocumentMovePrompt(prev => ({ ...prev, targetPath: target.path }))}
+                  style={{ paddingLeft: 12 + target.depth * 16 }}
+                >
+                  <Folder size={15} />
+                  <span>{target.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="asset-folder-create-button"
+                onClick={confirmDocumentMove}
+                disabled={documentMoveTargets.find(target => target.path === documentMovePrompt.targetPath)?.disabled}
+              >
+                <MoveRight size={16} />
+                <span>{t('workspace.move_document_confirm')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {assetDuplicatePrompt.isOpen && (
         <div className="duplicate-modal-overlay" onClick={() => setAssetDuplicatePrompt({ isOpen: false, node: null })}>
           <div className="modal-content glass-panel duplicate-modal" onClick={e => e.stopPropagation()}>
@@ -3177,6 +3299,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 )}
                 <button onClick={() => { openDuplicatePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Copy size={14} /> {t('workspace.duplicate_document')}
+                </button>
+                <button onClick={() => { openDocumentMovePrompt(contextMenu.node); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
+                  <MoveRight size={14} /> {t('workspace.move_document')}
                 </button>
                 <button onClick={() => { setRenamingPath(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Edit2 size={14} /> {t('common.rename')}
