@@ -13,6 +13,7 @@ const { updateIndex, removeFromIndex } = require("./indexer");
 const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "icon",
   "permissions",
+  "locked",
   "order",
   "coverAssetPath",
   "coverPositionX",
@@ -141,6 +142,19 @@ async function getEffectiveDocumentPermissions(pagesDir, safePath) {
   }
 
   return { hasRules, users };
+}
+
+async function isDocumentLocked(worldName, docPath) {
+  const safeName = validateWorldName(worldName);
+  const safePath = validateRelativePath(docPath);
+  await ensureWorldStructure(safeName);
+  const { pages: pagesDir } = getWorldPaths(safeName);
+  const paths = getAncestorPaths(safePath);
+  for (const currentPath of paths) {
+    const metadata = await readDocumentMetadata(pagesDir, currentPath);
+    if (metadata.locked === true) return true;
+  }
+  return false;
 }
 
 async function getDocumentAccess(worldName, docPath, user = null) {
@@ -664,6 +678,7 @@ module.exports = {
   getDocumentAccess,
   assertDocumentAccess,
   hasDocumentAccessLevel,
+  isDocumentLocked,
   createDocument,
   createDocumentPlaceholder,
   readDocument,

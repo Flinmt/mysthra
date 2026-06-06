@@ -207,6 +207,10 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   if (!hasDocumentAccessLevel(access, "write")) {
     connectionConfig.readOnly = true;
   }
+  if (!connectionConfig.readOnly) {
+    const { isDocumentLocked } = require("./tree");
+    connectionConfig.readOnly = await isDocumentLocked(room.worldId, resolvedRoom.path);
+  }
   debugCollaboration("auth", {
     documentName,
     userId: user.userId,
@@ -229,11 +233,13 @@ async function updateConnectionLockState(documentName, connection) {
     }
     throw error;
   }
-  const { getDocumentAccess, hasDocumentAccessLevel } = require("./tree");
+  const { getDocumentAccess, hasDocumentAccessLevel, isDocumentLocked } = require("./tree");
   const access = await getDocumentAccess(room.worldId, resolvedRoom.path, connection.context?.user).catch(() => "none");
+  const locked = connection.context?.user?.isVisitor ? false : await isDocumentLocked(room.worldId, resolvedRoom.path).catch(() => false);
   connection.readOnly = Boolean(
     connection.context?.user?.isVisitor ||
-    !hasDocumentAccessLevel(access, "write")
+    !hasDocumentAccessLevel(access, "write") ||
+    locked
   );
 }
 

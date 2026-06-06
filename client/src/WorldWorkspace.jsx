@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
@@ -732,6 +732,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const saveDocument = useCallback(async (silent = true) => {
     if (!activeTab || isVisitor || !hasDocumentAccess(activeTab.metadata?.currentUserAccess, 'write')) return false;
+    if (selectedContainer?.metadata?.locked) return false;
     const savedPath = activeTab.path;
     const savedContent = latestContentRef.current;
     setSaveStatus('saving');
@@ -763,7 +764,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (!silent) addToast(t('common.error'), 'error');
       return false;
     }
-  }, [activeTab, addToast, isVisitor, t, worldId]);
+  }, [activeTab, addToast, isVisitor, selectedContainer, t, worldId]);
 
   useEffect(() => {
     fetchTree();
@@ -1385,6 +1386,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       addToast(t('common.saved'), 'success');
     } catch {
       setDocumentPermissionsPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
+    }
+  };
+
+  const toggleDocumentLock = async () => {
+    if (!selectedContainer || !canLockDocument) return;
+    const newLockedState = !selectedContainer.metadata?.locked;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata: { locked: newLockedState } })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: t('common.error') }));
+        addToast(err.error || t('common.error'), 'error');
+        return;
+      }
+      await fetchTree();
+      addToast(newLockedState ? t('workspace.document_locked') : t('workspace.document_unlocked'), 'success');
+    } catch {
+      addToast(t('common.error_connection'), 'error');
     }
   };
 
@@ -2270,8 +2292,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const isMapTab = activeTab?.contentType === 'map';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
+  const isDocumentOwner = Boolean(currentUser?.userId && selectedContainer?.metadata?.ownerUserId === currentUser?.userId);
+  const canLockDocument = canManageDocumentPermissions || isDocumentOwner;
   const canWriteSelectedContainer = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'write');
-  const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write');
+  const isDocumentLocked = selectedContainer?.metadata?.locked === true;
+  const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write') && !isDocumentLocked;
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
@@ -2313,6 +2338,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
           )}
         </div>
+      )}
+      {selectedContainer && canLockDocument && (
+        <button
+          type="button"
+          className={`editor-document-lock${selectedContainer.metadata?.locked ? ' locked' : ''}`}
+          onClick={toggleDocumentLock}
+          title={selectedContainer.metadata?.locked ? t('workspace.document_unlock') : t('workspace.document_lock')}
+        >
+          {selectedContainer.metadata?.locked ? <Lock size={16} /> : <LockOpen size={16} />}
+        </button>
       )}
       {selectedContainer && canManageDocumentPermissions && (
         <button
