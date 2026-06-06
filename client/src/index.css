@@ -5759,11 +5759,12 @@ body {
 }
 
 .tree-node.selected {
-  border-color: rgba(167, 139, 250, 0.42);
-  background:
-    linear-gradient(90deg, rgba(139, 92, 246, 0.24), rgba(139, 92, 246, 0.06)),
-    rgba(255, 255, 255, 0.03);
-  box-shadow: inset 3px 0 0 var(--accent-color), 0 8px 26px rgba(0, 0, 0, 0.18);
+  border-color: transparent;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.tree-node.selected .tree-node-label {
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .tree-expander {
