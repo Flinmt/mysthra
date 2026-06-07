@@ -181,7 +181,7 @@ function getDocumentIcon(icon) {
 function getTabTypeIcon(contentType) {
   if (contentType === 'map') return Map;
   if (contentType === 'markdown') return FilePenLine;
-  return Book;
+  return FileText;
 }
 
 function normalizeIconSearch(value = '') {
@@ -238,14 +238,22 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
     <li className="asset-tree-document">
       <div
         className={`asset-tree-node ${isSelected ? 'selected' : ''}`}
-        draggable={!isRenaming && !isFolder && node.mediaType === 'image'}
+        draggable={!isRenaming && !isFolder && (node.mediaType === 'image' || node.mediaType === 'audio')}
         onDragStart={(event) => {
-          if (isRenaming || isFolder || node.mediaType !== 'image') return;
+          if (isRenaming || isFolder || (node.mediaType !== 'image' && node.mediaType !== 'audio')) return;
           event.dataTransfer.effectAllowed = 'copy';
-          event.dataTransfer.setData('application/x-mythra-asset-image', JSON.stringify({
+          event.dataTransfer.setData('application/x-mythra-asset', JSON.stringify({
             path: node.path,
-            name: node.name
+            name: node.name,
+            mediaType: node.mediaType
           }));
+          if (node.mediaType === 'image') {
+            event.dataTransfer.setData('application/x-mythra-asset-image', JSON.stringify({
+              path: node.path,
+              name: node.name,
+              mediaType: node.mediaType
+            }));
+          }
           event.dataTransfer.setData('text/plain', node.name);
         }}
         onContextMenu={(event) => {
@@ -1662,6 +1670,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     ];
   }, [documentMovePrompt.node, tree, t]);
   const assetImages = useMemo(() => getAssetImages(assetTree), [assetTree]);
+  const assetAudios = useMemo(() => {
+    const items = [];
+    const walk = (nodes = []) => {
+      for (const node of nodes) {
+        if (node.type === 'folder') walk(node.children || []);
+        else if (node.mediaType === 'audio') items.push(node);
+      }
+    };
+    walk(assetTree);
+    return items;
+  }, [assetTree]);
 
   const getUniqueDocumentName = (parentPath = '') => {
     const baseName = t('workspace.new_document_name');
@@ -2876,17 +2895,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'wiki' }))}
                         >
                           <FileText size={22} />
-                          <strong>Wiki</strong>
+                          <strong>{t('workspace.tab_type_notion_like')}</strong>
                           <span>{t('workspace.tab_type_wiki_hint')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`tab-type-card ${tabCreationPanel.contentType === 'map' ? 'active' : ''}`}
-                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'map' }))}
-                        >
-                          <Map size={22} />
-                          <strong>{t('workspace.tab_type_map')}</strong>
-                          <span>{t('workspace.tab_type_map_hint')}</span>
                         </button>
                         <button
                           type="button"
@@ -2896,6 +2906,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           <FilePenLine size={22} />
                           <strong>{t('workspace.tab_type_markdown')}</strong>
                           <span>{t('workspace.tab_type_markdown_hint')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-type-card ${tabCreationPanel.contentType === 'map' ? 'active' : ''}`}
+                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'map' }))}
+                        >
+                          <Map size={22} />
+                          <strong>{t('workspace.tab_type_map')}</strong>
+                          <span>{t('workspace.tab_type_map_hint')}</span>
                         </button>
                       </div>
 
@@ -3008,14 +3027,23 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         content={fileContent}
                         editable={isDocumentUnlocked && !isVisitor}
                         locked={!canWriteActiveTab}
+                        worldId={worldId}
                         mode={viewMode === 'edit' ? 'edit' : 'preview'}
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
                         isVisitor={isVisitor}
+                        assetImages={assetImages}
+                        assetAudios={assetAudios}
+                        getAssetUrl={getAssetUrl}
+                        onRequestAssets={fetchAssets}
                         labels={{
                           sourceLabel: t('workspace.markdown_source_label'),
                           sourcePlaceholder: t('workspace.markdown_source_placeholder'),
-                          previewTitle: t('workspace.markdown_preview_title')
+                          previewTitle: t('workspace.markdown_preview_title'),
+                          insertImage: t('workspace.insert_image'),
+                          insertAudio: t('workspace.insert_audio'),
+                          noAssetImages: t('workspace.no_asset_images'),
+                          noAssetAudios: t('workspace.no_asset_audios')
                         }}
                         onCollaborationSaveState={handleCollaborationSaveState}
                       />
@@ -3188,7 +3216,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     }}
                   >
                     <FileText size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>Wiki</span>
+                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_notion_like')}</span>
                   </button>
                   <button 
                     onClick={() => setPrompt({ ...prompt, contentType: 'map' })}
@@ -3788,6 +3816,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <button onClick={() => { setAssetDuplicatePrompt({ isOpen: true, node: assetContextMenu.node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Copy size={14} /> {t('workspace.duplicate_asset')}
                 </button>
+                {assetContextMenu.node.type !== 'folder' && (
+                  <button
+                    onClick={async () => {
+                      await copyTextToClipboard(`{{asset:${assetContextMenu.node.path}}}`);
+                      addToast(t('workspace.asset_reference_copied'), 'success');
+                      setAssetContextMenu(prev => ({ ...prev, isOpen: false }));
+                    }}
+                  >
+                    <Copy size={14} /> {t('workspace.copy_asset_reference')}
+                  </button>
+                )}
                 <button onClick={() => { openAssetMovePrompt(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <MoveRight size={14} /> {t('workspace.move_asset')}
                 </button>

@@ -6099,20 +6099,33 @@ body {
 .markdown-html-source {
   width: 100%;
   min-height: 420px;
-  resize: none;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
   color: rgba(248, 250, 252, 0.94);
-  caret-color: #c4b5fd;
   background: transparent;
-  outline: none;
-  font: 0.95rem/1.65 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 
-.markdown-html-source:focus {
+.markdown-html-source .cm-editor,
+.markdown-html-source .cm-scroller,
+.markdown-html-source .cm-content {
   background: transparent;
+}
+
+.markdown-html-source .cm-editor,
+.markdown-html-source .cm-editor.cm-focused {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+}
+
+.markdown-html-source .cm-editor {
+  min-height: 420px;
+}
+
+.markdown-html-source .cm-scroller {
+  overflow: visible;
+}
+
+.markdown-html-source .cm-content {
+  width: 100%;
 }
 
 .markdown-html-source::placeholder {
@@ -6125,6 +6138,27 @@ body {
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.markdown-asset-context-menu {
+  min-width: 240px;
+  max-width: min(340px, calc(100vw - 24px));
+  max-height: 380px;
+  overflow: auto;
+}
+
+.context-menu-media-icon {
+  min-width: 42px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  color: rgba(221, 214, 254, 0.92);
+  background: rgba(139, 92, 246, 0.16);
+  font-size: 0.66rem;
+  font-weight: 780;
 }
 
 .context-menu-section-label {
