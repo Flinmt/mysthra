@@ -2298,8 +2298,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const sidebarTabs = [
     { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
-    { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image },
-    { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
+    { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
   const activeCoverPath = activeTab && activeTab.contentType !== 'map' ? activeTab?.metadata?.coverAssetPath : null;
