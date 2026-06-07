@@ -164,11 +164,21 @@ async function isDocumentLocked(worldName, docPath) {
   const safePath = validateRelativePath(docPath);
   await ensureWorldStructure(safeName);
   const { pages: pagesDir } = getWorldPaths(safeName);
-  const paths = getAncestorPaths(safePath);
-  for (const currentPath of paths) {
-    const metadata = await readDocumentMetadata(pagesDir, currentPath);
-    if (metadata.locked === true) return true;
+
+  const ownMetadata = await readDocumentMetadata(pagesDir, safePath);
+  if (ownMetadata.locked === true) return true;
+
+  // Lock only propagates from a document to its direct tabs,
+  // not to child documents or their tabs.
+  if (ownMetadata.type === "tab") {
+    const parts = safePath.split("/");
+    if (parts.length > 1) {
+      const parentPath = parts.slice(0, -1).join("/");
+      const parentMetadata = await readDocumentMetadata(pagesDir, parentPath);
+      if (parentMetadata.locked === true) return true;
+    }
   }
+
   return false;
 }
 
