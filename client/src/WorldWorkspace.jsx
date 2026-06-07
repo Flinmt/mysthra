@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
+import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
 import DropdownSelect from './DropdownSelect';
 import {
@@ -178,7 +179,9 @@ function getDocumentIcon(icon) {
 }
 
 function getTabTypeIcon(contentType) {
-  return contentType === 'map' ? Map : Book;
+  if (contentType === 'map') return Map;
+  if (contentType === 'markdown') return FilePenLine;
+  return FileText;
 }
 
 function normalizeIconSearch(value = '') {
@@ -235,14 +238,22 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
     <li className="asset-tree-document">
       <div
         className={`asset-tree-node ${isSelected ? 'selected' : ''}`}
-        draggable={!isRenaming && !isFolder && node.mediaType === 'image'}
+        draggable={!isRenaming && !isFolder && (node.mediaType === 'image' || node.mediaType === 'audio')}
         onDragStart={(event) => {
-          if (isRenaming || isFolder || node.mediaType !== 'image') return;
+          if (isRenaming || isFolder || (node.mediaType !== 'image' && node.mediaType !== 'audio')) return;
           event.dataTransfer.effectAllowed = 'copy';
-          event.dataTransfer.setData('application/x-mythra-asset-image', JSON.stringify({
+          event.dataTransfer.setData('application/x-mythra-asset', JSON.stringify({
             path: node.path,
-            name: node.name
+            name: node.name,
+            mediaType: node.mediaType
           }));
+          if (node.mediaType === 'image') {
+            event.dataTransfer.setData('application/x-mythra-asset-image', JSON.stringify({
+              path: node.path,
+              name: node.name,
+              mediaType: node.mediaType
+            }));
+          }
           event.dataTransfer.setData('text/plain', node.name);
         }}
         onContextMenu={(event) => {
@@ -732,6 +743,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const saveDocument = useCallback(async (silent = true) => {
     if (!activeTab || isVisitor || !hasDocumentAccess(activeTab.metadata?.currentUserAccess, 'write')) return false;
+    if (selectedContainer?.metadata?.locked) return false;
     const savedPath = activeTab.path;
     const savedContent = latestContentRef.current;
     setSaveStatus('saving');
@@ -763,7 +775,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (!silent) addToast(t('common.error'), 'error');
       return false;
     }
-  }, [activeTab, addToast, isVisitor, t, worldId]);
+  }, [activeTab, addToast, isVisitor, selectedContainer, t, worldId]);
 
   useEffect(() => {
     fetchTree();
@@ -802,6 +814,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   useEffect(() => {
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
+    setViewMode('edit');
   }, [activeTab?.uid]);
 
   useEffect(() => {
@@ -1388,6 +1401,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
+  const toggleDocumentLock = async () => {
+    if (!selectedContainer || !canLockDocument) return;
+    const newLockedState = !selectedContainer.metadata?.locked;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata: { locked: newLockedState } })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: t('common.error') }));
+        addToast(err.error || t('common.error'), 'error');
+        return;
+      }
+      await fetchTree();
+      addToast(newLockedState ? t('workspace.document_locked') : t('workspace.document_unlocked'), 'success');
+    } catch {
+      addToast(t('common.error_connection'), 'error');
+    }
+  };
+
   const confirmDelete = async () => {
     const node = deletePrompt.node;
     if (isVisitor || !node) return;
@@ -1636,6 +1670,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     ];
   }, [documentMovePrompt.node, tree, t]);
   const assetImages = useMemo(() => getAssetImages(assetTree), [assetTree]);
+  const assetAudios = useMemo(() => {
+    const items = [];
+    const walk = (nodes = []) => {
+      for (const node of nodes) {
+        if (node.type === 'folder') walk(node.children || []);
+        else if (node.mediaType === 'audio') items.push(node);
+      }
+    };
+    walk(assetTree);
+    return items;
+  }, [assetTree]);
 
   const getUniqueDocumentName = (parentPath = '') => {
     const baseName = t('workspace.new_document_name');
@@ -2253,11 +2298,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const sidebarTabs = [
     { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
-    { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image },
-    { id: 'templates', label: t('workspace.sidebar_tab_templates'), icon: FileText }
+    { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
-  const activeCoverPath = activeTab?.contentType === 'wiki' ? activeTab?.metadata?.coverAssetPath : null;
+  const activeCoverPath = activeTab && activeTab.contentType !== 'map' ? activeTab?.metadata?.coverAssetPath : null;
   const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
     ? coverReposition.x
@@ -2268,10 +2312,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
+  const isMarkdownTab = activeTab?.contentType === 'markdown';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
+  const isDocumentOwner = Boolean(currentUser?.userId && selectedContainer?.metadata?.ownerUserId === currentUser?.userId);
+  const canLockDocument = canManageDocumentPermissions || isDocumentOwner;
   const canWriteSelectedContainer = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'write');
-  const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write');
+  const isDocumentLocked = selectedContainer?.metadata?.locked === true;
+  const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write') && !isDocumentLocked;
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
@@ -2313,6 +2361,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
           )}
         </div>
+      )}
+      {activeTab && isMarkdownTab && canWriteActiveTab && (
+        <button
+          type="button"
+          className={`editor-preview-toggle ${viewMode === 'edit' ? 'active' : ''}`}
+          onClick={() => setViewMode(prev => (prev === 'edit' ? 'view' : 'edit'))}
+          title={viewMode === 'edit' ? t('workspace.markdown_preview_mode') : t('workspace.markdown_edit_mode')}
+        >
+          {viewMode === 'edit' ? <Eye size={16} /> : <Edit2 size={16} />}
+        </button>
+      )}
+      {selectedContainer && canLockDocument && (
+        <button
+          type="button"
+          className={`editor-document-lock${selectedContainer.metadata?.locked ? ' locked' : ''}`}
+          onClick={toggleDocumentLock}
+          title={selectedContainer.metadata?.locked ? t('workspace.document_unlock') : t('workspace.document_lock')}
+        >
+          {selectedContainer.metadata?.locked ? <Lock size={16} /> : <LockOpen size={16} />}
+        </button>
       )}
       {selectedContainer && canManageDocumentPermissions && (
         <button
@@ -2738,7 +2806,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
               <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && activeTab?.contentType === 'wiki' && canWriteActiveTab && (
+                {!isVisitor && selectedContainer && activeTab && !isMapTab && canWriteActiveTab && (
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -2826,8 +2894,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'wiki' }))}
                         >
                           <FileText size={22} />
-                          <strong>Wiki</strong>
+                          <strong>{t('workspace.tab_type_notion_like')}</strong>
                           <span>{t('workspace.tab_type_wiki_hint')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-type-card ${tabCreationPanel.contentType === 'markdown' ? 'active' : ''}`}
+                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'markdown' }))}
+                        >
+                          <FilePenLine size={22} />
+                          <strong>{t('workspace.tab_type_markdown')}</strong>
+                          <span>{t('workspace.tab_type_markdown_hint')}</span>
                         </button>
                         <button
                           type="button"
@@ -2942,6 +3019,32 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                             error: t('workspace.collaboration_error')
                           }
                         }}
+                      />
+                      ) : activeTab.contentType === 'markdown' ? (
+                      <MarkdownHtmlEditor
+                        key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
+                        content={fileContent}
+                        editable={isDocumentUnlocked && !isVisitor}
+                        locked={!canWriteActiveTab}
+                        worldId={worldId}
+                        mode={viewMode === 'edit' ? 'edit' : 'preview'}
+                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
+                        currentUser={currentUser}
+                        isVisitor={isVisitor}
+                        assetImages={assetImages}
+                        assetAudios={assetAudios}
+                        getAssetUrl={getAssetUrl}
+                        onRequestAssets={fetchAssets}
+                        labels={{
+                          sourceLabel: t('workspace.markdown_source_label'),
+                          sourcePlaceholder: t('workspace.markdown_source_placeholder'),
+                          previewTitle: t('workspace.markdown_preview_title'),
+                          insertImage: t('workspace.insert_image'),
+                          insertAudio: t('workspace.insert_audio'),
+                          noAssetImages: t('workspace.no_asset_images'),
+                          noAssetAudios: t('workspace.no_asset_audios')
+                        }}
+                        onCollaborationSaveState={handleCollaborationSaveState}
                       />
                       ) : (
                       <WikiBlockEditor
@@ -3112,7 +3215,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     }}
                   >
                     <FileText size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>Wiki</span>
+                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_notion_like')}</span>
                   </button>
                   <button 
                     onClick={() => setPrompt({ ...prompt, contentType: 'map' })}
@@ -3133,6 +3236,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                   >
                     <Map size={20} />
                     <span style={{ fontSize: '0.75rem' }}>Mapa</span>
+                  </button>
+                  <button 
+                    onClick={() => setPrompt({ ...prompt, contentType: 'markdown' })}
+                    style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      padding: '12px', 
+                      background: prompt.contentType === 'markdown' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
+                      border: 'none', 
+                      borderRadius: 8, 
+                      color: 'white', 
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <FilePenLine size={20} />
+                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_markdown')}</span>
                   </button>
                 </div>
               </div>
@@ -3692,6 +3815,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <button onClick={() => { setAssetDuplicatePrompt({ isOpen: true, node: assetContextMenu.node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <Copy size={14} /> {t('workspace.duplicate_asset')}
                 </button>
+                {assetContextMenu.node.type !== 'folder' && (
+                  <button
+                    onClick={async () => {
+                      await copyTextToClipboard(`{{asset:${assetContextMenu.node.path}}}`);
+                      addToast(t('workspace.asset_reference_copied'), 'success');
+                      setAssetContextMenu(prev => ({ ...prev, isOpen: false }));
+                    }}
+                  >
+                    <Copy size={14} /> {t('workspace.copy_asset_reference')}
+                  </button>
+                )}
                 <button onClick={() => { openAssetMovePrompt(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                   <MoveRight size={14} /> {t('workspace.move_asset')}
                 </button>

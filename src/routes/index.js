@@ -23,6 +23,7 @@ const {
   getVisibleFileTree,
   getDocumentAccess,
   assertDocumentAccess,
+  isDocumentLocked,
   createDocument,
   createDocumentPlaceholder,
   readDocument,
@@ -727,6 +728,7 @@ async function router(request, response) {
           const body = await parseJsonBody(request);
           if (!body.path) return sendJson(response, 400, { error: "Missing document path" });
           await assertDocumentAccess(worldId, body.path, currentUser, "write");
+          if (await isDocumentLocked(worldId, body.path)) return sendJson(response, 403, { error: "Document is locked" });
           const result = await updateDocumentContent(worldId, body.path, body.content || "");
           return sendJson(response, 200, result);
         } catch (error) {
@@ -880,11 +882,13 @@ async function router(request, response) {
         if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
         const body = await parseJsonBody(request);
         if (!body.path || !body.metadata) return sendJson(response, 400, { error: "Missing path or metadata" });
+        const requiresAdmin = Object.prototype.hasOwnProperty.call(body.metadata, "permissions") ||
+          Object.prototype.hasOwnProperty.call(body.metadata, "locked");
         await assertDocumentAccess(
           worldId,
           body.path,
           currentUser,
-          Object.prototype.hasOwnProperty.call(body.metadata, "permissions") ? "admin" : "write"
+          requiresAdmin ? "admin" : "write"
         );
         const result = await updateDocumentMetadata(worldId, body.path, body.metadata);
         return sendJson(response, 200, result);
