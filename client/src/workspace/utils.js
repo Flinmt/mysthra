@@ -1,4 +1,5 @@
 const AUDIO_EXTENSIONS = new Set(['mp3', 'ogg', 'wav', 'm4a', 'mp4']);
+const INTERNAL_PAGE_LINK_PREFIX = 'mysthra://document/';
 
 export function getTreeChildren(node) {
   return (node.children || []).filter(child => child.type === 'container');
@@ -50,6 +51,53 @@ export function findNodeByUid(nodes = [], targetUid = '') {
     if (childMatch) return childMatch;
   }
   return null;
+}
+
+export function createInternalPageLink({ documentUid = '', tabUid = '' } = {}) {
+  const normalizedDocumentUid = String(documentUid || '').trim();
+  const normalizedTabUid = String(tabUid || '').trim();
+  if (!normalizedDocumentUid) return '';
+  const query = normalizedTabUid ? `?tab=${encodeURIComponent(normalizedTabUid)}` : '';
+  return `${INTERNAL_PAGE_LINK_PREFIX}${encodeURIComponent(normalizedDocumentUid)}${query}`;
+}
+
+export function parseInternalPageLink(href = '') {
+  const value = String(href || '').trim();
+  if (!value.startsWith(INTERNAL_PAGE_LINK_PREFIX)) return null;
+  const [rawDocumentUid, rawQuery = ''] = value.slice(INTERNAL_PAGE_LINK_PREFIX.length).split('?');
+  try {
+    const documentUid = decodeURIComponent(rawDocumentUid || '').trim();
+    if (!documentUid) return null;
+    const params = new URLSearchParams(rawQuery);
+    return {
+      documentUid,
+      tabUid: (params.get('tab') || '').trim()
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function isInternalPageLink(href = '') {
+  return Boolean(parseInternalPageLink(href));
+}
+
+export function getDocumentLinkOptions(nodes = []) {
+  const documents = [];
+  const walk = (items, depth = 0) => {
+    for (const item of items) {
+      if (item.type !== 'container') continue;
+      documents.push({ ...item, depth });
+      walk(item.children || [], depth + 1);
+    }
+  };
+  walk(nodes);
+  return documents;
+}
+
+export function getTabsForDocumentUid(nodes = [], documentUid = '') {
+  const documentNode = findNodeByUid(nodes, documentUid);
+  return getTabsForNode(documentNode);
 }
 
 export function findAssetByPath(nodes = [], targetPath = '') {

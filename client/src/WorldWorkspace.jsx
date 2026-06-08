@@ -23,6 +23,7 @@ import {
   getFirstOrderedTab,
   getTreeChildren,
   getTabsForNode,
+  parseInternalPageLink,
   isCollaborativeContentType,
   isInvalidAssetMoveTarget,
   isInvalidDocumentMoveTarget,
@@ -448,6 +449,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
         </span>
         <div
           className="tree-node-main"
+          title={node.name}
           onClick={() => {
             if (isRenaming) return;
             onFileSelect(node);
@@ -983,6 +985,43 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       setIsDirty(false);
       setSaveStatus('saved');
     }
+  };
+
+  const navigateToPageLink = async (href = '') => {
+    const parsedLink = parseInternalPageLink(href);
+    if (!parsedLink) return false;
+
+    const targetTab = parsedLink.tabUid ? findNodeByUid(tree, parsedLink.tabUid) : null;
+    const targetDocument = targetTab
+      ? findNodeByPath(tree, pathParent(targetTab.path))
+      : findNodeByUid(tree, parsedLink.documentUid);
+
+    if (!targetDocument || targetDocument.type !== 'container') {
+      addToast(t('workspace.page_link_not_found'), 'error');
+      return true;
+    }
+
+    setSelectedContainer(targetDocument);
+
+    if (parsedLink.tabUid) {
+      if (!targetTab || targetTab.type !== 'tab') {
+        addToast(t('workspace.page_link_not_found'), 'error');
+        return true;
+      }
+      await selectTab(targetTab);
+      return true;
+    }
+
+    const firstTab = getFirstOrderedTab(targetDocument);
+    if (firstTab) {
+      await selectTab(firstTab);
+    } else {
+      setActiveTab(null);
+      setFileContent('');
+      setIsDirty(false);
+      setSaveStatus('saved');
+    }
+    return true;
   };
 
   useEffect(() => {
@@ -2544,7 +2583,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </button>
         )
       ))}
-      {!isVisitor && canWriteSelectedContainer && (
+      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
         <button
           type="button"
           className="editor-tab-add"
@@ -3033,8 +3072,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         isVisitor={isVisitor}
                         assetImages={assetImages}
                         assetAudios={assetAudios}
+                        assetTree={assetTree}
                         getAssetUrl={getAssetUrl}
                         onRequestAssets={fetchAssets}
+                        documentTree={tree}
+                        onNavigateToPageLink={navigateToPageLink}
                         labels={{
                           sourceLabel: t('workspace.markdown_source_label'),
                           sourcePlaceholder: t('workspace.markdown_source_placeholder'),
@@ -3042,7 +3084,24 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           insertImage: t('workspace.insert_image'),
                           insertAudio: t('workspace.insert_audio'),
                           noAssetImages: t('workspace.no_asset_images'),
-                          noAssetAudios: t('workspace.no_asset_audios')
+                          noAssetAudios: t('workspace.no_asset_audios'),
+                          pageLink: t('workspace.page_link'),
+                          insertPageLink: t('workspace.insert_page_link'),
+                          pageLinkHint: t('workspace.page_link_hint'),
+                          linkedDocument: t('workspace.linked_document'),
+                          linkedTab: t('workspace.linked_tab'),
+                          defaultDocumentTab: t('workspace.default_document_tab'),
+                          insertLink: t('workspace.insert_link'),
+                          searchTabsAssetsPlaceholder: t('workspace.search_tabs_assets_placeholder'),
+                          noSearchResults: t('workspace.no_search_results'),
+                          resultTypeTab: t('workspace.result_type_tab'),
+                          resultTypeImage: t('workspace.result_type_image'),
+                          resultTypeAudio: t('workspace.result_type_audio'),
+                          previewPath: t('workspace.preview_path'),
+                          tabTypeWiki: t('workspace.tab_type_notion_like'),
+                          tabTypeMarkdown: t('workspace.tab_type_markdown'),
+                          tabTypeMap: t('workspace.tab_type_map'),
+                          cancel: t('common.cancel')
                         }}
                         onCollaborationSaveState={handleCollaborationSaveState}
                       />
@@ -3058,11 +3117,31 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         currentUser={currentUser}
                         isVisitor={isVisitor}
                         assetImages={assetImages}
+                        assetTree={assetTree}
                         getAssetUrl={getAssetUrl}
                         onRequestAssets={fetchAssets}
+                        documentTree={tree}
+                        onNavigateToPageLink={navigateToPageLink}
                         labels={{
                           insertImage: t('workspace.insert_image'),
                           noAssetImages: t('workspace.no_asset_images'),
+                          pageLink: t('workspace.page_link'),
+                          insertPageLink: t('workspace.insert_page_link'),
+                          pageLinkHint: t('workspace.page_link_hint'),
+                          linkedDocument: t('workspace.linked_document'),
+                          linkedTab: t('workspace.linked_tab'),
+                          defaultDocumentTab: t('workspace.default_document_tab'),
+                          insertLink: t('workspace.insert_link'),
+                          searchTabsAssetsPlaceholder: t('workspace.search_tabs_assets_placeholder'),
+                          noSearchResults: t('workspace.no_search_results'),
+                          resultTypeTab: t('workspace.result_type_tab'),
+                          resultTypeImage: t('workspace.result_type_image'),
+                          resultTypeAudio: t('workspace.result_type_audio'),
+                          previewPath: t('workspace.preview_path'),
+                          tabTypeWiki: t('workspace.tab_type_notion_like'),
+                          tabTypeMarkdown: t('workspace.tab_type_markdown'),
+                          tabTypeMap: t('workspace.tab_type_map'),
+                          cancel: t('common.cancel'),
                           collaboration: {
                             connecting: t('workspace.collaboration_connecting'),
                             connected: t('workspace.collaboration_connected'),
@@ -3081,7 +3160,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <div className="editor-placeholder muted">
                       <Book size={48} />
                       <p>Esta página não possui abas de conteúdo.</p>
-                      {!isVisitor && canWriteSelectedContainer && (
+                      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
                         <button
                           type="button"
                           className="btn-secondary"
