@@ -2544,7 +2544,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </button>
         )
       ))}
-      {!isVisitor && canWriteSelectedContainer && (
+      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
         <button
           type="button"
           className="editor-tab-add"
@@ -3081,7 +3081,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <div className="editor-placeholder muted">
                       <Book size={48} />
                       <p>Esta página não possui abas de conteúdo.</p>
-                      {!isVisitor && canWriteSelectedContainer && (
+                      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
                         <button
                           type="button"
                           className="btn-secondary"
