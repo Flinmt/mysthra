@@ -36,8 +36,8 @@ function buildTabResults(documentTree = [], labels = {}) {
       tabs.push({
         id: `tab:${tab.uid}`,
         kind: 'tab',
-        title: tab.name,
-        subtitle: `${labels.resultTypeTab || 'Tab'} · ${tabType}`,
+        title: document.name,
+        subtitle: `${labels.resultTypeTab || 'Tab'} · ${tab.name} · ${tabType}`,
         context: pathLabel,
         searchText: `${tab.name} ${tabType} ${document.name} ${pathLabel}`.toLowerCase(),
         document,

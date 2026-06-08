@@ -10,6 +10,7 @@ import DropdownSelect from './DropdownSelect';
 import {
   clampCoverPosition,
   copyTextToClipboard,
+  createInternalPageLink,
   findAssetByPath,
   findNodeByPath,
   findNodeByUid,
@@ -417,6 +418,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
   const visibleChildren = isSearching ? (node.children || []) : getTreeChildren(node);
   const showChildren = isOpen || isSearching;
   const canWriteNode = !isVisitor && hasDocumentAccess(node.metadata?.currentUserAccess, 'write');
+  const canReadNode = hasDocumentAccess(node.metadata?.currentUserAccess, 'read');
   const canAdminNode = !isVisitor && hasDocumentAccess(node.metadata?.currentUserAccess, 'admin');
   
   useEffect(() => {
@@ -433,7 +435,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
         className={`tree-node ${isSelected ? 'selected' : ''}`}
         draggable={!isRenaming && canWriteNode}
         onContextMenu={(e) => {
-          if (!canWriteNode) return;
+          if (!canReadNode) return;
           if (isRenaming) return;
           e.preventDefault();
           e.stopPropagation();
@@ -3787,6 +3789,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           >
             {contextMenu.node ? (
               <>
+                <button
+                  onClick={async () => {
+                    await copyTextToClipboard(createInternalPageLink({ documentUid: contextMenu.node.uid }));
+                    addToast(t('workspace.page_link_copied'), 'success');
+                    setContextMenu(prev => ({ ...prev, isOpen: false }));
+                  }}
+                >
+                  <Copy size={14} /> {t('workspace.copy_page_link')}
+                </button>
                 {hasDocumentAccess(contextMenu.node.metadata?.currentUserAccess, 'write') && (
                   <button onClick={() => { createDocumentInline(contextMenu.node.path); setContextMenu(prev => ({ ...prev, isOpen: false })); }}>
                     <Plus size={14} /> {t('workspace.create_document')}

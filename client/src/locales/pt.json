@@ -200,6 +200,8 @@
     "default_document_tab": "Aba padrão do documento",
     "insert_link": "Inserir link",
     "page_link_not_found": "O link desta página não foi encontrado",
+    "copy_page_link": "Copiar link da página",
+    "page_link_copied": "Link da página copiado",
     "search_tabs_assets_placeholder": "Buscar abas ou assets...",
     "no_search_results": "Nenhum resultado encontrado",
     "result_type_tab": "Aba",

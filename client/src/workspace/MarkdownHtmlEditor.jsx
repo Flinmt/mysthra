@@ -207,10 +207,6 @@ function getAssetMarkup(asset) {
   return `<img src="${escapeAttribute(reference)}" alt="${escapeAttribute(name)}">`
 }
 
-function escapeMarkdownLinkText(value = '') {
-  return String(value || '').replace(/([\\[\]])/g, '\\$1')
-}
-
 export default function MarkdownHtmlEditor({
   content,
   editable,
@@ -312,6 +308,21 @@ export default function MarkdownHtmlEditor({
     view.focus()
   }, [readOnly, source, updateText])
 
+  const insertInlineMarkup = useCallback((markup) => {
+    if (readOnly || !markup) return
+    const view = editorViewRef.current
+    if (!view) {
+      updateText(`${source}${markup}`)
+      return
+    }
+    const selection = view.state.selection.main
+    view.dispatch({
+      changes: { from: selection.from, to: selection.to, insert: markup },
+      selection: { anchor: selection.from + markup.length }
+    })
+    view.focus()
+  }, [readOnly, source, updateText])
+
   const insertAsset = useCallback((asset) => {
     if (!asset?.path) return
     insertMarkup(getAssetMarkup(asset))
@@ -319,8 +330,8 @@ export default function MarkdownHtmlEditor({
 
   const insertPageLink = useCallback(({ href, label }) => {
     if (!href) return
-    insertMarkup(`[${escapeMarkdownLinkText(label || labels?.pageLink || 'Page link')}](${href})`)
-  }, [insertMarkup, labels?.pageLink])
+    insertInlineMarkup(`<a href="${escapeAttribute(href)}">${escapeAttribute(label || labels?.pageLink || 'Page link')}</a>`)
+  }, [insertInlineMarkup, labels?.pageLink])
 
   const uploadAndInsertAsset = useCallback(async (file) => {
     if (readOnly || !file) return
