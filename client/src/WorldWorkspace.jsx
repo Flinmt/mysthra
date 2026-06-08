@@ -448,6 +448,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
         </span>
         <div
           className="tree-node-main"
+          title={node.name}
           onClick={() => {
             if (isRenaming) return;
             onFileSelect(node);
