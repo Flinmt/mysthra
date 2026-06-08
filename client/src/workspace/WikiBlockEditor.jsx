@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, Columns3 } from 'lucide-react';
+import { Columns2, Columns3, Link2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BlockNoteSchema, combineByGroup } from '@blocknote/core';
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core/extensions';
@@ -40,9 +40,17 @@ import { blocksToYXmlFragment } from '@blocknote/core/yjs';
 import { locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column';
 import '@blocknote/mantine/style.css';
 import { useCollaborationRoom } from '../useCollaborationRoom';
+import WorkspaceInsertSearch from './WorkspaceInsertSearch';
 import { prepareAssetUpload } from './utils';
+import { isInternalPageLink } from './utils';
 
 const WIKI_BLOCKNOTE_SCHEMA = withMultiColumn(BlockNoteSchema.create());
+const DEFAULT_ALLOWED_LINK_PROTOCOLS = /^(https?|ftps?|mailto|tel|callto|sms|cid|xmpp):/i;
+
+function isAllowedLink(href = '') {
+  const value = String(href || '').trim();
+  return DEFAULT_ALLOWED_LINK_PROTOCOLS.test(value) || isInternalPageLink(value);
+}
 
 function getBlockNoteLocaleKey(language = 'en') {
   const normalized = String(language || 'en').toLowerCase();
@@ -140,7 +148,7 @@ function MythraSideMenu() {
   );
 }
 
-function MythraFormattingToolbar() {
+function MythraFormattingToolbar({ onOpenPageLink, pageLinkLabel }) {
   return (
     <FormattingToolbar>
       <BlockTypeSelect />
@@ -161,6 +169,17 @@ function MythraFormattingToolbar() {
       <NestBlockButton />
       <UnnestBlockButton />
       <CreateLinkButton />
+      <button
+        type="button"
+        className="bn-button page-link-toolbar-button"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          onOpenPageLink?.();
+        }}
+        title={pageLinkLabel || 'Page link'}
+      >
+        <Link2 size={16} />
+      </button>
       <AddCommentButton />
       <AddTiptapCommentButton />
     </FormattingToolbar>
@@ -187,16 +206,19 @@ export default function WikiBlockEditor({
   collaborationRoom,
   currentUser,
   isVisitor = false,
-  assetImages = [],
   getAssetUrl,
   onRequestAssets,
   labels,
+  documentTree = [],
+  assetTree = [],
+  onNavigateToPageLink,
   onVisitorCountChange,
   onCollaborationSaveState,
   onChange
 }) {
   const { i18n } = useTranslation();
-  const [imageContextMenu, setImageContextMenu] = useState({ isOpen: false, x: 0, y: 0 });
+  const [insertSearch, setInsertSearch] = useState({ isOpen: false, x: 0, y: 0, mode: 'all', selectedText: '' });
+  const onNavigateToPageLinkRef = useRef(onNavigateToPageLink);
   const collaborationRoomState = useCollaborationRoom({
     roomName: collaborationRoom,
     currentUser,
@@ -234,6 +256,11 @@ export default function WikiBlockEditor({
   const emitFrameRef = useRef(null);
   const legacyMigrationRef = useRef('');
   const dictionary = useMemo(() => getBlockNoteDictionary(i18n.language), [i18n.language]);
+
+  useEffect(() => {
+    onNavigateToPageLinkRef.current = onNavigateToPageLink;
+  }, [onNavigateToPageLink]);
+
   const editor = useCreateBlockNote(
     {
       schema: WIKI_BLOCKNOTE_SCHEMA,
@@ -249,6 +276,16 @@ export default function WikiBlockEditor({
           }
         }
         : initialBlocks ? { initialContent: initialBlocks } : {}),
+      links: {
+        isValidLink: isAllowedLink,
+        onClick: (event) => {
+          const href = event.target?.closest?.('a')?.getAttribute('href') || '';
+          if (!isInternalPageLink(href)) return false;
+          event.preventDefault();
+          onNavigateToPageLinkRef.current?.(href);
+          return true;
+        }
+      },
       uploadFile: async (file) => {
         const prepared = await prepareAssetUpload(file);
         if (!prepared.contentType.startsWith('image/')) {
@@ -271,6 +308,12 @@ export default function WikiBlockEditor({
     },
     [contentKey, collaborationRoom, collaborationProvider, dictionary]
   );
+
+  const insertPageLink = useCallback(({ href, label }) => {
+    if (!href) return;
+    editor.createLink(href, label || labels.pageLink || 'Page link');
+    editor.focus();
+  }, [editor, labels.pageLink]);
   const getSlashMenuItems = useCallback(
     async (query) => {
       try {
@@ -374,19 +417,6 @@ export default function WikiBlockEditor({
   }, []);
 
   useEffect(() => {
-    if (!imageContextMenu.isOpen) return undefined;
-    const close = () => setImageContextMenu(prev => ({ ...prev, isOpen: false }));
-    window.addEventListener('click', close);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [imageContextMenu.isOpen]);
-
-  useEffect(() => {
     let isCancelled = false;
 
     const loadLegacyMarkdown = async () => {
@@ -467,7 +497,7 @@ export default function WikiBlockEditor({
         if (!editable) return;
         event.preventDefault();
         await onRequestAssets?.();
-        setImageContextMenu({ isOpen: true, x: event.clientX, y: event.clientY });
+        setInsertSearch({ isOpen: true, x: event.clientX, y: event.clientY, mode: 'all', selectedText: editor.getSelectedText?.().trim() || '' });
       }}
       onDragOver={(event) => {
         if (!editable) return;
@@ -500,31 +530,20 @@ export default function WikiBlockEditor({
         }
       }}
     >
-      {editable && imageContextMenu.isOpen && (
-        <div
-          className="context-menu glass-panel wiki-image-context-menu"
-          style={{ top: imageContextMenu.y, left: imageContextMenu.x }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="context-menu-section-label">{labels.insertImage}</div>
-          {assetImages.length === 0 ? (
-            <span className="context-menu-empty">{labels.noAssetImages}</span>
-          ) : (
-            assetImages.map(asset => (
-              <button
-                key={asset.path}
-                type="button"
-                onClick={() => {
-                  insertImageBlock(getAssetUrl(asset.path), asset.name);
-                  setImageContextMenu(prev => ({ ...prev, isOpen: false }));
-                }}
-              >
-                <img className="context-menu-thumb" src={getAssetUrl(asset.path)} alt="" />
-                <span>{asset.name}</span>
-              </button>
-            ))
-          )}
-        </div>
+      {editable && insertSearch.isOpen && (
+        <WorkspaceInsertSearch
+          documentTree={documentTree}
+          assetTree={assetTree}
+          mode={insertSearch.mode}
+          supportedAssets={['image']}
+          selectedText={insertSearch.selectedText}
+          position={insertSearch.x || insertSearch.y ? { x: insertSearch.x, y: insertSearch.y } : null}
+          getAssetUrl={getAssetUrl}
+          labels={labels}
+          onInsertPageLink={insertPageLink}
+          onInsertAsset={asset => insertImageBlock(getAssetUrl(asset.path), asset.name)}
+          onClose={() => setInsertSearch(prev => ({ ...prev, isOpen: false }))}
+        />
       )}
       <BlockNoteView
         editor={editor}
@@ -536,7 +555,7 @@ export default function WikiBlockEditor({
         onChange={emitEditorDocument}
       >
         <SideMenuController sideMenu={MythraSideMenu} />
-        <FormattingToolbarController formattingToolbar={MythraFormattingToolbar} />
+        <FormattingToolbarController formattingToolbar={() => <MythraFormattingToolbar onOpenPageLink={() => setInsertSearch({ isOpen: true, x: 0, y: 0, mode: 'page-link', selectedText: editor.getSelectedText?.().trim() || '' })} pageLinkLabel={labels.pageLink} />} />
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={getSlashMenuItems}

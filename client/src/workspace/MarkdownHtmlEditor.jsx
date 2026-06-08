@@ -10,7 +10,9 @@ import { tags } from '@lezer/highlight'
 import { EditorView } from '@codemirror/view'
 import MarkdownIt from 'markdown-it'
 import { useCollaborationRoom } from '../useCollaborationRoom'
+import WorkspaceInsertSearch from './WorkspaceInsertSearch'
 import { prepareAssetUpload } from './utils'
+import { isInternalPageLink } from './utils'
 
 const MARKDOWN_TEXT_NAME = 'markdown'
 const ASSET_REFERENCE_PATTERN = /\{\{asset:([^}]+)\}\}/g
@@ -161,7 +163,7 @@ function getPreviewMarkup(body = '') {
   <div class="markdown-html-preview-body">${sanitizePreviewHtml(body)}</div>`
 }
 
-function MarkdownPreview({ html }) {
+function MarkdownPreview({ html, onNavigateToPageLink }) {
   const hostRef = useRef(null)
 
   useEffect(() => {
@@ -169,7 +171,17 @@ function MarkdownPreview({ html }) {
     if (!host) return
     const root = host.shadowRoot || host.attachShadow({ mode: 'open' })
     root.innerHTML = getPreviewMarkup(html)
-  }, [html])
+
+    const handleClick = (event) => {
+      const link = event.target?.closest?.('a')
+      const href = link?.getAttribute('href') || ''
+      if (!isInternalPageLink(href)) return
+      event.preventDefault()
+      onNavigateToPageLink?.(href)
+    }
+    root.addEventListener('click', handleClick)
+    return () => root.removeEventListener('click', handleClick)
+  }, [html, onNavigateToPageLink])
 
   return <div className="markdown-html-preview" ref={hostRef} />
 }
@@ -195,6 +207,10 @@ function getAssetMarkup(asset) {
   return `<img src="${escapeAttribute(reference)}" alt="${escapeAttribute(name)}">`
 }
 
+function escapeMarkdownLinkText(value = '') {
+  return String(value || '').replace(/([\\[\]])/g, '\\$1')
+}
+
 export default function MarkdownHtmlEditor({
   content,
   editable,
@@ -204,16 +220,17 @@ export default function MarkdownHtmlEditor({
   collaborationRoom,
   currentUser,
   isVisitor = false,
-  assetImages = [],
-  assetAudios = [],
   getAssetUrl,
   onRequestAssets,
+  documentTree = [],
+  assetTree = [],
+  onNavigateToPageLink,
   labels,
   onCollaborationSaveState
 }) {
   const editorViewRef = useRef(null)
   const yTextRef = useRef(null)
-  const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0 })
+  const [insertSearch, setInsertSearch] = useState({ isOpen: false, x: 0, y: 0, selectedText: '' })
   const [source, setSource] = useState(content || '')
   const collaborationRoomState = useCollaborationRoom({
     roomName: collaborationRoom,
@@ -300,6 +317,11 @@ export default function MarkdownHtmlEditor({
     insertMarkup(getAssetMarkup(asset))
   }, [insertMarkup])
 
+  const insertPageLink = useCallback(({ href, label }) => {
+    if (!href) return
+    insertMarkup(`[${escapeMarkdownLinkText(label || labels?.pageLink || 'Page link')}](${href})`)
+  }, [insertMarkup, labels?.pageLink])
+
   const uploadAndInsertAsset = useCallback(async (file) => {
     if (readOnly || !file) return
     const prepared = await prepareAssetUpload(file)
@@ -319,19 +341,6 @@ export default function MarkdownHtmlEditor({
     insertAsset({ ...uploaded, mediaType })
   }, [insertAsset, onRequestAssets, readOnly, worldId])
 
-  useEffect(() => {
-    if (!assetContextMenu.isOpen) return undefined
-    const close = () => setAssetContextMenu(prev => ({ ...prev, isOpen: false }))
-    window.addEventListener('click', close)
-    window.addEventListener('scroll', close, true)
-    window.addEventListener('resize', close)
-    return () => {
-      window.removeEventListener('click', close)
-      window.removeEventListener('scroll', close, true)
-      window.removeEventListener('resize', close)
-    }
-  }, [assetContextMenu.isOpen])
-
   return (
     <div
       className={`markdown-html-editor ${effectiveMode === 'edit' ? 'is-editing' : 'is-previewing'}`}
@@ -339,7 +348,11 @@ export default function MarkdownHtmlEditor({
         if (readOnly || effectiveMode !== 'edit') return
         event.preventDefault()
         await onRequestAssets?.()
-        setAssetContextMenu({ isOpen: true, x: event.clientX, y: event.clientY })
+        const selection = editorViewRef.current?.state.selection.main
+        const selectedText = selection && selection.from !== selection.to
+          ? source.slice(selection.from, selection.to).trim()
+          : ''
+        setInsertSearch({ isOpen: true, x: event.clientX, y: event.clientY, selectedText })
       }}
       onDragOver={(event) => {
         if (readOnly || effectiveMode !== 'edit') return
@@ -371,45 +384,18 @@ export default function MarkdownHtmlEditor({
         }
       }}
     >
-      {effectiveMode === 'edit' && assetContextMenu.isOpen && (
-        <div
-          className="context-menu glass-panel markdown-asset-context-menu"
-          style={{ top: assetContextMenu.y, left: assetContextMenu.x }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="context-menu-section-label">{labels?.insertImage}</div>
-          {assetImages.length === 0 ? (
-            <span className="context-menu-empty">{labels?.noAssetImages}</span>
-          ) : assetImages.map(asset => (
-            <button
-              key={asset.path}
-              type="button"
-              onClick={() => {
-                insertAsset(asset)
-                setAssetContextMenu(prev => ({ ...prev, isOpen: false }))
-              }}
-            >
-              <img className="context-menu-thumb" src={getAssetUrl?.(asset.path)} alt="" />
-              <span>{asset.name}</span>
-            </button>
-          ))}
-          <div className="context-menu-section-label">{labels?.insertAudio}</div>
-          {assetAudios.length === 0 ? (
-            <span className="context-menu-empty">{labels?.noAssetAudios}</span>
-          ) : assetAudios.map(asset => (
-            <button
-              key={asset.path}
-              type="button"
-              onClick={() => {
-                insertAsset(asset)
-                setAssetContextMenu(prev => ({ ...prev, isOpen: false }))
-              }}
-            >
-              <span className="context-menu-media-icon">Audio</span>
-              <span>{asset.name}</span>
-            </button>
-          ))}
-        </div>
+      {effectiveMode === 'edit' && insertSearch.isOpen && (
+        <WorkspaceInsertSearch
+          documentTree={documentTree}
+          assetTree={assetTree}
+          selectedText={insertSearch.selectedText}
+          position={{ x: insertSearch.x, y: insertSearch.y }}
+          getAssetUrl={getAssetUrl}
+          labels={labels}
+          onInsertPageLink={insertPageLink}
+          onInsertAsset={insertAsset}
+          onClose={() => setInsertSearch(prev => ({ ...prev, isOpen: false }))}
+        />
       )}
       {effectiveMode === 'edit' ? (
         <CodeMirror
@@ -436,7 +422,7 @@ export default function MarkdownHtmlEditor({
           aria-label={labels?.sourceLabel}
         />
       ) : (
-        <MarkdownPreview html={previewHtml} />
+        <MarkdownPreview html={previewHtml} onNavigateToPageLink={onNavigateToPageLink} />
       )}
     </div>
   )

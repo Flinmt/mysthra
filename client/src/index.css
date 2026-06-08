@@ -6186,6 +6186,180 @@ body {
   background: rgba(15, 23, 42, 0.72);
 }
 
+.page-link-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(226, 232, 240, 0.9);
+  background: transparent;
+  cursor: pointer;
+}
+
+.page-link-toolbar-button:hover {
+  color: white;
+  background: rgba(139, 92, 246, 0.18);
+}
+
+.workspace-insert-search-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+}
+
+.workspace-insert-search {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(560px, calc(100vw - 28px));
+  padding: 10px;
+  border: 1px solid rgba(167, 139, 250, 0.24);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(24, 22, 34, 0.98), rgba(9, 11, 17, 0.98)),
+    rgba(12, 14, 21, 0.98);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translate(-50%, -50%);
+}
+
+.workspace-insert-search.is-positioned {
+  transform: none;
+}
+
+.workspace-insert-search input {
+  width: 100%;
+  height: 42px;
+  padding: 0 13px;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  border-radius: 10px;
+  color: rgba(248, 250, 252, 0.96);
+  background: rgba(0, 0, 0, 0.26);
+  outline: none;
+  font-size: 0.92rem;
+}
+
+.workspace-insert-search input:focus {
+  border-color: rgba(196, 181, 253, 0.5);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+
+.workspace-insert-results-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.workspace-insert-results {
+  max-height: min(360px, calc(100vh - 160px));
+  overflow: auto;
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-insert-result {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: rgba(248, 250, 252, 0.92);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspace-insert-result:hover,
+.workspace-insert-result:focus-visible {
+  border-color: rgba(167, 139, 250, 0.2);
+  background: rgba(139, 92, 246, 0.15);
+  outline: none;
+}
+
+.workspace-insert-result strong,
+.workspace-insert-result span,
+.workspace-insert-result small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-insert-result strong {
+  font-size: 0.86rem;
+}
+
+.workspace-insert-result span {
+  color: rgba(196, 181, 253, 0.9);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.workspace-insert-result small {
+  color: rgba(148, 163, 184, 0.78);
+  font-size: 0.72rem;
+}
+
+.workspace-insert-empty {
+  padding: 14px 10px;
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 0.84rem;
+}
+
+.workspace-insert-preview {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.workspace-insert-preview img {
+  width: 100%;
+  max-height: 130px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.workspace-insert-preview strong,
+.workspace-insert-preview span,
+.workspace-insert-preview small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-insert-preview strong {
+  color: rgba(248, 250, 252, 0.96);
+  font-size: 0.84rem;
+}
+
+.workspace-insert-preview span,
+.workspace-insert-preview small {
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 0.72rem;
+}
+
+@media (max-width: 680px) {
+  .workspace-insert-results-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-insert-preview {
+    display: none;
+  }
+}
+
 .tab-creation-panel {
   width: min(780px, 100%);
   margin: 18px auto 0;
