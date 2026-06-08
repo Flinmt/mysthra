@@ -200,6 +200,8 @@
     "default_document_tab": "Document default tab",
     "insert_link": "Insert link",
     "page_link_not_found": "This page link was not found",
+    "copy_page_link": "Copy page link",
+    "page_link_copied": "Page link copied",
     "search_tabs_assets_placeholder": "Search tabs or assets...",
     "no_search_results": "No results found",
     "result_type_tab": "Tab",
