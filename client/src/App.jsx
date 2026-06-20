@@ -3,6 +3,7 @@ import { Route, Switch, useLocation } from 'wouter'
 import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Share2, ChevronDown, ChevronUp, Users, Upload, Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
+import DropdownSelect from './DropdownSelect'
 import { DEFAULT_WORLD_THEME, WORLD_THEMES, getWorldTheme } from './worldThemes'
 
 async function copyTextToClipboard(text) {
@@ -813,11 +814,13 @@ function ThemeSelect({ value, onChange }) {
   return (
     <div className="input-group world-theme-field">
       <label>{t('dashboard.world_theme')}</label>
-      <select value={selectedTheme.id} onChange={event => onChange(event.target.value)}>
-        {WORLD_THEMES.map(theme => (
-          <option key={theme.id} value={theme.id}>{t(theme.labelKey)}</option>
-        ))}
-      </select>
+      <DropdownSelect
+        className="world-theme-dropdown"
+        value={selectedTheme.id}
+        onChange={onChange}
+        options={WORLD_THEMES.map(theme => ({ value: theme.id, label: t(theme.labelKey) }))}
+        placeholder={t('dashboard.world_theme')}
+      />
       <div className="world-theme-preview" aria-hidden="true">
         {selectedTheme.swatches.map(color => (
           <span key={color} style={{ backgroundColor: color }} />
