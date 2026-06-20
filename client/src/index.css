@@ -8204,6 +8204,16 @@ body {
   color: #fff4de;
 }
 
+.workspace-container[data-world-theme="ember-archive"] .tree-icon {
+  color: #d69a55;
+}
+
+.workspace-container[data-world-theme="ember-archive"] .tree-node:hover .tree-icon,
+.workspace-container[data-world-theme="ember-archive"] .tree-node.selected .tree-icon {
+  color: #ece4d3;
+  filter: drop-shadow(0 0 7px rgba(214, 154, 85, 0.32));
+}
+
 .workspace-container[data-world-theme="ember-archive"] .tree-expander,
 .workspace-container[data-world-theme="ember-archive"] .tree-node-actions button,
 .workspace-container[data-world-theme="ember-archive"] .editor-save-status {
