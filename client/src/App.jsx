@@ -3,6 +3,7 @@ import { Route, Switch, useLocation } from 'wouter'
 import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Share2, ChevronDown, ChevronUp, Users, Upload, Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
+import { DEFAULT_WORLD_THEME, WORLD_THEMES, getWorldTheme } from './worldThemes'
 
 async function copyTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
@@ -805,10 +806,33 @@ function UserSettingsModal({ onClose }) {
   )
 }
 
+function ThemeSelect({ value, onChange }) {
+  const { t } = useTranslation()
+  const selectedTheme = getWorldTheme(value)
+
+  return (
+    <div className="input-group world-theme-field">
+      <label>{t('dashboard.world_theme')}</label>
+      <select value={selectedTheme.id} onChange={event => onChange(event.target.value)}>
+        {WORLD_THEMES.map(theme => (
+          <option key={theme.id} value={theme.id}>{t(theme.labelKey)}</option>
+        ))}
+      </select>
+      <div className="world-theme-preview" aria-hidden="true">
+        {selectedTheme.swatches.map(color => (
+          <span key={color} style={{ backgroundColor: color }} />
+        ))}
+      </div>
+      <small>{t('dashboard.world_theme_hint')}</small>
+    </div>
+  )
+}
+
 function CreateWorldModal({ onClose, onCreated }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [theme, setTheme] = useState(DEFAULT_WORLD_THEME)
   const [publicRead, setPublicRead] = useState(false)
   const [thumbnailPreview, setThumbnailPreview] = useState('')
   const [thumbnailFile, setThumbnailFile] = useState(null)
@@ -827,6 +851,7 @@ function CreateWorldModal({ onClose, onCreated }) {
         body: JSON.stringify({
           name,
           description,
+          theme,
           publicRead
         })
       })
@@ -893,6 +918,8 @@ function CreateWorldModal({ onClose, onCreated }) {
             />
           </div>
 
+          <ThemeSelect value={theme} onChange={setTheme} />
+
           <div className="input-group">
             <label>{t('dashboard.world_thumbnail')}</label>
             <label className="world-thumbnail-picker">
@@ -937,6 +964,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const { t } = useTranslation()
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
+  const [theme, setTheme] = useState(getWorldTheme(world.theme).id)
   const [publicRead, setPublicRead] = useState(Boolean(world.publicRead))
   const [thumbnailPreview, setThumbnailPreview] = useState(world.thumbnail?.filename ? `/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0}` : '')
   const [thumbnailFile, setThumbnailFile] = useState(null)
@@ -955,6 +983,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
         body: JSON.stringify({
           name,
           description,
+          theme,
           publicRead
         })
       })
@@ -1016,6 +1045,8 @@ function EditWorldModal({ world, onClose, onUpdated }) {
               onChange={e => setDescription(e.target.value)} 
             />
           </div>
+
+          <ThemeSelect value={theme} onChange={setTheme} />
 
           <div className="input-group">
             <label>{t('dashboard.world_thumbnail')}</label>

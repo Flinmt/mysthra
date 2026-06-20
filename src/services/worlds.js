@@ -20,6 +20,7 @@ const THUMBNAIL_TYPES = {
 };
 
 const WORLD_MEMBER_ROLES = new Set(["member", "admin"]);
+const WORLD_THEMES = new Set(["default", "ember-archive"]);
 
 function normalizeWorldMemberRole(role) {
   return WORLD_MEMBER_ROLES.has(role) ? role : "member";
@@ -44,6 +45,10 @@ function isWorldAdminConfig(worldData, userId) {
 
 function normalizePublicRead(value) {
   return value === true;
+}
+
+function normalizeWorldTheme(value) {
+  return WORLD_THEMES.has(value) ? value : "default";
 }
 
 async function readWorldConfigById(worldId) {
@@ -150,6 +155,7 @@ async function createWorld(data) {
     displayName: name,
     description: description || "",
     createdAt: Date.now(),
+    theme: normalizeWorldTheme(data.theme),
     publicRead: normalizePublicRead(data.publicRead),
     members: []
   };
@@ -178,6 +184,9 @@ async function updateWorld(worldId, data) {
 
   if (name) worldData.displayName = name;
   if (description !== undefined) worldData.description = description;
+  if (Object.prototype.hasOwnProperty.call(data, "theme")) {
+    worldData.theme = normalizeWorldTheme(data.theme);
+  }
   if (Object.prototype.hasOwnProperty.call(data, "publicRead")) {
     worldData.publicRead = normalizePublicRead(data.publicRead);
   }

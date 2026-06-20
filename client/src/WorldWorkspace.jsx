@@ -2599,7 +2599,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   );
 
   return (
-    <div className="workspace-container" style={{ flexDirection: 'row' }}>
+    <div className="workspace-container" data-world-theme={worldData?.theme || 'default'} style={{ flexDirection: 'row' }}>
       <aside className="workspace-sidebar sidebar-nexus">
         <div className="sidebar-header sidebar-nexus-header">
           <div className="sidebar-nexus-glow" aria-hidden="true" />
