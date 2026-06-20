@@ -66,6 +66,7 @@ test("createWorld stores lean world metadata", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, worldName);
   assert.equal(world.description, "A world in migration");
+  assert.equal(world.theme, "default");
   assert.equal(world.publicRead, false);
   assert.equal("thumbnailUrl" in world, false);
 
@@ -82,12 +83,14 @@ test("updateWorld only updates world profile fields", async () => {
 
   const world = await updateWorld(worldName, {
     name: "Renamed World",
-    description: "Updated"
+    description: "Updated",
+    theme: "ember-archive"
   });
 
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, "Renamed World");
   assert.equal(world.description, "Updated");
+  assert.equal(world.theme, "ember-archive");
   assert.equal(world.publicRead, false);
 });
 
