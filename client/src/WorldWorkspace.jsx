@@ -7,6 +7,7 @@ import { useCollaborationRoom } from './useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
 import DropdownSelect from './DropdownSelect';
+import { DEFAULT_WORLD_THEME, getWorldTheme } from './worldThemes';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -517,6 +518,37 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
 }
 
 const DOCUMENT_ACCESS_RANK = { none: 0, read: 1, write: 2, admin: 3 };
+const WORLD_THEME_CACHE_PREFIX = 'mysthra:world-theme:';
+
+function getCachedWorldTheme(worldId) {
+  try {
+    return getWorldTheme(window.localStorage.getItem(`${WORLD_THEME_CACHE_PREFIX}${worldId}`)).id;
+  } catch {
+    return DEFAULT_WORLD_THEME;
+  }
+}
+
+function setCachedWorldTheme(worldId, themeId) {
+  try {
+    window.localStorage.setItem(`${WORLD_THEME_CACHE_PREFIX}${worldId}`, getWorldTheme(themeId).id);
+  } catch {
+    // Storage may be unavailable in private or restricted browsing contexts.
+  }
+}
+
+function WorkspaceBootScreen({ theme, title, label }) {
+  return (
+    <div className="workspace-container workspace-boot" data-world-theme={theme}>
+      <div className="workspace-boot-card">
+        <div className="workspace-boot-mark" aria-hidden="true" />
+        <div>
+          <strong>{title}</strong>
+          <span>{label}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function hasDocumentAccess(access, required) {
   return (DOCUMENT_ACCESS_RANK[access] || 0) >= (DOCUMENT_ACCESS_RANK[required] || 0);
@@ -531,6 +563,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [selectedContainer, setSelectedContainer] = useState(null);
   const [activeTab, setActiveTab] = useState(null);
   const [fileContent, setFileContent] = useState('');
+  const [contentLoading, setContentLoading] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [viewMode, setViewMode] = useState('edit'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
@@ -544,6 +577,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [selectedAssetFolderPath, setSelectedAssetFolderPath] = useState('');
   const [worldData, setWorldData] = useState(null);
   const [worldDataLoaded, setWorldDataLoaded] = useState(false);
+  const [treeLoaded, setTreeLoaded] = useState(false);
+  const [cachedWorldTheme, setCachedWorldThemeState] = useState(() => getCachedWorldTheme(worldId));
   const [toasts, setToasts] = useState([]);
   const [saveStatus, setSaveStatus] = useState('saved');
   const assetFileInputRef = useRef(null);
@@ -598,6 +633,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       addToast(t('common.error'), 'error');
+    } finally {
+      setTreeLoaded(true);
     }
     return null;
   }, [addToast, t, worldId]);
@@ -609,6 +646,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (res.ok) {
         const data = await res.json();
         setWorldData(data);
+        setCachedWorldThemeState(getWorldTheme(data.theme).id);
+        setCachedWorldTheme(worldId, data.theme);
       }
     } catch {
       setWorldData(null);
@@ -782,9 +821,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeTab, addToast, isVisitor, selectedContainer, t, worldId]);
 
   useEffect(() => {
+    setTreeLoaded(false);
+    setWorldDataLoaded(false);
+    setCachedWorldThemeState(getCachedWorldTheme(worldId));
     fetchTree();
     fetchWorldData();
-  }, [fetchTree, fetchWorldData]);
+  }, [fetchTree, fetchWorldData, worldId]);
 
   useEffect(() => {
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
@@ -847,6 +889,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     const clearActiveTab = () => {
       setActiveTab(null);
       setFileContent('');
+      setContentLoading(false);
       setIsDirty(false);
     };
 
@@ -859,21 +902,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (tabNode.contentType === 'map') {
         setActiveTab(tabNode);
         setFileContent('');
+        setContentLoading(false);
         setIsDirty(false);
         setSaveStatus('saved');
         return;
       }
 
+      setActiveTab(tabNode);
+      setFileContent('');
+      setContentLoading(true);
       try {
         const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabNode.path)}`);
         if (!res.ok || isCancelled) return;
         const data = await res.json();
-        setActiveTab(tabNode);
         setFileContent(data.content);
         setIsDirty(false);
         setSaveStatus('saved');
       } catch {
         if (!isCancelled) addToast(t('common.error'), 'error');
+      } finally {
+        if (!isCancelled) setContentLoading(false);
       }
     };
 
@@ -924,6 +972,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     } else {
       setActiveTab(null);
       setFileContent('');
+      setContentLoading(false);
     }
   };
 
@@ -938,22 +987,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     if (tabNode.contentType === 'map') {
       setActiveTab(tabNode);
       setFileContent('');
+      setContentLoading(false);
       setIsDirty(false);
       setSaveStatus('saved');
       return;
     }
     
+    setActiveTab(tabNode);
+    setFileContent('');
+    setContentLoading(true);
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabNode.path)}`);
       if (res.ok) {
         const data = await res.json();
-        setActiveTab(tabNode);
         setFileContent(data.content);
         setIsDirty(false);
         setSaveStatus('saved');
       }
     } catch {
       addToast(t('common.error'), 'error');
+    } finally {
+      setContentLoading(false);
     }
   };
 
@@ -984,6 +1038,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     } else {
       setActiveTab(null);
       setFileContent('');
+      setContentLoading(false);
       setIsDirty(false);
       setSaveStatus('saved');
     }
@@ -1020,6 +1075,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     } else {
       setActiveTab(null);
       setFileContent('');
+      setContentLoading(false);
       setIsDirty(false);
       setSaveStatus('saved');
     }
@@ -1052,6 +1108,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     if (!tabToOpen) {
       setActiveTab(null);
       setFileContent('');
+      setContentLoading(false);
       setIsDirty(false);
       setSaveStatus('saved');
       return;
@@ -1061,22 +1118,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (tabToOpen.contentType === 'map') {
         setActiveTab(tabToOpen);
         setFileContent('');
+        setContentLoading(false);
         setIsDirty(false);
         setSaveStatus('saved');
         return;
       }
 
+      setActiveTab(tabToOpen);
+      setFileContent('');
+      setContentLoading(true);
       try {
         const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(tabToOpen.path)}`);
         if (res.ok) {
           const data = await res.json();
-          setActiveTab(tabToOpen);
           setFileContent(data.content);
           setIsDirty(false);
           setSaveStatus('saved');
         }
       } catch {
         addToast(t('common.error'), 'error');
+      } finally {
+        setContentLoading(false);
       }
     };
 
@@ -2364,6 +2426,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
+  const workspaceTheme = getWorldTheme(worldData?.theme || cachedWorldTheme).id;
+  const isWorkspaceBooting = !worldDataLoaded || !treeLoaded;
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
     : saveStatus === 'error'
@@ -2371,6 +2435,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       : isDirty
         ? t('workspace.save_status_pending')
         : t('workspace.save_status_saved');
+
+  if (isWorkspaceBooting) {
+    return (
+      <WorkspaceBootScreen
+        theme={workspaceTheme}
+        title={worldData?.displayName || worldId}
+        label={t('workspace.loading_world')}
+      />
+    );
+  }
+
   const editorControls = !isVisitor ? (
     <div className="editor-cover-controls">
       {activeTab && (
@@ -2599,7 +2674,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   );
 
   return (
-    <div className="workspace-container" data-world-theme={worldData?.theme || 'default'} style={{ flexDirection: 'row' }}>
+    <div className="workspace-container" data-world-theme={workspaceTheme} style={{ flexDirection: 'row' }}>
       <aside className="workspace-sidebar sidebar-nexus">
         <div className="sidebar-header sidebar-nexus-header">
           <div className="sidebar-nexus-glow" aria-hidden="true" />
@@ -2730,11 +2805,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               }}
             >
               {assetLoading ? (
-                <div className="sidebar-empty-state compact">
-                  <div className="sidebar-empty-icon">
-                    <Image size={26} />
+                <div className="sidebar-local-loading">
+                  <div className="sidebar-local-loading-lines" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
                   </div>
-                  <h2>{t('common.loading')}</h2>
+                  <strong>{t('workspace.loading_assets')}</strong>
                 </div>
               ) : assetTree.length === 0 ? (
                 <div className="sidebar-empty-state compact">
@@ -2999,6 +3076,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           {t('common.create')}
                         </button>
                       </div>
+                    </div>
+                  ) : contentLoading ? (
+                    <div className="editor-local-loading">
+                      <div className="editor-local-loading-mark" aria-hidden="true" />
+                      <strong>{t('workspace.loading_content')}</strong>
+                      <span>{t('workspace.loading_content_hint')}</span>
                     </div>
                   ) : activeTab ? (
                     <>
@@ -3611,7 +3694,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             <div className="user-admin-modal-body members-admin-grid">
               <div className="user-admin-directory">
                 <div className="user-admin-section-title">{t('workspace.current_members')}</div>
-                {membersPanel.members.length === 0 ? (
+                {membersPanel.loading && membersPanel.members.length === 0 ? (
+                  <div className="user-admin-local-loading">
+                    <div className="sidebar-local-loading-lines" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <strong>{t('workspace.loading_members')}</strong>
+                  </div>
+                ) : membersPanel.members.length === 0 ? (
                   <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
                 ) : (
                   <div className="user-admin-list members-list">
@@ -3715,7 +3807,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               <div className="user-admin-section-title">{t('workspace.document_permissions_users')}</div>
               <div className="document-permissions-list">
                 {documentPermissionsPanel.loading ? (
-                  <div className="user-admin-empty compact">{t('common.loading')}</div>
+                  <div className="user-admin-local-loading compact">
+                    <div className="sidebar-local-loading-lines" aria-hidden="true">
+                      <span />
+                      <span />
+                    </div>
+                    <strong>{t('workspace.loading_permissions')}</strong>
+                  </div>
                 ) : documentPermissionsPanel.members.length === 0 ? (
                   <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
                 ) : (
