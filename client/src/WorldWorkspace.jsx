@@ -1241,6 +1241,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           metadata: { type: 'tab', contentType, name: tabName, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
         };
 
+        await fetchTree();
+
         if (contentType === 'wiki') {
           const resDoc = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(createdTab.path)}`);
           if (resDoc.ok) {
@@ -1265,7 +1267,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           setSaveStatus('saved');
           await fetchAssets();
         }
-        await fetchTree();
         addToast(t('common.created'), 'success');
       } else {
         addToast(t('common.error'), 'error');
