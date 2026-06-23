@@ -953,7 +953,10 @@ export default function MapEditor({
                 }}
                 onDragEnd={event => {
                   event.cancelBubble = true;
-                  updateItem({ ...item, x: event.target.x(), y: event.target.y() });
+                  const node = itemNodesRef.current.get(item.id);
+                  if (node) {
+                    updateItem({ ...item, x: node.x(), y: node.y() });
+                  }
                 }}
               >
                 <Circle
@@ -995,7 +998,7 @@ export default function MapEditor({
               </Group>
             );
           })}
-          {selectedBounds && (
+          {selectedBounds && selectedItem?.type !== 'marker' && (
             <Rect
               x={selectedBounds.x}
               y={selectedBounds.y}
