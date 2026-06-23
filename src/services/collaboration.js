@@ -14,7 +14,7 @@ const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
 const BLOCKNOTE_FRAGMENT = "blocknote";
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown", "board"]);
 
 let activeCollaborationServer = null;
 

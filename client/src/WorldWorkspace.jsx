@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './MapEditor';
+import BoardEditor from './BoardEditor';
 import { useCollaborationRoom } from './useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
@@ -183,6 +184,7 @@ function getDocumentIcon(icon) {
 
 function getTabTypeIcon(contentType) {
   if (contentType === 'map') return Map;
+  if (contentType === 'board') return Shapes;
   if (contentType === 'markdown') return FilePenLine;
   return FileText;
 }
@@ -768,6 +770,19 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     selectedContainerPathRef.current = selectedContainer?.path || '';
   }, [selectedContainer?.path]);
 
+
+  const selectedContainerPath = selectedContainer?.path || '';
+  const activeTabPath = activeTab?.path || '';
+
+  useEffect(() => {
+    if (!selectedContainerPath || !activeTabPath) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('document') === selectedContainerPath && params.get('tab') === activeTabPath) return;
+    params.set('document', selectedContainerPath);
+    params.set('tab', activeTabPath);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [activeTabPath, selectedContainerPath]);
+
   const handleWikiContentChange = useCallback((nextContent) => {
     latestContentRef.current = nextContent;
     latestTabPathRef.current = activeTab?.path || '';
@@ -853,7 +868,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeSidebarTab, fetchAssets, isVisitor]);
 
   useEffect(() => {
-    if (activeTab?.contentType === 'map') {
+    if (activeTab?.contentType === 'map' || activeTab?.contentType === 'board') {
       fetchAssets();
     }
   }, [activeTab?.contentType, fetchAssets]);
@@ -899,7 +914,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
-      if (tabNode.contentType === 'map') {
+      if (tabNode.contentType === 'map' || tabNode.contentType === 'board') {
         setActiveTab(tabNode);
         setFileContent('');
         setContentLoading(false);
@@ -984,7 +999,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
     setTabCreationPanel(prev => ({ ...prev, isOpen: false }));
 
-    if (tabNode.contentType === 'map') {
+    if (tabNode.contentType === 'map' || tabNode.contentType === 'board') {
       setActiveTab(tabNode);
       setFileContent('');
       setContentLoading(false);
@@ -1115,7 +1130,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
 
     const openInitialTab = async () => {
-      if (tabToOpen.contentType === 'map') {
+      if (tabToOpen.contentType === 'map' || tabToOpen.contentType === 'board') {
         setActiveTab(tabToOpen);
         setFileContent('');
         setContentLoading(false);
@@ -1232,12 +1247,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             const data = await resDoc.json();
             setActiveTab(nextActiveTab);
             setFileContent(data.content || '');
+            setContentLoading(false);
+            setIsDirty(false);
+            setSaveStatus('saved');
+          } else {
+            setActiveTab(nextActiveTab);
+            setFileContent('');
+            setContentLoading(false);
             setIsDirty(false);
             setSaveStatus('saved');
           }
         } else {
           setActiveTab(nextActiveTab);
           setFileContent('');
+          setContentLoading(false);
           setIsDirty(false);
           setSaveStatus('saved');
           await fetchAssets();
@@ -2133,7 +2156,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const handleCoverUpload = async (event) => {
     const [file] = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!file || isVisitor || !selectedContainer || !activeTab || activeTab.contentType === 'map') return;
+    if (!file || isVisitor || !selectedContainer || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board') return;
 
     setCoverUploading(true);
     try {
@@ -2264,7 +2287,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeCover = async () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
+    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
     const metadata = { coverAssetPath: null, coverPositionX: 50, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null };
     updateActiveTabMetadata(metadata);
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
@@ -2293,7 +2316,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const startCoverReposition = () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
+    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
     const position = getCurrentCoverPosition();
     setCoverReposition({
       isEditing: true,
@@ -2319,7 +2342,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, []);
 
   const saveCoverReposition = async () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || !activeCoverPath) return;
+    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
     const metadata = {
       coverPositionX: coverReposition.x,
       coverPositionY: coverReposition.y,
@@ -2404,7 +2427,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
-  const activeCoverPath = activeTab && activeTab.contentType !== 'map' ? activeTab?.metadata?.coverAssetPath : null;
+  const activeCoverPath = activeTab && activeTab.contentType !== 'map' && activeTab.contentType !== 'board' ? activeTab?.metadata?.coverAssetPath : null;
   const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
     ? coverReposition.x
@@ -2415,6 +2438,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
   const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
+  const isBoardTab = activeTab?.contentType === 'board';
+  const isCanvasTab = isMapTab || isBoardTab;
   const isMarkdownTab = activeTab?.contentType === 'markdown';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
@@ -2530,7 +2555,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                   <span>{t('workspace.share_tab')}</span>
                 </button>
               )}
-              {activeTab && !isMapTab && canWriteActiveTab && (
+              {activeTab && !isCanvasTab && canWriteActiveTab && (
                 <>
                   <button
                     type="button"
@@ -2923,8 +2948,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className={`editor-page ${isMapTab ? 'is-map-page' : 'is-wiki-page'} ${!isMapTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && activeTab && !isMapTab && canWriteActiveTab && (
+              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${!isCanvasTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
+                {!isVisitor && selectedContainer && activeTab && !isCanvasTab && canWriteActiveTab && (
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -2933,7 +2958,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     hidden
                   />
                 )}
-                {!isMapTab && activeCoverPath && (
+                {!isCanvasTab && activeCoverPath && (
                   <div
                     ref={coverRef}
                     className={`editor-page-cover has-image ${coverReposition.isEditing ? 'is-repositioning' : ''} ${coverReposition.isDragging ? 'is-dragging' : ''}`}
@@ -3032,6 +3057,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           <Map size={22} />
                           <strong>{t('workspace.tab_type_map')}</strong>
                           <span>{t('workspace.tab_type_map_hint')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`tab-type-card ${tabCreationPanel.contentType === 'board' ? 'active' : ''}`}
+                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'board' }))}
+                        >
+                          <Shapes size={22} />
+                          <strong>{t('workspace.tab_type_board')}</strong>
+                          <span>{t('workspace.tab_type_board_hint')}</span>
                         </button>
                       </div>
 
@@ -3144,6 +3178,63 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           }
                         }}
                       />
+                      ) : activeTab.contentType === 'board' ? (
+                      <BoardEditor
+                        key={activeTab.path}
+                        worldId={worldId}
+                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
+                        currentUser={currentUser}
+                        isVisitor={isVisitor}
+                        locked={!canWriteActiveTab}
+                        assetImages={assetImages}
+                        assetTree={assetTree}
+                        getAssetUrl={getAssetUrl}
+                        onRequestAssets={fetchAssets}
+                        documentTree={tree}
+                        onNavigateToLink={navigateToMapLink}
+                        onCollaborationSaveState={handleCollaborationSaveState}
+                        labels={{
+                          toolbar: t('workspace.board_toolbar'),
+                          selectTool: t('workspace.map_tool_select'),
+                          panTool: t('workspace.map_tool_pan'),
+                          noteTool: t('workspace.board_tool_note'),
+                          textTool: t('workspace.map_tool_text'),
+                          rectTool: t('workspace.board_tool_rect'),
+                          circleTool: t('workspace.board_tool_circle'),
+                          imageTool: t('workspace.map_tool_image'),
+                          noteDefault: t('workspace.board_note_default'),
+                          textDefault: t('workspace.map_text_default'),
+                          itemEditorTitle: t('workspace.board_item_editor_title'),
+                          itemText: t('workspace.board_item_text'),
+                          itemColor: t('workspace.map_marker_color'),
+                          shapeBorderColor: t('workspace.board_shape_border_color'),
+                          pageLink: t('workspace.page_link'),
+                          linkConfigured: t('workspace.board_link_configured'),
+                          searchPageLink: t('workspace.board_search_page_link'),
+                          noPageLinked: t('workspace.board_no_page_linked'),
+                          linkedDocument: t('workspace.map_marker_linked_document'),
+                          linkedTab: t('workspace.map_marker_linked_tab'),
+                          markerNoLink: t('workspace.map_marker_no_link'),
+                          markerDocumentDefaultTab: t('workspace.map_marker_document_default_tab'),
+                          markerRemoveLink: t('workspace.map_marker_remove_link'),
+                          gridMode: t('workspace.map_grid_mode'),
+                          zoomIn: t('workspace.map_zoom_in'),
+                          zoomOut: t('workspace.map_zoom_out'),
+                          resetView: t('workspace.map_reset_view'),
+                          deleteSelected: t('workspace.map_delete_selected'),
+                          connectItems: t('workspace.board_connect_items'),
+                          insertImage: t('workspace.insert_image'),
+                          uploadImage: t('workspace.map_upload_image'),
+                          uploading: t('common.uploading'),
+                          noAssetImages: t('workspace.no_asset_images'),
+                          assetsSearch: t('workspace.assets_search'),
+                          assetsRootTarget: t('workspace.assets_root_target'),
+                          assetsNewFolder: t('workspace.assets_new_folder'),
+                          newAssetFolderName: t('workspace.new_asset_folder_name'),
+                          noSearchResults: t('workspace.no_search_results'),
+                          onlineUsers: t('workspace.online_users')
+                        }}
+                      />
                       ) : activeTab.contentType === 'markdown' ? (
                       <MarkdownHtmlEditor
                         key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
@@ -3186,6 +3277,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           tabTypeWiki: t('workspace.tab_type_notion_like'),
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
+                          tabTypeBoard: t('workspace.tab_type_board'),
                           cancel: t('common.cancel')
                         }}
                         onCollaborationSaveState={handleCollaborationSaveState}
@@ -3226,6 +3318,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           tabTypeWiki: t('workspace.tab_type_notion_like'),
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
+                          tabTypeBoard: t('workspace.tab_type_board'),
                           cancel: t('common.cancel'),
                           collaboration: {
                             connecting: t('workspace.collaboration_connecting'),
@@ -3400,6 +3493,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                   >
                     <Map size={20} />
                     <span style={{ fontSize: '0.75rem' }}>Mapa</span>
+                  </button>
+                  <button 
+                    onClick={() => setPrompt({ ...prompt, contentType: 'board' })}
+                    style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      padding: '12px', 
+                      background: prompt.contentType === 'board' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
+                      border: 'none', 
+                      borderRadius: 8, 
+                      color: 'white', 
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Shapes size={20} />
+                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_board')}</span>
                   </button>
                   <button 
                     onClick={() => setPrompt({ ...prompt, contentType: 'markdown' })}
