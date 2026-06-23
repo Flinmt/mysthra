@@ -11,7 +11,7 @@ const {
 const { updateIndex, removeFromIndex } = require("./indexer");
 
 const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["wiki", "markdown"]);
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown", "board"]);
 
 function getTabContentType(metadata = {}) {
   return metadata.contentType || (metadata.type === "tab" ? "wiki" : null);

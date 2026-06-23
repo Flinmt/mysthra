@@ -19,7 +19,7 @@ export function getFirstOrderedTab(node) {
 }
 
 export function isCollaborativeContentType(contentType) {
-  return contentType === 'wiki' || contentType === 'map' || contentType === 'markdown';
+  return contentType === 'wiki' || contentType === 'map' || contentType === 'markdown' || contentType === 'board';
 }
 
 export function isRootContainer(node) {

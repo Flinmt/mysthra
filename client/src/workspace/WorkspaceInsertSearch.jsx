@@ -15,6 +15,7 @@ function getDocumentPathLabel(node, pathByUid) {
 function getTabTypeLabel(contentType, labels = {}) {
   if (contentType === 'markdown') return labels.tabTypeMarkdown || 'Markdown/HTML'
   if (contentType === 'map') return labels.tabTypeMap || 'Map'
+  if (contentType === 'board') return labels.tabTypeBoard || 'Board'
   return labels.tabTypeWiki || 'Notion-like'
 }
 

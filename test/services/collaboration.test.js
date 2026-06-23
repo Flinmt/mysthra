@@ -62,6 +62,10 @@ test("resolveTabRoom accepts collaborative tab content types only", async () => 
     type: "tab",
     contentType: "markdown"
   });
+  const boardTab = await createDocument(worldName, "Board Tab", "", {
+    type: "tab",
+    contentType: "board"
+  });
   const invalidTab = await createDocument(worldName, "Secret Tab", "", {
     type: "tab",
     contentType: "secret"
@@ -70,6 +74,7 @@ test("resolveTabRoom accepts collaborative tab content types only", async () => 
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: wikiTab.uid })).tabUid, wikiTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: mapTab.uid })).tabUid, mapTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: markdownTab.uid })).tabUid, markdownTab.uid);
+  assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: boardTab.uid })).tabUid, boardTab.uid);
 
   await assert.rejects(
     () => resolveTabRoom({ type: "tab", worldId: worldName, tabUid: invalidTab.uid }),

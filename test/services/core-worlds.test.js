@@ -304,6 +304,30 @@ test("document tree supports containers and editable tabs", async () => {
   assert.equal((await readDocument(worldName, tab.path)).content, "# Revised draft");
 });
 
+test("document tree supports collaborative board tabs", async () => {
+  const worldName = "core-tree-board-tabs";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const container = await createDocument(worldName, "Planning", "", {
+    type: "container"
+  });
+  const board = await createDocument(worldName, `${container.path}/Board`, "", {
+    type: "tab",
+    contentType: "board"
+  });
+
+  const tree = await getFileTree(worldName);
+  assert.equal(tree[0].children[0].name, "Board");
+  assert.equal(tree[0].children[0].type, "tab");
+  assert.equal(tree[0].children[0].contentType, "board");
+
+  await assert.rejects(
+    () => readDocument(worldName, board.path),
+    { code: "DOCUMENT_NOT_FOUND" }
+  );
+});
+
 test("document creation stores accented tab names in metadata", async () => {
   const worldName = "core-tree-accented-tabs";
   const tabName = "Introdução";
