@@ -1026,35 +1026,49 @@ export default function BoardEditor({
     })))
   }, [readOnly, updateItems])
 
+  const getDraggedItemPosition = useCallback((node, item) => {
+    if (item.type === 'circle') {
+      return {
+        x: node.x() - (item.width || 160) / 2,
+        y: node.y() - (item.height || 120) / 2
+      }
+    }
+    return { x: node.x(), y: node.y() }
+  }, [])
+
   const beginItemDrag = useCallback((event, item) => {
     if (readOnly || !selectedItemIds.includes(item.id) || selectedItems.length <= 1) {
       multiDragSessionRef.current = null
       return
     }
+    const anchorPosition = getDraggedItemPosition(event.target, item)
     multiDragSessionRef.current = {
       anchorId: item.id,
-      anchorX: event.target.x(),
-      anchorY: event.target.y(),
+      anchorX: anchorPosition.x,
+      anchorY: anchorPosition.y,
       items: selectedItems.map(selectedItem => ({ ...selectedItem }))
     }
-  }, [readOnly, selectedItemIds, selectedItems])
+  }, [getDraggedItemPosition, readOnly, selectedItemIds, selectedItems])
 
   const updateItemDrag = useCallback((event, item) => {
     const session = multiDragSessionRef.current
     if (!session || session.anchorId !== item.id || session.items.length <= 1) return
-    moveSelectionDragBy(session.items, event.target.x() - session.anchorX, event.target.y() - session.anchorY)
-  }, [moveSelectionDragBy])
+    const position = getDraggedItemPosition(event.target, item)
+    moveSelectionDragBy(session.items, position.x - session.anchorX, position.y - session.anchorY)
+  }, [getDraggedItemPosition, moveSelectionDragBy])
 
   const endItemDrag = useCallback((event, item) => {
     const session = multiDragSessionRef.current
     if (session && session.anchorId === item.id && session.items.length > 1) {
-      moveSelectionDragBy(session.items, event.target.x() - session.anchorX, event.target.y() - session.anchorY)
+      const position = getDraggedItemPosition(event.target, item)
+      moveSelectionDragBy(session.items, position.x - session.anchorX, position.y - session.anchorY)
       multiDragSessionRef.current = null
       return
     }
     multiDragSessionRef.current = null
-    updateItem({ ...item, x: event.target.x(), y: event.target.y() })
-  }, [moveSelectionDragBy, updateItem])
+    const position = getDraggedItemPosition(event.target, item)
+    updateItem({ ...item, x: position.x, y: position.y })
+  }, [getDraggedItemPosition, moveSelectionDragBy, updateItem])
 
 
   const startConnectorDraft = useCallback((event, item) => {
