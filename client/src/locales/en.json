@@ -190,6 +190,7 @@
     "create_tab": "Create Tab",
     "create_first_tab": "Create first tab",
     "create_tab_inline_hint": "Choose the type and name the new content for this document.",
+    "tab_limit_reached": "This document already has the 5-tab limit.",
     "new_tab_name": "New Tab",
     "tab_type_notion_like": "Notion like",
     "tab_type_wiki_hint": "Notion-like editor for text, notes, and visual blocks.",

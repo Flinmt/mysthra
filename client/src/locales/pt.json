@@ -190,6 +190,7 @@
     "create_tab": "Criar Aba",
     "create_first_tab": "Criar primeira aba",
     "create_tab_inline_hint": "Escolha o tipo e dê um nome para o novo conteúdo deste documento.",
+    "tab_limit_reached": "Este documento já possui o limite de 5 abas.",
     "new_tab_name": "Nova Aba",
     "tab_type_notion_like": "Notion like",
     "tab_type_wiki_hint": "Editor notion-like para texto, notas e blocos visuais.",
