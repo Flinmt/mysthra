@@ -99,6 +99,58 @@ function getBoundsCenter(bounds) {
   return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
 }
 
+function cloneBoardItem(item, patch = {}) {
+  return {
+    ...item,
+    ...patch,
+    props: {
+      ...(item.props || {}),
+      ...(patch.props || {})
+    }
+  }
+}
+
+function getClipboardItemsFromSelection(selectedItems = [], allItems = []) {
+  const normalItems = selectedItems
+    .filter(item => item.type !== 'connector')
+    .map(item => cloneBoardItem(item))
+  const normalIds = new Set(normalItems.map(item => item.id))
+  const connectors = allItems
+    .filter(item => item.type === 'connector' && normalIds.has(item.props?.sourceId) && normalIds.has(item.props?.targetId))
+    .map(item => cloneBoardItem(item))
+
+  return [...normalItems, ...connectors]
+}
+
+function createPastedBoardItems(items = [], options = {}) {
+  const offset = options.offset ?? 24
+  const sourceBounds = options.targetPoint ? getItemsBounds(items.filter(item => item.type !== 'connector'), items) : null
+  const dx = sourceBounds ? options.targetPoint.x - (sourceBounds.x + sourceBounds.width / 2) : offset
+  const dy = sourceBounds ? options.targetPoint.y - (sourceBounds.y + sourceBounds.height / 2) : offset
+  const idMap = new Map()
+  const normalItems = items.filter(item => item.type !== 'connector')
+  const pastedItems = normalItems.map(item => {
+    const id = createId('board-item')
+    idMap.set(item.id, id)
+    return cloneBoardItem(item, {
+      id,
+      x: item.x + dx,
+      y: item.y + dy
+    })
+  })
+  const pastedConnectors = items
+    .filter(item => item.type === 'connector' && idMap.has(item.props?.sourceId) && idMap.has(item.props?.targetId))
+    .map(item => cloneBoardItem(item, {
+      id: createId('board-item'),
+      props: {
+        sourceId: idMap.get(item.props.sourceId),
+        targetId: idMap.get(item.props.targetId)
+      }
+    }))
+
+  return [...pastedItems, ...pastedConnectors]
+}
+
 function getConnectorAnchor(bounds, toward) {
   const center = getBoundsCenter(bounds)
   const dx = toward.x - center.x
@@ -357,6 +409,9 @@ export default function BoardEditor({
   const panSessionRef = useRef(null)
   const selectionMarqueeRef = useRef(null)
   const multiDragSessionRef = useRef(null)
+  const clipboardRef = useRef([])
+  const lastBoardPointerRef = useRef(null)
+  const lastMouseClientRef = useRef(null)
   const fileInputRef = useRef(null)
   const userMovedViewportRef = useRef(false)
   const undoManagerRef = useRef(null)
@@ -565,6 +620,14 @@ export default function BoardEditor({
     selectionMarqueeRef.current = selectionMarquee
   }, [selectionMarquee])
 
+  useEffect(() => {
+    const updateMouseClient = (event) => {
+      lastMouseClientRef.current = { x: event.clientX, y: event.clientY }
+    }
+    document.addEventListener('mousemove', updateMouseClient, true)
+    return () => document.removeEventListener('mousemove', updateMouseClient, true)
+  }, [])
+
   const registerNode = useCallback((id, node) => {
     if (node) itemNodesRef.current.set(id, node)
     else itemNodesRef.current.delete(id)
@@ -605,6 +668,20 @@ export default function BoardEditor({
     return {
       x: (pointer.x - viewport.x) / viewport.scale,
       y: (pointer.y - viewport.y) / viewport.scale
+    }
+  }, [viewport])
+
+  const getMousePointInBoard = useCallback(() => {
+    const mouse = lastMouseClientRef.current
+    const stageContainer = stageRef.current?.container()
+    if (!mouse || !stageContainer) return null
+    const rect = stageContainer.getBoundingClientRect()
+    const stageX = mouse.x - rect.left
+    const stageY = mouse.y - rect.top
+    if (stageX < 0 || stageY < 0 || stageX > rect.width || stageY > rect.height) return null
+    return {
+      x: (stageX - viewport.x) / viewport.scale,
+      y: (stageY - viewport.y) / viewport.scale
     }
   }, [viewport])
 
@@ -979,27 +1056,7 @@ export default function BoardEditor({
 
   const duplicateSelected = useCallback(() => {
     if (readOnly || selectedItems.length === 0 || !yState) return
-    const idMap = new Map()
-    const normalItems = selectedItems.filter(item => item.type !== 'connector')
-    const duplicatedItems = normalItems.map(item => {
-      const id = createId('board-item')
-      idMap.set(item.id, id)
-      return {
-        ...item,
-        id,
-        x: item.x + 24,
-        y: item.y + 24,
-        props: { ...(item.props || {}) }
-      }
-    })
-    const duplicatedConnectors = state.items
-      .filter(item => item.type === 'connector' && idMap.has(item.props?.sourceId) && idMap.has(item.props?.targetId))
-      .map(item => ({
-        ...item,
-        id: createId('board-item'),
-        props: { ...(item.props || {}), sourceId: idMap.get(item.props.sourceId), targetId: idMap.get(item.props.targetId) }
-      }))
-    const duplicates = [...duplicatedItems, ...duplicatedConnectors]
+    const duplicates = createPastedBoardItems(getClipboardItemsFromSelection(selectedItems, state.items))
     if (duplicates.length === 0) return
     yState.doc.transact(() => {
       duplicates.forEach(duplicate => yState.yItems.push([duplicate]))
@@ -1007,6 +1064,38 @@ export default function BoardEditor({
     setSelection(duplicates.map(item => item.id))
     setHoveredId('')
   }, [readOnly, selectedItems, setSelection, state.items, yState])
+
+  const copySelectedToClipboard = useCallback(() => {
+    if (selectedItems.length === 0) return false
+    const clipboardItems = getClipboardItemsFromSelection(selectedItems, state.items)
+    if (clipboardItems.length === 0) return false
+    clipboardRef.current = clipboardItems
+    return true
+  }, [selectedItems, state.items])
+
+  const pasteClipboardItems = useCallback(() => {
+    if (readOnly || !yState || clipboardRef.current.length === 0) return false
+    const pastedItems = createPastedBoardItems(clipboardRef.current, { targetPoint: getMousePointInBoard() || lastBoardPointerRef.current })
+    if (pastedItems.length === 0) return false
+    yState.doc.transact(() => {
+      pastedItems.forEach(item => yState.yItems.push([item]))
+    })
+    clipboardRef.current = pastedItems.map(item => cloneBoardItem(item))
+    setSelection(pastedItems.map(item => item.id))
+    setHoveredId('')
+    setDrawingShape(null)
+    setConnectorDraft(null)
+    setInlineEditor({ isOpen: false, itemId: '', text: '' })
+    setItemEditor({ isOpen: false, itemId: '', mode: 'style', x: 0, y: 0 })
+    return true
+  }, [getMousePointInBoard, readOnly, setSelection, yState])
+
+  const cutSelectedToClipboard = useCallback(() => {
+    if (readOnly || selectedItems.length === 0) return false
+    if (!copySelectedToClipboard()) return false
+    deleteSelected()
+    return true
+  }, [copySelectedToClipboard, deleteSelected, readOnly, selectedItems.length])
 
   const moveSelectedBy = useCallback((dx, dy) => {
     if (readOnly || selectedItems.length === 0) return
@@ -1091,23 +1180,63 @@ export default function BoardEditor({
   }, [readOnly, updateItem])
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const isTextEditingEvent = (event) => {
       const target = event.target
       const tagName = target?.tagName?.toLowerCase()
-      const isTextInput = target?.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select'
-      if (isTextInput) return
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      return Boolean(target?.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select')
+    }
+    const isShortcut = (event, key) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return false
+      const normalizedKey = String(event.key || '').toLowerCase()
+      return normalizedKey === key || event.code === `Key${key.toUpperCase()}`
+    }
+    const handleCopy = (event) => {
+      if (isTextEditingEvent(event) || selectedItems.length === 0) return
+      event.preventDefault()
+      copySelectedToClipboard()
+    }
+    const handleCut = (event) => {
+      if (isTextEditingEvent(event) || selectedItems.length === 0 || readOnly) return
+      event.preventDefault()
+      cutSelectedToClipboard()
+    }
+    const handlePaste = (event) => {
+      if (isTextEditingEvent(event) || readOnly || clipboardRef.current.length === 0) return
+      event.preventDefault()
+      pasteClipboardItems()
+    }
+    const handleKeyDown = (event) => {
+      if (isTextEditingEvent(event)) return
+      if (isShortcut(event, 'z')) {
         event.preventDefault()
         if (event.shiftKey) undoManagerRef.current?.redo()
         else undoManagerRef.current?.undo()
         return
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+      if (isShortcut(event, 'y')) {
         event.preventDefault()
         undoManagerRef.current?.redo()
         return
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
+      if (isShortcut(event, 'c')) {
+        if (selectedItems.length === 0) return
+        event.preventDefault()
+        copySelectedToClipboard()
+        return
+      }
+      if (isShortcut(event, 'x')) {
+        if (selectedItems.length === 0 || readOnly) return
+        event.preventDefault()
+        cutSelectedToClipboard()
+        return
+      }
+      if (isShortcut(event, 'v')) {
+        if (readOnly || clipboardRef.current.length === 0) return
+        event.preventDefault()
+        pasteClipboardItems()
+        return
+      }
+      if (isShortcut(event, 'd')) {
         if (selectedItems.length === 0 || readOnly) return
         event.preventDefault()
         duplicateSelected()
@@ -1138,9 +1267,17 @@ export default function BoardEditor({
         deleteSelected()
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [cancelInlineEdit, clearSelection, deleteSelected, duplicateSelected, moveSelectedBy, readOnly, selectedItems])
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('copy', handleCopy, true)
+    document.addEventListener('cut', handleCut, true)
+    document.addEventListener('paste', handlePaste, true)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('copy', handleCopy, true)
+      document.removeEventListener('cut', handleCut, true)
+      document.removeEventListener('paste', handlePaste, true)
+    }
+  }, [cancelInlineEdit, clearSelection, copySelectedToClipboard, cutSelectedToClipboard, deleteSelected, duplicateSelected, moveSelectedBy, pasteClipboardItems, readOnly, selectedItems])
 
   const handleUpload = useCallback(async (event) => {
     const [file] = Array.from(event.target.files || [])
@@ -1221,6 +1358,7 @@ export default function BoardEditor({
           updateSelectionMarquee()
           updateShapeDrawing()
           const point = stagePointToWorld()
+          lastBoardPointerRef.current = point
           if (connectorDraft) {
             const target = findConnectableItemAtPoint(point, connectorDraft.sourceId)
             setConnectorDraft(prev => prev ? { ...prev, currentPoint: point, targetId: target?.id || '' } : prev)
@@ -1231,7 +1369,10 @@ export default function BoardEditor({
         onTouchMove={() => updateShapeDrawing()}
         onMouseUp={endViewportPan}
         onTouchEnd={endViewportPan}
-        onMouseLeave={endViewportPan}
+        onMouseLeave={() => {
+          lastBoardPointerRef.current = null
+          endViewportPan()
+        }}
         className={`board-stage tool-${tool} ${drawingShape ? 'is-drawing-shape' : ''} ${connectorDraft ? 'is-connecting' : ''} ${isViewportPanning ? 'is-panning' : ''}`.trim()}
       >
         <Layer>
