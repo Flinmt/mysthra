@@ -9256,7 +9256,24 @@ body {
   transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
 }
 
+.board-popover-field input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  color: var(--text-primary);
+  outline: none;
+  padding: 10px;
+  transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
+}
+
 .board-popover-field textarea:focus {
+  border-color: rgba(56, 189, 248, 0.54);
+  background: rgba(15, 23, 42, 0.64);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.board-popover-field input:focus {
   border-color: rgba(56, 189, 248, 0.54);
   background: rgba(15, 23, 42, 0.64);
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
@@ -9570,8 +9587,37 @@ body {
 .board-inline-note-editor.is-text {
   border-width: 2px;
   color: #f8fafc;
-  background: rgba(9, 11, 16, 0.72) !important;
+  border-color: rgba(248, 250, 252, 0.28);
+  border-radius: 8px;
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.86) !important;
   box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+.board-text-align-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.board-text-align-row button {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  color: rgba(226, 232, 240, 0.84);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 8px 6px;
+  text-transform: capitalize;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
+}
+
+.board-text-align-row button.active,
+.board-text-align-row button:hover {
+  border-color: rgba(139, 92, 246, 0.54);
+  background: rgba(139, 92, 246, 0.18);
+  color: #ffffff;
 }
 
 
