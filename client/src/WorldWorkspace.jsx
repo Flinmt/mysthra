@@ -8,7 +8,7 @@ import { useCollaborationRoom } from './useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
 import DropdownSelect from './DropdownSelect';
-import { DEFAULT_WORLD_THEME, getWorldTheme } from './worldThemes';
+import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeStyle } from './worldThemes';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -2469,6 +2469,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
   const workspaceTheme = getWorldTheme(worldData?.theme || cachedWorldTheme).id;
+  const workspaceThemeStyle = worldData?.customTheme
+    ? getWorldThemeStyle(worldData.theme, worldData.customTheme)
+    : {};
   const isWorkspaceBooting = !worldDataLoaded || !treeLoaded;
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
@@ -2716,7 +2719,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   );
 
   return (
-    <div className="workspace-container" data-world-theme={workspaceTheme} style={{ flexDirection: 'row' }}>
+    <div
+      className="workspace-container"
+      data-world-theme={workspaceTheme}
+      data-custom-theme={worldData?.customTheme ? 'true' : undefined}
+      style={{ ...workspaceThemeStyle, flexDirection: 'row' }}
+    >
       <aside className="workspace-sidebar sidebar-nexus">
         <div className="sidebar-header sidebar-nexus-header">
           <div className="sidebar-nexus-glow" aria-hidden="true" />

@@ -95,6 +95,59 @@ test("updateWorld only updates world profile fields", async () => {
   assert.equal(world.publicRead, false);
 });
 
+test("updateWorld accepts vampire masquerade world theme", async () => {
+  const worldName = "core-world-vampire-theme";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const world = await updateWorld(worldName, {
+    theme: "vampire-masquerade"
+  });
+
+  assert.equal(world.theme, "vampire-masquerade");
+});
+
+test("world custom theme colors are normalized and stored", async () => {
+  const worldName = "core-world-custom-theme";
+  await resetWorld(worldName);
+  await createWorld({
+    name: worldName,
+    customTheme: {
+      colors: {
+        background: "#123",
+        surface: "#203040",
+        accent: "#AA55CC",
+        ignored: "#ffffff"
+      }
+    }
+  });
+
+  let world = await updateWorld(worldName, {
+    customTheme: {
+      colors: {
+        background: "#456",
+        surface: "not-a-color",
+        text: "#f8fafc",
+        mutedText: "#abc",
+        accent: "#11aa77",
+        secondaryAccent: "#XYZ"
+      }
+    }
+  });
+
+  assert.deepEqual(world.customTheme, {
+    colors: {
+      background: "#445566",
+      text: "#f8fafc",
+      mutedText: "#aabbcc",
+      accent: "#11aa77"
+    }
+  });
+
+  world = await updateWorld(worldName, { customTheme: null });
+  assert.equal(world.customTheme, null);
+});
+
 test("world public visitor access is stored per world", async () => {
   const worldName = "core-world-public-read";
   await resetWorld(worldName);

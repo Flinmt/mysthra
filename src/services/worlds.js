@@ -20,7 +20,16 @@ const THUMBNAIL_TYPES = {
 };
 
 const WORLD_MEMBER_ROLES = new Set(["member", "admin"]);
-const WORLD_THEMES = new Set(["default", "ember-archive"]);
+const WORLD_THEMES = new Set(["default", "ember-archive", "vampire-masquerade"]);
+const CUSTOM_THEME_COLOR_KEYS = new Set([
+  "background",
+  "surface",
+  "text",
+  "mutedText",
+  "accent",
+  "secondaryAccent"
+]);
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 function normalizeWorldMemberRole(role) {
   return WORLD_MEMBER_ROLES.has(role) ? role : "member";
@@ -49,6 +58,31 @@ function normalizePublicRead(value) {
 
 function normalizeWorldTheme(value) {
   return WORLD_THEMES.has(value) ? value : "default";
+}
+
+function normalizeHexColor(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!HEX_COLOR_PATTERN.test(trimmed)) return null;
+  if (trimmed.length === 4) {
+    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toLowerCase();
+  }
+  return trimmed.toLowerCase();
+}
+
+function normalizeCustomTheme(value) {
+  if (!value || typeof value !== "object") return null;
+  const inputColors = value.colors;
+  if (!inputColors || typeof inputColors !== "object" || Array.isArray(inputColors)) return null;
+
+  const colors = {};
+  for (const [key, color] of Object.entries(inputColors)) {
+    if (!CUSTOM_THEME_COLOR_KEYS.has(key)) continue;
+    const normalizedColor = normalizeHexColor(color);
+    if (normalizedColor) colors[key] = normalizedColor;
+  }
+
+  return Object.keys(colors).length > 0 ? { colors } : null;
 }
 
 async function readWorldConfigById(worldId) {
@@ -156,6 +190,7 @@ async function createWorld(data) {
     description: description || "",
     createdAt: Date.now(),
     theme: normalizeWorldTheme(data.theme),
+    customTheme: normalizeCustomTheme(data.customTheme),
     publicRead: normalizePublicRead(data.publicRead),
     members: []
   };
@@ -186,6 +221,9 @@ async function updateWorld(worldId, data) {
   if (description !== undefined) worldData.description = description;
   if (Object.prototype.hasOwnProperty.call(data, "theme")) {
     worldData.theme = normalizeWorldTheme(data.theme);
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "customTheme")) {
+    worldData.customTheme = normalizeCustomTheme(data.customTheme);
   }
   if (Object.prototype.hasOwnProperty.call(data, "publicRead")) {
     worldData.publicRead = normalizePublicRead(data.publicRead);

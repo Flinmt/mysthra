@@ -4,7 +4,14 @@ import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Sha
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
 import DropdownSelect from './DropdownSelect'
-import { DEFAULT_WORLD_THEME, WORLD_THEMES, getWorldTheme } from './worldThemes'
+import {
+  DEFAULT_WORLD_THEME,
+  WORLD_THEMES,
+  getThemeColors,
+  getThemeSwatches,
+  getWorldTheme,
+  normalizeCustomTheme
+} from './worldThemes'
 
 async function copyTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
@@ -807,26 +814,191 @@ function UserSettingsModal({ onClose }) {
   )
 }
 
-function ThemeSelect({ value, onChange }) {
+const CUSTOM_THEME_COLOR_FIELDS = [
+  ['background', 'dashboard.theme_color_background'],
+  ['surface', 'dashboard.theme_color_surface'],
+  ['text', 'dashboard.theme_color_text'],
+  ['mutedText', 'dashboard.theme_color_muted_text'],
+  ['accent', 'dashboard.theme_color_accent'],
+  ['secondaryAccent', 'dashboard.theme_color_secondary_accent']
+]
+const CUSTOM_THEME_OPTION = 'custom'
+
+function buildCustomThemePayload(enabled, colors) {
+  return enabled ? normalizeCustomTheme({ colors }) : null
+}
+
+function ThemeSelect({ value, customTheme, onChange }) {
   const { t } = useTranslation()
-  const selectedTheme = getWorldTheme(value)
+  const isCustomTheme = value === CUSTOM_THEME_OPTION
+  const selectedTheme = isCustomTheme ? getWorldTheme(DEFAULT_WORLD_THEME) : getWorldTheme(value)
+  const swatches = getThemeSwatches(selectedTheme.id, customTheme)
+  const options = [
+    ...WORLD_THEMES.map(theme => ({ value: theme.id, label: t(theme.labelKey) })),
+    { value: CUSTOM_THEME_OPTION, label: t('dashboard.theme_custom') }
+  ]
 
   return (
-    <div className="input-group world-theme-field">
+    <div className="input-group world-theme-field world-form-field">
       <label>{t('dashboard.world_theme')}</label>
       <DropdownSelect
         className="world-theme-dropdown"
-        value={selectedTheme.id}
+        value={isCustomTheme ? CUSTOM_THEME_OPTION : selectedTheme.id}
         onChange={onChange}
-        options={WORLD_THEMES.map(theme => ({ value: theme.id, label: t(theme.labelKey) }))}
+        options={options}
         placeholder={t('dashboard.world_theme')}
       />
       <div className="world-theme-preview" aria-hidden="true">
-        {selectedTheme.swatches.map(color => (
+        {swatches.map(color => (
           <span key={color} style={{ backgroundColor: color }} />
         ))}
       </div>
       <small>{t('dashboard.world_theme_hint')}</small>
+    </div>
+  )
+}
+
+function ThemeColorPicker({ theme, enabled, colors, onColorsChange }) {
+  const { t } = useTranslation()
+
+  const resetToPreset = () => {
+    onColorsChange(getThemeColors(theme))
+  }
+
+  return (
+    <div className="input-group world-custom-theme-field world-form-field">
+      {enabled && (
+        <div className="world-custom-theme-controls">
+          <div className="world-custom-theme-copy">
+            <strong>{t('dashboard.theme_customize_colors')}</strong>
+            <small>{t('dashboard.theme_customize_colors_hint')}</small>
+          </div>
+          <div className="world-custom-theme-grid">
+            {CUSTOM_THEME_COLOR_FIELDS.map(([key, labelKey]) => (
+              <label
+                key={key}
+                className="world-color-control"
+                style={{ backgroundColor: colors[key] }}
+                title={t(labelKey)}
+              >
+                <input
+                  type="color"
+                  aria-label={t(labelKey)}
+                  value={colors[key]}
+                  onChange={event => onColorsChange({ ...colors, [key]: event.target.value })}
+                />
+              </label>
+            ))}
+          </div>
+          <button type="button" className="btn-secondary world-custom-theme-reset" onClick={resetToPreset}>
+            {t('dashboard.theme_restore_preset')}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WorldFormFields({
+  name,
+  setName,
+  description,
+  setDescription,
+  theme,
+  setTheme,
+  customThemeEnabled,
+  setCustomThemeEnabled,
+  customThemeColors,
+  setCustomThemeColors,
+  publicRead,
+  setPublicRead,
+  thumbnailPreview,
+  handleThumbnailChange,
+  isEditing
+}) {
+  const { t } = useTranslation()
+  const customTheme = buildCustomThemePayload(customThemeEnabled, customThemeColors)
+  const selectedThemeValue = customThemeEnabled ? CUSTOM_THEME_OPTION : theme
+
+  return (
+    <div className="world-form-body">
+      <div className="world-form-grid">
+        <section className="world-form-section">
+          <div className="world-form-section-heading">
+            <span>{t('dashboard.world_form_identity')}</span>
+          </div>
+          <div className="input-group world-form-field">
+            <label>{t('dashboard.world_name')}</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder={isEditing ? undefined : t('dashboard.world_name_placeholder')}
+              required
+              autoFocus={!isEditing}
+            />
+          </div>
+
+          <div className="input-group world-form-field">
+            <label>{t('dashboard.short_description')}</label>
+            <input
+              type="text"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder={isEditing ? undefined : t('dashboard.short_description_placeholder')}
+            />
+          </div>
+
+          <div className="input-group world-form-field world-form-thumbnail-field">
+            <label>{t('dashboard.world_thumbnail')}</label>
+            <label className="world-thumbnail-picker">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} />
+              {thumbnailPreview ? (
+                <img src={thumbnailPreview} alt="" />
+              ) : (
+                <span><Upload size={18} /> {t('dashboard.choose_thumbnail')}</span>
+              )}
+            </label>
+          </div>
+        </section>
+
+        <section className="world-form-section">
+          <div className="world-form-section-heading">
+            <span>{t('dashboard.world_form_appearance')}</span>
+          </div>
+          <ThemeSelect
+            value={selectedThemeValue}
+            customTheme={customTheme}
+            onChange={nextTheme => {
+              if (nextTheme === CUSTOM_THEME_OPTION) {
+                setCustomThemeEnabled(true)
+                return
+              }
+              setTheme(nextTheme)
+              setCustomThemeEnabled(false)
+              setCustomThemeColors(getThemeColors(nextTheme))
+            }}
+          />
+
+          <ThemeColorPicker
+            theme={theme}
+            enabled={customThemeEnabled}
+            colors={customThemeColors}
+            onColorsChange={setCustomThemeColors}
+          />
+
+          <label className="settings-checkbox world-public-read-toggle">
+            <input
+              type="checkbox"
+              checked={publicRead}
+              onChange={e => setPublicRead(e.target.checked)}
+            />
+            <span>
+              <strong>{t('dashboard.public_read')}</strong>
+            </span>
+          </label>
+        </section>
+      </div>
     </div>
   )
 }
@@ -836,6 +1008,8 @@ function CreateWorldModal({ onClose, onCreated }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [theme, setTheme] = useState(DEFAULT_WORLD_THEME)
+  const [customThemeEnabled, setCustomThemeEnabled] = useState(false)
+  const [customThemeColors, setCustomThemeColors] = useState(() => getThemeColors(DEFAULT_WORLD_THEME))
   const [publicRead, setPublicRead] = useState(false)
   const [thumbnailPreview, setThumbnailPreview] = useState('')
   const [thumbnailFile, setThumbnailFile] = useState(null)
@@ -855,6 +1029,7 @@ function CreateWorldModal({ onClose, onCreated }) {
           name,
           description,
           theme,
+          customTheme: buildCustomThemePayload(customThemeEnabled, customThemeColors),
           publicRead
         })
       })
@@ -896,60 +1071,30 @@ function CreateWorldModal({ onClose, onCreated }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-content glass-panel">
-        <h2>{t('dashboard.create_new_world')}</h2>
+      <div className="modal-content glass-panel world-form-modal">
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label>{t('dashboard.world_name')}</label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              placeholder={t('dashboard.world_name_placeholder')}
-              required
-              autoFocus
-            />
+          <div className="world-form-header">
+            <h2>{t('dashboard.create_new_world')}</h2>
           </div>
-          
-          <div className="input-group">
-            <label>{t('dashboard.short_description')}</label>
-            <input 
-              type="text" 
-              value={description} 
-              onChange={e => setDescription(e.target.value)} 
-              placeholder={t('dashboard.short_description_placeholder')}
-            />
-          </div>
+          <WorldFormFields
+            name={name}
+            setName={setName}
+            description={description}
+            setDescription={setDescription}
+            theme={theme}
+            setTheme={setTheme}
+            customThemeEnabled={customThemeEnabled}
+            setCustomThemeEnabled={setCustomThemeEnabled}
+            customThemeColors={customThemeColors}
+            setCustomThemeColors={setCustomThemeColors}
+            publicRead={publicRead}
+            setPublicRead={setPublicRead}
+            thumbnailPreview={thumbnailPreview}
+            handleThumbnailChange={handleThumbnailChange}
+          />
+          {error && <div className="error-msg world-form-error">{error}</div>}
 
-          <ThemeSelect value={theme} onChange={setTheme} />
-
-          <div className="input-group">
-            <label>{t('dashboard.world_thumbnail')}</label>
-            <label className="world-thumbnail-picker">
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} />
-              {thumbnailPreview ? (
-                <img src={thumbnailPreview} alt="" />
-              ) : (
-                <span><Upload size={18} /> {t('dashboard.choose_thumbnail')}</span>
-              )}
-            </label>
-          </div>
-
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={publicRead}
-              onChange={e => setPublicRead(e.target.checked)}
-            />
-            <span>
-              <strong>{t('dashboard.public_read')}</strong>
-              <small>{t('dashboard.public_read_hint')}</small>
-            </span>
-          </label>
-
-          {error && <div className="error-msg">{error}</div>}
-
-          <div className="modal-actions">
+          <div className="modal-actions world-form-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
               {t('common.cancel')}
             </button>
@@ -968,6 +1113,8 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const [name, setName] = useState(world.displayName || '')
   const [description, setDescription] = useState(world.description || '')
   const [theme, setTheme] = useState(getWorldTheme(world.theme).id)
+  const [customThemeEnabled, setCustomThemeEnabled] = useState(Boolean(world.customTheme))
+  const [customThemeColors, setCustomThemeColors] = useState(() => getThemeColors(world.theme, world.customTheme))
   const [publicRead, setPublicRead] = useState(Boolean(world.publicRead))
   const [thumbnailPreview, setThumbnailPreview] = useState(world.thumbnail?.filename ? `/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0}` : '')
   const [thumbnailFile, setThumbnailFile] = useState(null)
@@ -987,6 +1134,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
           name,
           description,
           theme,
+          customTheme: buildCustomThemePayload(customThemeEnabled, customThemeColors),
           publicRead
         })
       })
@@ -1027,57 +1175,31 @@ function EditWorldModal({ world, onClose, onUpdated }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-content glass-panel">
-        <h2>{t('dashboard.edit_world')}</h2>
+      <div className="modal-content glass-panel world-form-modal">
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label>{t('dashboard.world_name')}</label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              required
-            />
+          <div className="world-form-header">
+            <h2>{t('dashboard.edit_world')}</h2>
           </div>
-          
-          <div className="input-group">
-            <label>{t('dashboard.short_description')}</label>
-            <input 
-              type="text" 
-              value={description} 
-              onChange={e => setDescription(e.target.value)} 
-            />
-          </div>
-
-          <ThemeSelect value={theme} onChange={setTheme} />
-
-          <div className="input-group">
-            <label>{t('dashboard.world_thumbnail')}</label>
-            <label className="world-thumbnail-picker">
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} />
-              {thumbnailPreview ? (
-                <img src={thumbnailPreview} alt="" />
-              ) : (
-                <span><Upload size={18} /> {t('dashboard.choose_thumbnail')}</span>
-              )}
-            </label>
-          </div>
-
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={publicRead}
-              onChange={e => setPublicRead(e.target.checked)}
-            />
-            <span>
-              <strong>{t('dashboard.public_read')}</strong>
-              <small>{t('dashboard.public_read_hint')}</small>
-            </span>
-          </label>
-
+          <WorldFormFields
+            name={name}
+            setName={setName}
+            description={description}
+            setDescription={setDescription}
+            theme={theme}
+            setTheme={setTheme}
+            customThemeEnabled={customThemeEnabled}
+            setCustomThemeEnabled={setCustomThemeEnabled}
+            customThemeColors={customThemeColors}
+            setCustomThemeColors={setCustomThemeColors}
+            publicRead={publicRead}
+            setPublicRead={setPublicRead}
+            thumbnailPreview={thumbnailPreview}
+            handleThumbnailChange={handleThumbnailChange}
+            isEditing
+          />
           {error && <div className="error-msg">{error}</div>}
 
-          <div className="modal-actions">
+          <div className="modal-actions world-form-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
               {t('common.cancel')}
             </button>
