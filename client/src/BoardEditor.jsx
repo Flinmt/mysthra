@@ -24,6 +24,11 @@ const TOOL_LABELS = {
 }
 
 const NOTE_COLORS = ['#fde68a', '#bfdbfe', '#bbf7d0', '#fecdd3', '#ddd6fe']
+const DEFAULT_SHAPE_STROKE = '#a78bfa'
+const DEFAULT_TEXT_FILL = 'rgba(15, 23, 42, 0.74)'
+const DEFAULT_TEXT_COLOR = '#f8fafc'
+const DEFAULT_TEXT_FONT_SIZE = 22
+const DEFAULT_TEXT_FONT_WEIGHT = '700'
 const SHAPE_STROKE_COLORS = ['#a78bfa', '#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#f8fafc']
 const INLINE_TEXT_TYPES = new Set(['note', 'text'])
 const CONNECTABLE_ITEM_TYPES = new Set(['note', 'text', 'rect', 'circle', 'image'])
@@ -97,6 +102,58 @@ function getItemsBounds(items = [], allItems = items) {
 
 function getBoundsCenter(bounds) {
   return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+}
+
+function cloneBoardItem(item, patch = {}) {
+  return {
+    ...item,
+    ...patch,
+    props: {
+      ...(item.props || {}),
+      ...(patch.props || {})
+    }
+  }
+}
+
+function getClipboardItemsFromSelection(selectedItems = [], allItems = []) {
+  const normalItems = selectedItems
+    .filter(item => item.type !== 'connector')
+    .map(item => cloneBoardItem(item))
+  const normalIds = new Set(normalItems.map(item => item.id))
+  const connectors = allItems
+    .filter(item => item.type === 'connector' && normalIds.has(item.props?.sourceId) && normalIds.has(item.props?.targetId))
+    .map(item => cloneBoardItem(item))
+
+  return [...normalItems, ...connectors]
+}
+
+function createPastedBoardItems(items = [], options = {}) {
+  const offset = options.offset ?? 24
+  const sourceBounds = options.targetPoint ? getItemsBounds(items.filter(item => item.type !== 'connector'), items) : null
+  const dx = sourceBounds ? options.targetPoint.x - (sourceBounds.x + sourceBounds.width / 2) : offset
+  const dy = sourceBounds ? options.targetPoint.y - (sourceBounds.y + sourceBounds.height / 2) : offset
+  const idMap = new Map()
+  const normalItems = items.filter(item => item.type !== 'connector')
+  const pastedItems = normalItems.map(item => {
+    const id = createId('board-item')
+    idMap.set(item.id, id)
+    return cloneBoardItem(item, {
+      id,
+      x: item.x + dx,
+      y: item.y + dy
+    })
+  })
+  const pastedConnectors = items
+    .filter(item => item.type === 'connector' && idMap.has(item.props?.sourceId) && idMap.has(item.props?.targetId))
+    .map(item => cloneBoardItem(item, {
+      id: createId('board-item'),
+      props: {
+        sourceId: idMap.get(item.props.sourceId),
+        targetId: idMap.get(item.props.targetId)
+      }
+    }))
+
+  return [...pastedItems, ...pastedConnectors]
 }
 
 function getConnectorAnchor(bounds, toward) {
@@ -357,6 +414,9 @@ export default function BoardEditor({
   const panSessionRef = useRef(null)
   const selectionMarqueeRef = useRef(null)
   const multiDragSessionRef = useRef(null)
+  const clipboardRef = useRef([])
+  const lastBoardPointerRef = useRef(null)
+  const lastMouseClientRef = useRef(null)
   const fileInputRef = useRef(null)
   const userMovedViewportRef = useRef(false)
   const undoManagerRef = useRef(null)
@@ -379,6 +439,7 @@ export default function BoardEditor({
   const [linkSearchQuery, setLinkSearchQuery] = useState('')
   const [drawingShape, setDrawingShape] = useState(null)
   const [selectionMarquee, setSelectionMarquee] = useState(null)
+  const [dragPreviewItems, setDragPreviewItems] = useState([])
   const [connectorDraft, setConnectorDraft] = useState(null)
   const [connectorPulse, setConnectorPulse] = useState(0)
   const [inlineEditor, setInlineEditor] = useState({ isOpen: false, itemId: '', text: '' })
@@ -427,6 +488,11 @@ export default function BoardEditor({
   }, [selectedId, selectedIds, state.items])
   const selectedItems = useMemo(() => state.items.filter(item => selectedItemIds.includes(item.id)), [selectedItemIds, state.items])
   const selectedItem = selectedItems[0] || null
+  const previewItems = useMemo(() => {
+    if (dragPreviewItems.length === 0) return state.items
+    const previewById = new Map(dragPreviewItems.map(item => [item.id, item]))
+    return state.items.map(item => previewById.get(item.id) || item)
+  }, [dragPreviewItems, state.items])
   const assetBreadcrumb = useMemo(
     () => getAssetBreadcrumb(assetTree, selectedAssetFolderPath, labels.assetsRootTarget || 'Assets root'),
     [assetTree, labels.assetsRootTarget, selectedAssetFolderPath]
@@ -440,7 +506,8 @@ export default function BoardEditor({
       .filter(node => node.type === 'folder' || node.mediaType === 'image')
   }, [assetImages, assetSearchQuery, assetTree, selectedAssetFolderPath])
   const editedItem = state.items.find(item => item.id === itemEditor.itemId)
-  const selectedBounds = selectedItems.length > 0 ? getItemsBounds(selectedItems, state.items) : null
+  const selectedPreviewItems = previewItems.filter(item => selectedItemIds.includes(item.id))
+  const selectedBounds = selectedPreviewItems.length > 0 ? getItemsBounds(selectedPreviewItems, previewItems) : null
   const inlineItem = state.items.find(item => item.id === inlineEditor.itemId)
   const inlineBounds = inlineItem ? getItemBounds(inlineItem) : null
   const contextualBounds = selectedBounds ? {
@@ -565,6 +632,14 @@ export default function BoardEditor({
     selectionMarqueeRef.current = selectionMarquee
   }, [selectionMarquee])
 
+  useEffect(() => {
+    const updateMouseClient = (event) => {
+      lastMouseClientRef.current = { x: event.clientX, y: event.clientY }
+    }
+    document.addEventListener('mousemove', updateMouseClient, true)
+    return () => document.removeEventListener('mousemove', updateMouseClient, true)
+  }, [])
+
   const registerNode = useCallback((id, node) => {
     if (node) itemNodesRef.current.set(id, node)
     else itemNodesRef.current.delete(id)
@@ -605,6 +680,20 @@ export default function BoardEditor({
     return {
       x: (pointer.x - viewport.x) / viewport.scale,
       y: (pointer.y - viewport.y) / viewport.scale
+    }
+  }, [viewport])
+
+  const getMousePointInBoard = useCallback(() => {
+    const mouse = lastMouseClientRef.current
+    const stageContainer = stageRef.current?.container()
+    if (!mouse || !stageContainer) return null
+    const rect = stageContainer.getBoundingClientRect()
+    const stageX = mouse.x - rect.left
+    const stageY = mouse.y - rect.top
+    if (stageX < 0 || stageY < 0 || stageX > rect.width || stageY > rect.height) return null
+    return {
+      x: (stageX - viewport.x) / viewport.scale,
+      y: (stageY - viewport.y) / viewport.scale
     }
   }, [viewport])
 
@@ -663,14 +752,30 @@ export default function BoardEditor({
       return { id, type, x: point.x - width / 2, y: point.y - height / 2, width, height, props: { text: labels.noteDefault || 'Note', color: NOTE_COLORS[0], ...props } }
     }
     if (type === 'text') {
-      const width = 220
-      const height = 70
-      return { id, type, x: point.x - width / 2, y: point.y - height / 2, width, height, props: { text: labels.textDefault || 'Text', color: '#f8fafc', ...props } }
+      const width = 260
+      const height = 120
+      return {
+        id,
+        type,
+        x: point.x - width / 2,
+        y: point.y - height / 2,
+        width,
+        height,
+        props: {
+          text: labels.textDefault || 'Text',
+          color: DEFAULT_TEXT_COLOR,
+          fill: DEFAULT_TEXT_FILL,
+          fontSize: DEFAULT_TEXT_FONT_SIZE,
+          fontWeight: DEFAULT_TEXT_FONT_WEIGHT,
+          align: 'left',
+          ...props
+        }
+      }
     }
     if (type === 'circle') {
       const width = 160
       const height = 120
-      return { id, type, x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: '#38bdf8', ...props } }
+      return { id, type, x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: DEFAULT_SHAPE_STROKE, ...props } }
     }
     if (type === 'image') {
       const width = 240
@@ -679,7 +784,7 @@ export default function BoardEditor({
     }
     const width = 180
     const height = 110
-    return { id, type: 'rect', x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: '#a78bfa', ...props } }
+    return { id, type: 'rect', x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: DEFAULT_SHAPE_STROKE, ...props } }
   }, [labels.noteDefault, labels.textDefault])
 
   const commitInlineEdit = useCallback(() => {
@@ -707,14 +812,14 @@ export default function BoardEditor({
       props: {
         sourceId,
         targetId,
-        stroke: selectionTheme.accent,
+        stroke: DEFAULT_SHAPE_STROKE,
         arrowEnd: true
       }
     }
     yState.yItems.push([connector])
     setSelection([connector.id])
     setHoveredId('')
-  }, [readOnly, selectionTheme.accent, setSelection, state.items, yState])
+  }, [readOnly, setSelection, state.items, yState])
 
   const selectBoardItem = useCallback((event, itemId) => {
     event.cancelBubble = true
@@ -738,6 +843,10 @@ export default function BoardEditor({
 
   const openItemEditor = useCallback((event, item, mode = 'style') => {
     event?.cancelBubble && (event.cancelBubble = true)
+    event?.evt?.preventDefault?.()
+    event?.evt?.stopPropagation?.()
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
     const pointer = stageRef.current?.getPointerPosition() || { x: size.width / 2, y: size.height / 2 }
     const popoverWidth = mode === 'link' ? 360 : 280
     const popoverHeight = mode === 'link' ? 390 : 220
@@ -894,7 +1003,7 @@ export default function BoardEditor({
       height: box.height,
       props: {
         fill: 'transparent',
-        stroke: drawingShape.type === 'circle' ? '#38bdf8' : '#a78bfa'
+        stroke: DEFAULT_SHAPE_STROKE
       }
     }
     yState.yItems.push([item])
@@ -972,6 +1081,7 @@ export default function BoardEditor({
     clearSelection()
     setHoveredId('')
     setDrawingShape(null)
+    setDragPreviewItems([])
     setConnectorDraft(null)
     setInlineEditor({ isOpen: false, itemId: '', text: '' })
     setItemEditor({ isOpen: false, itemId: '', mode: 'style', x: 0, y: 0 })
@@ -979,27 +1089,7 @@ export default function BoardEditor({
 
   const duplicateSelected = useCallback(() => {
     if (readOnly || selectedItems.length === 0 || !yState) return
-    const idMap = new Map()
-    const normalItems = selectedItems.filter(item => item.type !== 'connector')
-    const duplicatedItems = normalItems.map(item => {
-      const id = createId('board-item')
-      idMap.set(item.id, id)
-      return {
-        ...item,
-        id,
-        x: item.x + 24,
-        y: item.y + 24,
-        props: { ...(item.props || {}) }
-      }
-    })
-    const duplicatedConnectors = state.items
-      .filter(item => item.type === 'connector' && idMap.has(item.props?.sourceId) && idMap.has(item.props?.targetId))
-      .map(item => ({
-        ...item,
-        id: createId('board-item'),
-        props: { ...(item.props || {}), sourceId: idMap.get(item.props.sourceId), targetId: idMap.get(item.props.targetId) }
-      }))
-    const duplicates = [...duplicatedItems, ...duplicatedConnectors]
+    const duplicates = createPastedBoardItems(getClipboardItemsFromSelection(selectedItems, state.items))
     if (duplicates.length === 0) return
     yState.doc.transact(() => {
       duplicates.forEach(duplicate => yState.yItems.push([duplicate]))
@@ -1007,6 +1097,38 @@ export default function BoardEditor({
     setSelection(duplicates.map(item => item.id))
     setHoveredId('')
   }, [readOnly, selectedItems, setSelection, state.items, yState])
+
+  const copySelectedToClipboard = useCallback(() => {
+    if (selectedItems.length === 0) return false
+    const clipboardItems = getClipboardItemsFromSelection(selectedItems, state.items)
+    if (clipboardItems.length === 0) return false
+    clipboardRef.current = clipboardItems
+    return true
+  }, [selectedItems, state.items])
+
+  const pasteClipboardItems = useCallback(() => {
+    if (readOnly || !yState || clipboardRef.current.length === 0) return false
+    const pastedItems = createPastedBoardItems(clipboardRef.current, { targetPoint: getMousePointInBoard() || lastBoardPointerRef.current })
+    if (pastedItems.length === 0) return false
+    yState.doc.transact(() => {
+      pastedItems.forEach(item => yState.yItems.push([item]))
+    })
+    clipboardRef.current = pastedItems.map(item => cloneBoardItem(item))
+    setSelection(pastedItems.map(item => item.id))
+    setHoveredId('')
+    setDrawingShape(null)
+    setConnectorDraft(null)
+    setInlineEditor({ isOpen: false, itemId: '', text: '' })
+    setItemEditor({ isOpen: false, itemId: '', mode: 'style', x: 0, y: 0 })
+    return true
+  }, [getMousePointInBoard, readOnly, setSelection, yState])
+
+  const cutSelectedToClipboard = useCallback(() => {
+    if (readOnly || selectedItems.length === 0) return false
+    if (!copySelectedToClipboard()) return false
+    deleteSelected()
+    return true
+  }, [copySelectedToClipboard, deleteSelected, readOnly, selectedItems.length])
 
   const moveSelectedBy = useCallback((dx, dy) => {
     if (readOnly || selectedItems.length === 0) return
@@ -1017,44 +1139,74 @@ export default function BoardEditor({
     })))
   }, [readOnly, selectedItems, updateItems])
 
-  const moveSelectionDragBy = useCallback((items, dx, dy) => {
-    if (readOnly || items.length === 0) return
-    updateItems(items.filter(item => item.type !== 'connector').map(item => ({
+  const getMovedDragItems = useCallback((items, dx, dy) => (
+    items.filter(item => item.type !== 'connector').map(item => ({
       ...item,
       x: item.x + dx,
       y: item.y + dy
-    })))
-  }, [readOnly, updateItems])
+    }))
+  ), [])
+
+  const previewSelectionDragBy = useCallback((items, dx, dy) => {
+    if (readOnly || items.length === 0) return
+    setDragPreviewItems(getMovedDragItems(items, dx, dy))
+  }, [getMovedDragItems, readOnly])
+
+  const moveSelectionDragBy = useCallback((items, dx, dy) => {
+    if (readOnly || items.length === 0) return
+    updateItems(getMovedDragItems(items, dx, dy))
+  }, [getMovedDragItems, readOnly, updateItems])
+
+  const getDraggedItemPosition = useCallback((node, item) => {
+    if (item.type === 'circle') {
+      return {
+        x: node.x() - (item.width || 160) / 2,
+        y: node.y() - (item.height || 120) / 2
+      }
+    }
+    return { x: node.x(), y: node.y() }
+  }, [])
 
   const beginItemDrag = useCallback((event, item) => {
-    if (readOnly || !selectedItemIds.includes(item.id) || selectedItems.length <= 1) {
+    if (readOnly) {
       multiDragSessionRef.current = null
+      setDragPreviewItems([])
       return
     }
+    const dragItems = selectedItemIds.includes(item.id) && selectedItems.length > 1
+      ? selectedItems
+      : [item]
+    const anchorPosition = getDraggedItemPosition(event.target, item)
     multiDragSessionRef.current = {
       anchorId: item.id,
-      anchorX: event.target.x(),
-      anchorY: event.target.y(),
-      items: selectedItems.map(selectedItem => ({ ...selectedItem }))
+      anchorX: anchorPosition.x,
+      anchorY: anchorPosition.y,
+      items: dragItems.map(dragItem => ({ ...dragItem }))
     }
-  }, [readOnly, selectedItemIds, selectedItems])
+    setDragPreviewItems([])
+  }, [getDraggedItemPosition, readOnly, selectedItemIds, selectedItems])
 
   const updateItemDrag = useCallback((event, item) => {
     const session = multiDragSessionRef.current
-    if (!session || session.anchorId !== item.id || session.items.length <= 1) return
-    moveSelectionDragBy(session.items, event.target.x() - session.anchorX, event.target.y() - session.anchorY)
-  }, [moveSelectionDragBy])
+    if (!session || session.anchorId !== item.id) return
+    const position = getDraggedItemPosition(event.target, item)
+    previewSelectionDragBy(session.items, position.x - session.anchorX, position.y - session.anchorY)
+  }, [getDraggedItemPosition, previewSelectionDragBy])
 
   const endItemDrag = useCallback((event, item) => {
     const session = multiDragSessionRef.current
-    if (session && session.anchorId === item.id && session.items.length > 1) {
-      moveSelectionDragBy(session.items, event.target.x() - session.anchorX, event.target.y() - session.anchorY)
+    if (session && session.anchorId === item.id) {
+      const position = getDraggedItemPosition(event.target, item)
+      moveSelectionDragBy(session.items, position.x - session.anchorX, position.y - session.anchorY)
       multiDragSessionRef.current = null
+      setDragPreviewItems([])
       return
     }
     multiDragSessionRef.current = null
-    updateItem({ ...item, x: event.target.x(), y: event.target.y() })
-  }, [moveSelectionDragBy, updateItem])
+    setDragPreviewItems([])
+    const position = getDraggedItemPosition(event.target, item)
+    updateItem({ ...item, x: position.x, y: position.y })
+  }, [getDraggedItemPosition, moveSelectionDragBy, updateItem])
 
 
   const startConnectorDraft = useCallback((event, item) => {
@@ -1077,23 +1229,63 @@ export default function BoardEditor({
   }, [readOnly, updateItem])
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const isTextEditingEvent = (event) => {
       const target = event.target
       const tagName = target?.tagName?.toLowerCase()
-      const isTextInput = target?.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select'
-      if (isTextInput) return
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      return Boolean(target?.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select')
+    }
+    const isShortcut = (event, key) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return false
+      const normalizedKey = String(event.key || '').toLowerCase()
+      return normalizedKey === key || event.code === `Key${key.toUpperCase()}`
+    }
+    const handleCopy = (event) => {
+      if (isTextEditingEvent(event) || selectedItems.length === 0) return
+      event.preventDefault()
+      copySelectedToClipboard()
+    }
+    const handleCut = (event) => {
+      if (isTextEditingEvent(event) || selectedItems.length === 0 || readOnly) return
+      event.preventDefault()
+      cutSelectedToClipboard()
+    }
+    const handlePaste = (event) => {
+      if (isTextEditingEvent(event) || readOnly || clipboardRef.current.length === 0) return
+      event.preventDefault()
+      pasteClipboardItems()
+    }
+    const handleKeyDown = (event) => {
+      if (isTextEditingEvent(event)) return
+      if (isShortcut(event, 'z')) {
         event.preventDefault()
         if (event.shiftKey) undoManagerRef.current?.redo()
         else undoManagerRef.current?.undo()
         return
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+      if (isShortcut(event, 'y')) {
         event.preventDefault()
         undoManagerRef.current?.redo()
         return
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
+      if (isShortcut(event, 'c')) {
+        if (selectedItems.length === 0) return
+        event.preventDefault()
+        copySelectedToClipboard()
+        return
+      }
+      if (isShortcut(event, 'x')) {
+        if (selectedItems.length === 0 || readOnly) return
+        event.preventDefault()
+        cutSelectedToClipboard()
+        return
+      }
+      if (isShortcut(event, 'v')) {
+        if (readOnly || clipboardRef.current.length === 0) return
+        event.preventDefault()
+        pasteClipboardItems()
+        return
+      }
+      if (isShortcut(event, 'd')) {
         if (selectedItems.length === 0 || readOnly) return
         event.preventDefault()
         duplicateSelected()
@@ -1101,6 +1293,8 @@ export default function BoardEditor({
       }
       if (event.key === 'Escape') {
         event.preventDefault()
+        multiDragSessionRef.current = null
+        setDragPreviewItems([])
         clearSelection()
         setHoveredId('')
         setItemEditor({ isOpen: false, itemId: '', mode: 'style', x: 0, y: 0 })
@@ -1121,12 +1315,22 @@ export default function BoardEditor({
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedItems.length === 0 || readOnly) return
         event.preventDefault()
+        multiDragSessionRef.current = null
+        setDragPreviewItems([])
         deleteSelected()
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [cancelInlineEdit, clearSelection, deleteSelected, duplicateSelected, moveSelectedBy, readOnly, selectedItems])
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('copy', handleCopy, true)
+    document.addEventListener('cut', handleCut, true)
+    document.addEventListener('paste', handlePaste, true)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('copy', handleCopy, true)
+      document.removeEventListener('cut', handleCut, true)
+      document.removeEventListener('paste', handlePaste, true)
+    }
+  }, [cancelInlineEdit, clearSelection, copySelectedToClipboard, cutSelectedToClipboard, deleteSelected, duplicateSelected, moveSelectedBy, pasteClipboardItems, readOnly, selectedItems])
 
   const handleUpload = useCallback(async (event) => {
     const [file] = Array.from(event.target.files || [])
@@ -1190,7 +1394,14 @@ export default function BoardEditor({
   ].filter(item => !readOnly || item.id === 'select')
 
   return (
-    <div ref={containerRef} className="board-editor-shell">
+    <div
+      ref={containerRef}
+      className="board-editor-shell"
+      onContextMenu={event => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+    >
       <Stage
         ref={stageRef}
         width={size.width}
@@ -1207,6 +1418,7 @@ export default function BoardEditor({
           updateSelectionMarquee()
           updateShapeDrawing()
           const point = stagePointToWorld()
+          lastBoardPointerRef.current = point
           if (connectorDraft) {
             const target = findConnectableItemAtPoint(point, connectorDraft.sourceId)
             setConnectorDraft(prev => prev ? { ...prev, currentPoint: point, targetId: target?.id || '' } : prev)
@@ -1217,18 +1429,21 @@ export default function BoardEditor({
         onTouchMove={() => updateShapeDrawing()}
         onMouseUp={endViewportPan}
         onTouchEnd={endViewportPan}
-        onMouseLeave={endViewportPan}
+        onMouseLeave={() => {
+          lastBoardPointerRef.current = null
+          endViewportPan()
+        }}
         className={`board-stage tool-${tool} ${drawingShape ? 'is-drawing-shape' : ''} ${connectorDraft ? 'is-connecting' : ''} ${isViewportPanning ? 'is-panning' : ''}`.trim()}
       >
         <Layer>
           <Rect x={-100000} y={-100000} width={200000} height={200000} fill={state.canvas.backgroundColor} listening={false} />
           {state.canvas.gridVisible && <BoardGrid viewport={viewport} size={size} gridSize={state.canvas.gridSize || 48} />}
-          {state.items.filter(item => item.type === 'connector').map(item => {
-            const points = getConnectorPoints(item, state.items)
+          {previewItems.filter(item => item.type === 'connector').map(item => {
+            const points = getConnectorPoints(item, previewItems)
             if (points.length === 0) return null
             const isSelected = selectedItemIds.includes(item.id)
             const isHovered = hoveredId === item.id
-            const stroke = isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.82)' : item.props?.stroke || selectionTheme.accent
+            const stroke = isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.82)' : item.props?.stroke || DEFAULT_SHAPE_STROKE
             const isEndpointSelected = selectedItemIds.includes(item.props?.sourceId) || selectedItemIds.includes(item.props?.targetId)
             return (
               <Arrow
@@ -1254,11 +1469,11 @@ export default function BoardEditor({
             )
           })}
           {connectorDraft && (() => {
-            const points = getConnectorPoints({ type: 'connector', props: { sourceId: connectorDraft.sourceId } }, state.items, connectorDraft.currentPoint)
+            const points = getConnectorPoints({ type: 'connector', props: { sourceId: connectorDraft.sourceId } }, previewItems, connectorDraft.currentPoint)
             if (!points.length) return null
             return <Arrow points={points} stroke={connectorDraft.targetId ? selectionTheme.accent : 'rgba(248,250,252,0.58)'} fill={connectorDraft.targetId ? selectionTheme.accent : 'rgba(248,250,252,0.58)'} strokeWidth={2.25} pointerLength={11} pointerWidth={11} lineCap="round" lineJoin="round" dash={connectorDraft.targetId ? [] : [8, 6]} listening={false} />
           })()}
-          {state.items.filter(item => item.type !== 'connector').map(item => {
+          {previewItems.filter(item => item.type !== 'connector').map(item => {
             const isSelected = selectedItemIds.includes(item.id)
             const isHovered = hoveredId === item.id
             const draggable = !readOnly && tool === 'select' && !isViewportPanning
@@ -1310,7 +1525,7 @@ export default function BoardEditor({
                   radiusX={(item.width || 160) / 2}
                   radiusY={(item.height || 120) / 2}
                   fill={item.props?.fill || 'transparent'}
-                  stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || '#38bdf8'}
+                  stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || DEFAULT_SHAPE_STROKE}
                   strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2}
                   onTransformEnd={event => {
                     const node = event.target
@@ -1336,7 +1551,38 @@ export default function BoardEditor({
               return <Line key={item.id} ref={node => registerNode(item.id, node)} x={item.x} y={item.y} points={item.props?.points || [0, 0, 180, 0]} stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.72)' : item.props?.stroke || '#f8fafc'} strokeWidth={isSelected || isHovered ? 4 : 3} lineCap="round" lineJoin="round" draggable={draggable} onClick={event => selectBoardItem(event, item.id)} onTap={event => selectBoardItem(event, item.id)} onDblClick={event => navigateItem(item) || openItemEditor(event, item)} onDblTap={event => navigateItem(item) || openItemEditor(event, item)} onMouseEnter={() => handleItemHover(item.id)} onMouseLeave={() => handleItemHover('')} onContextMenu={event => openItemEditor(event, item)} onDragStart={event => beginItemDrag(event, item)} onDragMove={event => updateItemDrag(event, item)} onDragEnd={event => endItemDrag(event, item)} />
             }
             if (item.type === 'text') {
-              return <Text key={item.id} {...common} text={item.props?.text || ''} fill={item.props?.color || '#f8fafc'} fontSize={24} fontStyle="700" padding={6} />
+              return (
+                <Group key={item.id} {...common}>
+                  <Rect
+                    width={item.width || 260}
+                    height={item.height || 120}
+                    fill={item.props?.fill || DEFAULT_TEXT_FILL}
+                    stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(248,250,252,0.46)' : item.props?.stroke || 'rgba(148, 163, 184, 0.22)'}
+                    strokeWidth={isSelected ? 2.5 : isHovered ? 1.75 : 1}
+                    cornerRadius={8}
+                    shadowColor="#000"
+                    shadowBlur={14}
+                    shadowOpacity={0.2}
+                    shadowOffsetY={6}
+                  />
+                  <Text
+                    x={0}
+                    y={0}
+                    width={item.width || 260}
+                    height={item.height || 120}
+                    text={item.props?.text || ''}
+                    fill={item.props?.color || DEFAULT_TEXT_COLOR}
+                    fontSize={item.props?.fontSize || DEFAULT_TEXT_FONT_SIZE}
+                    fontStyle={item.props?.fontWeight || DEFAULT_TEXT_FONT_WEIGHT}
+                    lineHeight={1.22}
+                    padding={14}
+                    verticalAlign="middle"
+                    align={item.props?.align || 'left'}
+                    wrap="word"
+                    listening={false}
+                  />
+                </Group>
+              )
             }
             if (item.type === 'note') {
               return (
@@ -1371,7 +1617,7 @@ export default function BoardEditor({
                 </Group>
               )
             }
-            return <Rect key={item.id} {...common} fill={item.props?.fill || 'transparent'} stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || '#a78bfa'} strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2} cornerRadius={10} />
+            return <Rect key={item.id} {...common} fill={item.props?.fill || 'transparent'} stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || DEFAULT_SHAPE_STROKE} strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2} cornerRadius={10} />
           })}
           {selectionMarquee?.active && (() => {
             const x = Math.min(selectionMarquee.start.x, selectionMarquee.current.x)
@@ -1448,9 +1694,9 @@ export default function BoardEditor({
             )
           })}
           {remoteUsers.filter(user => user.selectedId && user.selectedId !== selectedId).map(user => {
-            const item = state.items.find(nextItem => nextItem.id === user.selectedId)
+            const item = previewItems.find(nextItem => nextItem.id === user.selectedId)
             if (!item) return null
-            const bounds = getItemBounds(item, state.items)
+            const bounds = getItemBounds(item, previewItems)
             return <Rect key={`${user.clientId}-${item.id}`} x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} stroke={user.color} strokeWidth={2} dash={[8, 5]} listening={false} />
           })}
           <Transformer ref={transformerRef} rotateEnabled={selectedItems.length === 1} borderStroke={selectionTheme.accent} borderStrokeWidth={1.5} borderDash={[10, 6]} anchorFill={selectionTheme.accent} anchorStroke="#ffffff" anchorStrokeWidth={1.5} anchorCornerRadius={5} anchorSize={10} enabledAnchors={selectedItems.length === 1 ? ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right'] : []} />
@@ -1516,11 +1762,11 @@ export default function BoardEditor({
             top: viewport.y + inlineBounds.y * viewport.scale,
             width: inlineBounds.width * viewport.scale,
             height: inlineBounds.height * viewport.scale,
-            fontSize: `${Math.max(12, 18 * viewport.scale)}px`,
-            lineHeight: 1.18,
-            textAlign: 'center',
+            fontSize: `${Math.max(12, (inlineItem.type === 'text' ? (inlineItem.props?.fontSize || DEFAULT_TEXT_FONT_SIZE) : 18) * viewport.scale)}px`,
+            lineHeight: inlineItem.type === 'text' ? 1.22 : 1.18,
+            textAlign: inlineItem.type === 'text' ? (inlineItem.props?.align || 'left') : 'center',
             padding: `${Math.max(8, 14 * viewport.scale)}px`,
-            background: inlineItem.props?.color || NOTE_COLORS[0]
+            background: inlineItem.type === 'text' ? (inlineItem.props?.fill || DEFAULT_TEXT_FILL) : (inlineItem.props?.color || NOTE_COLORS[0])
           }}
           onChange={event => setInlineEditor(prev => ({ ...prev, text: event.target.value }))}
           onBlur={commitInlineEdit}
@@ -1655,10 +1901,37 @@ export default function BoardEditor({
           {(itemEditor.mode || 'style') === 'style' && (
             <>
               {editedItem.type === 'text' && (
-                <label className="board-popover-field">
-                  <span>{labels.itemText || 'Text'}</span>
-                  <textarea value={editedItem.props?.text || ''} onChange={event => updateEditedItemProps({ text: event.target.value })} />
-                </label>
+                <>
+                  <label className="board-popover-field">
+                    <span>{labels.itemText || 'Text'}</span>
+                    <textarea value={editedItem.props?.text || ''} onChange={event => updateEditedItemProps({ text: event.target.value })} />
+                  </label>
+                  <label className="board-popover-field">
+                    <span>{labels.textSize || 'Text size'}</span>
+                    <input
+                      type="number"
+                      min="12"
+                      max="56"
+                      value={editedItem.props?.fontSize || DEFAULT_TEXT_FONT_SIZE}
+                      onChange={event => updateEditedItemProps({ fontSize: Math.max(12, Math.min(56, Number(event.target.value) || DEFAULT_TEXT_FONT_SIZE)) })}
+                    />
+                  </label>
+                  <div className="board-popover-section">
+                    <span>{labels.textAlign || 'Text align'}</span>
+                    <div className="board-text-align-row">
+                      {['left', 'center', 'right'].map(align => (
+                        <button
+                          key={align}
+                          type="button"
+                          className={(editedItem.props?.align || 'left') === align ? 'active' : ''}
+                          onClick={() => updateEditedItemProps({ align })}
+                        >
+                          {align}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
               {editedItem.type === 'note' && (
                 <div className="board-popover-section">
@@ -1676,7 +1949,7 @@ export default function BoardEditor({
                       <button
                         key={color}
                         type="button"
-                        className={(editedItem.props?.stroke || '') === color ? 'active' : ''}
+                        className={(editedItem.props?.stroke || DEFAULT_SHAPE_STROKE) === color ? 'active' : ''}
                         style={{ '--stroke-color': color }}
                         onClick={() => updateEditedItemProps({ stroke: color })}
                         title={color}

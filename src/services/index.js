@@ -17,7 +17,8 @@ const {
   deleteDocument,
   renameDocument,
   moveDocument,
-  duplicateDocument
+  duplicateDocument,
+  MAX_TABS_PER_DOCUMENT
 } = require("./tree");
 
 module.exports = {
@@ -39,5 +40,6 @@ module.exports = {
   deleteDocument,
   renameDocument,
   moveDocument,
-  duplicateDocument
+  duplicateDocument,
+  MAX_TABS_PER_DOCUMENT
 };

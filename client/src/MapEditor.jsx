@@ -1034,6 +1034,8 @@ export default function MapEditor({
         </div>
       )}
 
+      <div className="board-zoom-indicator map-zoom-indicator">{Math.round(viewport.scale * 100)}%</div>
+
       <div className="map-floating-dock" role="toolbar" aria-label={labels.toolbar || 'Map tools'}>
         {tools.map(({ id, icon: Icon, label }) => (
           <button

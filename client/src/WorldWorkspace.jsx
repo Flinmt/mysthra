@@ -8,7 +8,7 @@ import { useCollaborationRoom } from './useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
 import DropdownSelect from './DropdownSelect';
-import { DEFAULT_WORLD_THEME, getWorldTheme } from './worldThemes';
+import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeStyle } from './worldThemes';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -520,6 +520,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
 }
 
 const DOCUMENT_ACCESS_RANK = { none: 0, read: 1, write: 2, admin: 3 };
+const MAX_TABS_PER_DOCUMENT = 5;
 const WORLD_THEME_CACHE_PREFIX = 'mysthra:world-theme:';
 
 function getCachedWorldTheme(worldId) {
@@ -1174,11 +1175,19 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const openTabCreationPanel = () => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
+    if (hasReachedTabLimit) {
+      addToast(t('workspace.tab_limit_reached'), 'error');
+      return;
+    }
     setTabCreationPanel({ isOpen: true, name: getUniqueTabName(), contentType: 'wiki', mapFile: null });
   };
 
   const handleCreateTabInline = async () => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
+    if (hasReachedTabLimit) {
+      addToast(t('workspace.tab_limit_reached'), 'error');
+      return;
+    }
     const tabName = tabCreationPanel.name.trim();
     if (!tabName) return;
     if (isDirty) {
@@ -1269,7 +1278,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         }
         addToast(t('common.created'), 'success');
       } else {
-        addToast(t('common.error'), 'error');
+        const data = await res.json().catch(() => null);
+        addToast(data?.error || t('common.error'), 'error');
       }
     } catch {
       addToast(t('common.error'), 'error');
@@ -1606,6 +1616,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const duplicateTab = async (tab) => {
     if (isVisitor || !tab) return;
+    if (hasReachedTabLimit) {
+      addToast(t('workspace.tab_limit_reached'), 'error');
+      return;
+    }
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/duplicate`, {
         method: 'POST',
@@ -1622,7 +1636,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         setRenamingTab({ path: result.path, value: result.name });
         addToast(t('workspace.duplicated'), 'success');
       } else {
-        addToast(t('common.error'), 'error');
+        const data = await res.json().catch(() => null);
+        addToast(data?.error || t('common.error'), 'error');
       }
     } catch {
       addToast(t('common.error'), 'error');
@@ -2428,6 +2443,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
   ].filter(tab => !isVisitor || tab.id === 'wiki');
   const selectedTabs = getTabsForNode(selectedContainer);
+  const hasReachedTabLimit = selectedTabs.length >= MAX_TABS_PER_DOCUMENT;
   const activeCoverPath = activeTab && activeTab.contentType !== 'map' && activeTab.contentType !== 'board' ? activeTab?.metadata?.coverAssetPath : null;
   const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
@@ -2453,6 +2469,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
   const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
   const workspaceTheme = getWorldTheme(worldData?.theme || cachedWorldTheme).id;
+  const workspaceThemeStyle = worldData?.customTheme
+    ? getWorldThemeStyle(worldData.theme, worldData.customTheme)
+    : {};
   const isWorkspaceBooting = !worldDataLoaded || !treeLoaded;
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
@@ -2686,7 +2705,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </button>
         )
       ))}
-      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
+      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && !hasReachedTabLimit && (
         <button
           type="button"
           className="editor-tab-add"
@@ -2700,7 +2719,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   );
 
   return (
-    <div className="workspace-container" data-world-theme={workspaceTheme} style={{ flexDirection: 'row' }}>
+    <div
+      className="workspace-container"
+      data-world-theme={workspaceTheme}
+      data-custom-theme={worldData?.customTheme ? 'true' : undefined}
+      style={{ ...workspaceThemeStyle, flexDirection: 'row' }}
+    >
       <aside className="workspace-sidebar sidebar-nexus">
         <div className="sidebar-header sidebar-nexus-header">
           <div className="sidebar-nexus-glow" aria-hidden="true" />
@@ -3339,7 +3363,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <div className="editor-placeholder muted">
                       <Book size={48} />
                       <p>Esta página não possui abas de conteúdo.</p>
-                      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
+                      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && !hasReachedTabLimit && (
                         <button
                           type="button"
                           className="btn-secondary"
@@ -4070,14 +4094,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 >
                   <Edit2 size={14} /> {t('common.rename')}
                 </button>
-                <button
-                  onClick={() => {
-                    duplicateTab(tabContextMenu.node);
-                    setTabContextMenu(prev => ({ ...prev, isOpen: false }));
-                  }}
-                >
-                  <Copy size={14} /> {t('workspace.duplicate_tab')}
-                </button>
+                {!hasReachedTabLimit && (
+                  <button
+                    onClick={() => {
+                      duplicateTab(tabContextMenu.node);
+                      setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+                    }}
+                  >
+                    <Copy size={14} /> {t('workspace.duplicate_tab')}
+                  </button>
+                )}
               </>
             )}
             {hasDocumentAccess(tabContextMenu.node.metadata?.currentUserAccess, 'admin') && (

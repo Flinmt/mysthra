@@ -22,6 +22,7 @@ const {
   getFileTree,
   getDocumentAccess,
   getVisibleFileTree,
+  MAX_TABS_PER_DOCUMENT,
   getWorldRole,
   getPathByUid,
   isWorldPublicReadable,
@@ -92,6 +93,59 @@ test("updateWorld only updates world profile fields", async () => {
   assert.equal(world.description, "Updated");
   assert.equal(world.theme, "ember-archive");
   assert.equal(world.publicRead, false);
+});
+
+test("updateWorld accepts vampire masquerade world theme", async () => {
+  const worldName = "core-world-vampire-theme";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  const world = await updateWorld(worldName, {
+    theme: "vampire-masquerade"
+  });
+
+  assert.equal(world.theme, "vampire-masquerade");
+});
+
+test("world custom theme colors are normalized and stored", async () => {
+  const worldName = "core-world-custom-theme";
+  await resetWorld(worldName);
+  await createWorld({
+    name: worldName,
+    customTheme: {
+      colors: {
+        background: "#123",
+        surface: "#203040",
+        accent: "#AA55CC",
+        ignored: "#ffffff"
+      }
+    }
+  });
+
+  let world = await updateWorld(worldName, {
+    customTheme: {
+      colors: {
+        background: "#456",
+        surface: "not-a-color",
+        text: "#f8fafc",
+        mutedText: "#abc",
+        accent: "#11aa77",
+        secondaryAccent: "#XYZ"
+      }
+    }
+  });
+
+  assert.deepEqual(world.customTheme, {
+    colors: {
+      background: "#445566",
+      text: "#f8fafc",
+      mutedText: "#aabbcc",
+      accent: "#11aa77"
+    }
+  });
+
+  world = await updateWorld(worldName, { customTheme: null });
+  assert.equal(world.customTheme, null);
 });
 
 test("world public visitor access is stored per world", async () => {
@@ -302,6 +356,64 @@ test("document tree supports containers and editable tabs", async () => {
 
   await updateDocumentContent(worldName, tab.path, "# Revised draft");
   assert.equal((await readDocument(worldName, tab.path)).content, "# Revised draft");
+});
+
+test("documents allow at most five direct tabs", async () => {
+  const worldName = "core-tree-tab-limit";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const container = await createDocument(worldName, "Characters", "", {
+    type: "container"
+  });
+
+  for (let index = 1; index <= MAX_TABS_PER_DOCUMENT; index += 1) {
+    await createDocument(worldName, `${container.path}/Tab ${index}`, "", {
+      type: "tab",
+      contentType: "wiki"
+    });
+  }
+
+  await assert.rejects(
+    () => createDocument(worldName, `${container.path}/Tab ${MAX_TABS_PER_DOCUMENT + 1}`, "", {
+      type: "tab",
+      contentType: "wiki"
+    }),
+    {
+      code: "DOCUMENT_LIMIT_EXCEEDED",
+      message: `Document cannot have more than ${MAX_TABS_PER_DOCUMENT} tabs`
+    }
+  );
+});
+
+test("document tab limit counts only direct tab children", async () => {
+  const worldName = "core-tree-tab-limit-direct";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const container = await createDocument(worldName, "Lore", "", {
+    type: "container"
+  });
+
+  for (let index = 1; index <= MAX_TABS_PER_DOCUMENT; index += 1) {
+    await createDocument(worldName, `${container.path}/Section ${index}`, "", {
+      type: "container"
+    });
+    await createDocument(worldName, `${container.path}/Tab ${index}`, "", {
+      type: "tab",
+      contentType: "wiki"
+    });
+  }
+
+  const child = await createDocument(worldName, `${container.path}/Child`, "", {
+    type: "container"
+  });
+  const childTab = await createDocument(worldName, `${child.path}/Notes`, "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  assert.equal(childTab.name, "Notes");
 });
 
 test("document tree supports collaborative board tabs", async () => {
