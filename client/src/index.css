@@ -4419,7 +4419,11 @@ body {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background: transparent;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    #0b0d11;
+  background-size: 48px 48px;
   border: 0;
   border-radius: 0;
 }
@@ -4442,46 +4446,43 @@ body {
   bottom: 22px;
   z-index: 20;
   display: flex;
-  max-width: calc(100% - 28px);
   align-items: center;
   gap: 6px;
+  max-width: calc(100% - 28px);
   overflow-x: auto;
   padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  background: rgba(14, 18, 28, 0.68);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(9, 11, 16, 0.82);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   transform: translateX(-50%);
 }
 
 .map-floating-dock button {
-  min-width: 36px;
-  height: 36px;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 7px;
   background: transparent;
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  color: rgba(255, 255, 255, 0.74);
   cursor: pointer;
   flex: 0 0 auto;
-  font-size: 0.72rem;
   transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
 
 .map-floating-dock button:hover:not(:disabled),
 .map-floating-dock button.active {
-  border-color: rgba(255, 255, 255, 0.13);
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .map-floating-dock button.active {
-  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.42);
+  box-shadow: inset 0 0 0 1px var(--accent-color);
 }
 
 .map-floating-dock button:disabled {
@@ -4498,8 +4499,8 @@ body {
 
 .map-status-strip {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  right: 18px;
+  bottom: 24px;
   z-index: 18;
   display: flex;
   gap: 8px;
@@ -4507,20 +4508,18 @@ body {
 }
 
 .map-presence-count {
-  min-height: 28px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  background: rgba(13, 17, 23, 0.68);
-  color: var(--text-secondary);
-  padding: 5px 10px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  font-size: 0.72rem;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(9, 11, 16, 0.72);
+  font-size: 0.78rem;
   font-weight: 700;
-  text-transform: uppercase;
+  backdrop-filter: blur(14px);
 }
 
 .map-remote-cursor {
@@ -4554,16 +4553,16 @@ body {
 
 .map-asset-popover {
   position: absolute;
-  left: 50%;
-  bottom: 78px;
+  right: 18px;
+  top: 18px;
   z-index: 24;
-  width: min(420px, calc(100% - 28px));
-  max-height: min(480px, calc(100% - 108px));
+  width: min(330px, calc(100% - 32px));
+  max-height: min(520px, calc(100% - 32px));
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  transform: translateX(-50%);
+  overflow: auto;
 }
 
 .map-marker-popover {
@@ -4576,6 +4575,10 @@ body {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(9, 11, 16, 0.9));
+  box-shadow: 0 24px 68px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.035) inset;
   animation: contextMenuIn 0.16s ease-out;
 }
 
@@ -9340,7 +9343,11 @@ body {
   height: 100%;
   min-height: 620px;
   overflow: hidden;
-  background: #0b0d11;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    #0b0d11;
+  background-size: 48px 48px;
 }
 
 .board-editor-shell canvas {
@@ -9359,6 +9366,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  max-width: calc(100% - 28px);
+  overflow-x: auto;
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
@@ -9371,6 +9380,7 @@ body {
 .board-floating-dock button {
   display: grid;
   place-items: center;
+  min-width: 34px;
   width: 34px;
   height: 34px;
   border: 0;
@@ -9378,12 +9388,18 @@ body {
   color: rgba(255, 255, 255, 0.74);
   background: transparent;
   cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
 
 .board-floating-dock button:hover:not(:disabled),
 .board-floating-dock button.active {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.12);
+}
+
+.board-floating-dock button.active {
+  box-shadow: inset 0 0 0 1px var(--accent-color);
 }
 
 .board-floating-dock button:disabled {
@@ -9849,6 +9865,11 @@ body {
   font-weight: 800;
   text-align: center;
   backdrop-filter: blur(14px);
+}
+
+.map-zoom-indicator {
+  left: 18px;
+  bottom: 24px;
 }
 
 
@@ -11097,4 +11118,17 @@ body {
 .workspace-container .document-permissions-modal .user-admin-role-segments button.active {
   color: white;
   background: var(--accent-color);
+}
+
+.workspace-container .map-floating-dock button:hover:not(:disabled),
+.workspace-container .board-floating-dock button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .map-floating-dock button.active,
+.workspace-container .board-floating-dock button.active {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-hover);
+  box-shadow: inset 0 0 0 1px var(--workspace-theme-accent-border), 0 0 18px var(--accent-glow);
 }
