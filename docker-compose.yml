@@ -6,10 +6,13 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/data
+      - mysthra-data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=3000
       - MASTER_PASSWORD=${MASTER_PASSWORD:?Set MASTER_PASSWORD before starting Mysthra}
       - MAX_JSON_BODY_SIZE=${MAX_JSON_BODY_SIZE:-1mb}
       - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-50mb}
+
+volumes:
+  mysthra-data:
