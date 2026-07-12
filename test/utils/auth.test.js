@@ -6,6 +6,7 @@ const {
   getMasterPassword,
   safeCompare
 } = require("../../src/utils/auth");
+const { isGlobalAdmin, isRoot, isServerAdmin, normalizeGlobalRole } = require("../../src/utils/roles");
 
 test("getMasterPassword requires explicit configuration in production", () => {
   const originalNodeEnv = process.env.NODE_ENV;
@@ -48,4 +49,14 @@ test("session cookies use secure attributes in production", () => {
 test("safeCompare compares matching strings without plain equality", () => {
   assert.equal(safeCompare("secret", "secret"), true);
   assert.equal(safeCompare("secret", "different"), false);
+});
+
+test("global roles distinguish root, server admin, and common users", () => {
+  assert.equal(isRoot({ globalRole: "root" }), true);
+  assert.equal(isServerAdmin({ globalRole: "server-admin" }), true);
+  assert.equal(isGlobalAdmin({ globalRole: "root" }), true);
+  assert.equal(isGlobalAdmin({ globalRole: "server-admin" }), true);
+  assert.equal(isGlobalAdmin({ globalRole: null }), false);
+  assert.equal(normalizeGlobalRole("root"), null);
+  assert.equal(normalizeGlobalRole("server-admin"), "server-admin");
 });

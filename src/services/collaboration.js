@@ -10,6 +10,7 @@ const {
   validateWorldName
 } = require("../data/filesystem");
 const { getAuthenticatedUser } = require("../utils/auth");
+const { isGlobalAdmin } = require("../utils/roles");
 const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
@@ -183,7 +184,7 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   }
 
   const { isWorldMember } = require("./worlds");
-  if (!user.isAdmin && !(await isWorldMember(room.worldId, user.userId))) {
+  if (!isGlobalAdmin(user) && !(await isWorldMember(room.worldId, user.userId))) {
     debugCollaboration("auth-reject", { documentName, userId: user.userId, reason: "forbidden" });
     const error = new Error("Forbidden");
     error.reason = "forbidden";

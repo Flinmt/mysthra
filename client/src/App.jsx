@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Route, Switch, useLocation } from 'wouter'
-import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Share2, ChevronDown, ChevronUp, Users, Upload, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Redirect, Route, Switch, useLocation } from 'wouter'
+import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Share2, ChevronDown, ChevronUp, Users, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
+import UserSettingsPage from './UserSettingsPage'
 import DropdownSelect from './DropdownSelect'
 import {
   DEFAULT_WORLD_THEME,
@@ -56,6 +57,15 @@ function App() {
 
   return (
     <Switch>
+      <Route path="/settings/users">
+        {isAuthenticated && currentUser?.globalRole ? (
+          <UserSettingsPage currentUser={currentUser} />
+        ) : isAuthenticated ? (
+          <Redirect to="/" />
+        ) : (
+          <Login onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />
+        )}
+      </Route>
       <Route path="/world/:id">
         {(params) => {
           const isVisitor = new URLSearchParams(window.location.search).get('view') === 'true';
@@ -94,7 +104,7 @@ function Login({ onLogin }) {
   const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [userQuery, setUserQuery] = useState('')
-  const [loginUsers, setLoginUsers] = useState([{ id: 'admin', username: 'admin', isAdmin: true }])
+  const [loginUsers, setLoginUsers] = useState([{ id: 'root', username: 'admin', globalRole: 'root' }])
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -105,7 +115,7 @@ function Login({ onLogin }) {
       .then(async res => {
         if (!res.ok) return
         const data = await res.json()
-        const users = data.items?.length ? data.items : [{ id: 'admin', username: 'admin', isAdmin: true }]
+        const users = data.items?.length ? data.items : [{ id: 'root', username: 'admin', globalRole: 'root' }]
         setLoginUsers(users)
       })
       .catch(() => {})
@@ -217,7 +227,7 @@ function Login({ onLogin }) {
                         }}
                       >
                         <span>{user.username}</span>
-                        {user.isAdmin && <small>{t('login.admin_user')}</small>}
+                        {user.globalRole && <small>{t(`login.${user.globalRole === 'root' ? 'root_user' : 'server_admin_user'}`)}</small>}
                       </button>
                     ))
                   )}
@@ -266,9 +276,8 @@ function Dashboard({ onLogout, currentUser }) {
   const [showModal, setShowModal] = useState(false)
   const [editingWorld, setEditingWorld] = useState(null)
   const [deletingWorld, setDeletingWorld] = useState(null)
-  const [showUsersModal, setShowUsersModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const isAdmin = Boolean(currentUser?.isAdmin)
+  const isGlobalAdmin = Boolean(currentUser?.globalRole)
 
   const loadWorlds = async () => {
     try {
@@ -325,8 +334,8 @@ function Dashboard({ onLogout, currentUser }) {
             <div className="dashboard-action-group">
               <LanguageSwitcher />
 
-              {isAdmin && (
-                <button className="nexus-icon-btn dashboard-users-button" onClick={() => setShowUsersModal(true)} title={t('dashboard.manage_users')}>
+              {isGlobalAdmin && (
+                <button className="nexus-icon-btn dashboard-users-button" onClick={() => setLocation('/settings/users')} title={t('dashboard.manage_users')}>
                   <Users size={18} />
                 </button>
               )}
@@ -351,7 +360,7 @@ function Dashboard({ onLogout, currentUser }) {
                   className={`nexus-card-bg ${world.thumbnail?.filename ? 'has-thumbnail' : ''}`}
                   style={world.thumbnail?.filename ? { backgroundImage: `url(/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0})` } : undefined}
                 ></div>
-                {isAdmin && (
+                {isGlobalAdmin && (
                   <div className="nexus-card-actions">
                     <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>
                       <Settings size={14} />
@@ -369,7 +378,7 @@ function Dashboard({ onLogout, currentUser }) {
             ))}
             
             {/* Create Card */}
-            {!searchQuery && isAdmin && (
+            {!searchQuery && isGlobalAdmin && (
               <div className="nexus-card nexus-create-btn" onClick={() => setShowModal(true)}>
                 <div className="plus-circle-nexus">
                   <Plus size={24} />
@@ -414,405 +423,11 @@ function Dashboard({ onLogout, currentUser }) {
         />
       )}
 
-      {showUsersModal && (
-        <UserSettingsModal
-          onClose={() => setShowUsersModal(false)}
-        />
-      )}
     </div>
   )
 }
 
 
-
-function UserSettingsModal({ onClose }) {
-  const { t } = useTranslation()
-  const [users, setUsers] = useState([])
-  const [worlds, setWorlds] = useState([])
-  const [memberships, setMemberships] = useState({})
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [resetPasswords, setResetPasswords] = useState({})
-  const [accessUser, setAccessUser] = useState(null)
-  const [activeTab, setActiveTab] = useState('user')
-  const [userSearch, setUserSearch] = useState('')
-  const [deleteUserPrompt, setDeleteUserPrompt] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  const loadUsers = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [usersRes, worldsRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/worlds')
-      ])
-      if (usersRes.ok) {
-        const data = await usersRes.json()
-        setUsers(data.items || [])
-      }
-      let loadedWorlds = []
-      if (worldsRes.ok) {
-        const data = await worldsRes.json()
-        loadedWorlds = data.items || []
-        setWorlds(loadedWorlds)
-      }
-      const memberPairs = await Promise.all(
-        loadedWorlds.map(async world => {
-          const res = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/members`)
-          if (!res.ok) return [world.id, []]
-          const data = await res.json()
-          return [world.id, data.items || []]
-        })
-      )
-      const nextMemberships = {}
-      for (const [worldId, members] of memberPairs) {
-        for (const member of members) {
-          if (!nextMemberships[member.userId]) nextMemberships[member.userId] = {}
-          nextMemberships[member.userId][worldId] = member.role || 'member'
-        }
-      }
-      setMemberships(nextMemberships)
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setLoading(false)
-    }
-  }, [t])
-
-  useEffect(() => {
-    loadUsers()
-  }, [loadUsers])
-
-  const filteredUsers = users.filter(user => user.username.toLowerCase().includes(userSearch.trim().toLowerCase()))
-
-  const selectUser = (user) => {
-    setAccessUser(user)
-    setActiveTab('user')
-  }
-
-  const createUser = async (event) => {
-    event.preventDefault()
-    setError('')
-    setSaving(true)
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      })
-      if (res.ok) {
-        setUsername('')
-        setPassword('')
-        await loadUsers()
-      } else {
-        const data = await res.json()
-        setError(data.error || t('dashboard.user_create_error'))
-      }
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const toggleWorldAccess = async (userId, worldId, hasAccess, role = 'member') => {
-    setError('')
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members${hasAccess ? `/${encodeURIComponent(userId)}` : ''}`, {
-        method: hasAccess ? 'DELETE' : 'POST',
-        headers: hasAccess ? undefined : { 'Content-Type': 'application/json' },
-        body: hasAccess ? undefined : JSON.stringify({ userId, role })
-      })
-      if (res.ok) {
-        setMemberships(prev => {
-          const current = { ...(prev[userId] || {}) }
-          if (hasAccess) delete current[worldId]
-          else current[worldId] = role
-          return { ...prev, [userId]: current }
-        })
-      } else {
-        const data = await res.json()
-        setError(data.error || t('dashboard.user_update_error'))
-      }
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const changeWorldRole = async (userId, worldId, role) => {
-    setError('')
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role })
-      })
-      if (res.ok) {
-        setMemberships(prev => ({
-          ...prev,
-          [userId]: {
-            ...(prev[userId] || {}),
-            [worldId]: role
-          }
-        }))
-      } else {
-        const data = await res.json()
-        setError(data.error || t('dashboard.user_update_error'))
-      }
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const changePassword = async (userId) => {
-    const nextPassword = resetPasswords[userId]
-    if (!nextPassword) return
-    setError('')
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/users/${encodeURIComponent(userId)}/password`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: nextPassword })
-      })
-      if (res.ok) {
-        setResetPasswords(prev => ({ ...prev, [userId]: '' }))
-      } else {
-        const data = await res.json()
-        setError(data.error || t('dashboard.user_update_error'))
-      }
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const deleteUser = async (user) => {
-    if (!user) return
-    setError('')
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' })
-      if (res.ok) {
-        setDeleteUserPrompt(null)
-        if (accessUser?.id === user.id) setAccessUser(null)
-        await loadUsers()
-      } else {
-        const data = await res.json()
-        setError(data.error || t('dashboard.user_update_error'))
-      }
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="modal-backdrop">
-      <div className="user-admin-modal" role="dialog" aria-modal="true" aria-labelledby="user-admin-title">
-        <div className="user-admin-modal-header">
-          <div>
-            <h2 id="user-admin-title">{t('dashboard.manage_users')}</h2>
-            <p>{t('dashboard.manage_users_hint')}</p>
-          </div>
-          <button type="button" className="user-admin-close" onClick={onClose} disabled={saving} aria-label={t('common.cancel')}>
-            ×
-          </button>
-        </div>
-
-        <div className="user-admin-modal-body user-admin-flow">
-          <aside className="user-admin-directory-panel">
-            <form className="user-admin-create-card" onSubmit={createUser}>
-              <div className="user-admin-section-title">{t('dashboard.create_user')}</div>
-              <div className="user-admin-form-stack">
-                <label>
-                  <span>{t('login.username')}</span>
-                  <input value={username} onChange={event => setUsername(event.target.value)} placeholder={t('login.username_placeholder')} required />
-                </label>
-                <label className="user-admin-password-input-wrap">
-                  <span>{t('login.master_password')}</span>
-                  <div className="user-admin-password-input">
-                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} placeholder={t('login.password_placeholder')} required />
-                    <button type="button" className="user-admin-password-toggle" onClick={() => setShowPassword(prev => !prev)} tabIndex={-1} aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </label>
-                <button type="submit" className="user-admin-primary" disabled={saving}>
-                  {saving ? t('common.saving') : t('dashboard.create_user')}
-                </button>
-              </div>
-            </form>
-
-            <section className="user-admin-directory">
-              <div className="user-admin-section-title">{t('dashboard.user_directory')}</div>
-              <input className="user-admin-search" value={userSearch} onChange={event => setUserSearch(event.target.value)} placeholder={t('dashboard.search_users')} />
-              <div className="user-admin-list">
-                {loading ? (
-                  <div className="user-admin-empty compact">{t('common.loading')}</div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="user-admin-empty compact">{t('dashboard.no_users')}</div>
-                ) : (
-                  filteredUsers.map(user => {
-                    const accessCount = Object.keys(memberships[user.id] || {}).length
-                    return (
-                      <button
-                        key={user.id}
-                        type="button"
-                        className={`user-admin-user-card ${accessUser?.id === user.id ? 'active' : ''}`}
-                        onClick={() => selectUser(user)}
-                      >
-                        <span className="user-admin-avatar">{String(user.username || '?').slice(0, 1).toUpperCase()}</span>
-                        <span className="user-admin-user-main">
-                          <strong>{user.username}</strong>
-                          <small>{accessCount} {accessCount === 1 ? t('dashboard.world_count_singular') : t('dashboard.world_count_plural')}</small>
-                        </span>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            </section>
-          </aside>
-
-          <section className="user-admin-flow-panel">
-            {accessUser ? (
-              <>
-                <div className="user-admin-flow-header">
-                  <div className="user-admin-avatar large">{String(accessUser.username || '?').slice(0, 1).toUpperCase()}</div>
-                  <div>
-                    <span>{t('dashboard.configuring_access_for')}</span>
-                    <h3>{accessUser.username}</h3>
-                  </div>
-                </div>
-
-                <nav className="user-admin-steps" aria-label={t('dashboard.manage_users')}>
-                  <button type="button" className={activeTab === 'user' ? 'active' : ''} onClick={() => setActiveTab('user')}>
-                    {t('dashboard.user_step_profile')}
-                  </button>
-                  <button type="button" className={activeTab === 'worlds' ? 'active' : ''} onClick={() => setActiveTab('worlds')}>
-                    {t('dashboard.user_step_worlds')}
-                  </button>
-                </nav>
-
-                <div className="user-admin-step-card">
-                  {activeTab === 'user' && (
-                    <div className="user-admin-step-section">
-                      <div>
-                        <div className="user-admin-section-title">{t('dashboard.user_step_profile')}</div>
-                        <p>{t('dashboard.user_profile_hint')}</p>
-                      </div>
-                      <div className="user-admin-profile-row">
-                        <span>{t('login.username')}</span>
-                        <strong>{accessUser.username}</strong>
-                      </div>
-                      <button type="button" className="user-admin-text-danger" onClick={() => setDeleteUserPrompt(accessUser)} disabled={saving}>
-                        {t('dashboard.delete_user')}
-                      </button>
-                      <div>
-                        <div className="user-admin-section-title">{t('dashboard.password_access')}</div>
-                        <p>{t('dashboard.password_access_hint')}</p>
-                      </div>
-                      <div className="user-admin-password compact">
-                        <label className="user-admin-password-field">
-                          <Key size={15} />
-                          <input type="password" value={resetPasswords[accessUser.id] || ''} onChange={event => setResetPasswords(prev => ({ ...prev, [accessUser.id]: event.target.value }))} placeholder={t('dashboard.new_password')} disabled={saving} />
-                        </label>
-                        <button type="button" className="user-admin-secondary" onClick={() => changePassword(accessUser.id)} disabled={saving || !resetPasswords[accessUser.id]}>
-                          {t('dashboard.update_password')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'worlds' && (
-                    <div className="user-admin-step-section user-admin-world-step">
-                    <div>
-                      <div className="user-admin-section-title">{t('dashboard.world_access')}</div>
-                      <p>{t('dashboard.world_access_hint')}</p>
-                    </div>
-                  <div className="user-admin-world-list">
-                    {worlds.length === 0 ? (
-                      <div className="user-admin-empty">{t('dashboard.no_worlds')}</div>
-                    ) : (
-                        worlds.map(world => {
-                        const role = memberships[accessUser.id]?.[world.id] || 'none'
-                        const hasAccess = role !== 'none'
-                        return (
-                          <div key={world.id} className="user-admin-world-access-row">
-                            <div className="user-admin-world-copy">
-                              <span>{world.displayName || world.name}</span>
-                            </div>
-                            <div className="user-admin-role-segments" aria-label={t('dashboard.world_access')}>
-                              {[
-                                ['none', t('dashboard.no_access')],
-                                ['member', t('workspace.member_role_member')],
-                                ['admin', t('workspace.member_role_admin')]
-                              ].map(([nextRole, label]) => (
-                                <button key={nextRole} type="button" className={role === nextRole ? 'active' : ''} disabled={saving} onClick={() => {
-                                  if (nextRole === role) return
-                                  if (nextRole === 'none') {
-                                    if (hasAccess) toggleWorldAccess(accessUser.id, world.id, true)
-                                    return
-                                  }
-                                  if (!hasAccess) toggleWorldAccess(accessUser.id, world.id, false, nextRole)
-                                  else changeWorldRole(accessUser.id, world.id, nextRole)
-                                }}>
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="user-admin-empty user-admin-select-empty">
-                <Users size={36} />
-                <span>{t('dashboard.select_user_to_manage')}</span>
-              </div>
-            )}
-          </section>
-
-          {error && <div className="user-admin-error">{error}</div>}
-        </div>
-
-        {deleteUserPrompt && (
-          <div className="user-admin-confirm">
-            <div className="user-admin-confirm-card">
-              <h3>{t('dashboard.delete_user')}</h3>
-              <p>{t('dashboard.delete_user_confirm', { name: deleteUserPrompt.username })}</p>
-              <div>
-                <button type="button" className="user-admin-secondary" onClick={() => setDeleteUserPrompt(null)} disabled={saving}>
-                  {t('common.cancel')}
-                </button>
-                <button type="button" className="user-admin-danger" onClick={() => deleteUser(deleteUserPrompt)} disabled={saving}>
-                  {t('dashboard.delete_user')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 const CUSTOM_THEME_COLOR_FIELDS = [
   ['background', 'dashboard.theme_color_background'],

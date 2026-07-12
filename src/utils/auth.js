@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { normalizeGlobalRole } = require("./roles");
 
 const SESSION_FILE = process.env.SESSION_FILE || path.join(process.cwd(), "data", "sessions.json");
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24;
@@ -45,17 +46,8 @@ function loadSessions() {
       const parsed = JSON.parse(data);
       const now = Date.now();
       if (Array.isArray(parsed)) {
-        const migrated = {};
-        for (const token of parsed) {
-          migrated[token] = {
-            userId: "admin",
-            username: getAdminUsername(),
-            isAdmin: true,
-            expiresAt: now + SESSION_MAX_AGE_MS
-          };
-        }
-        saveSessions(migrated);
-        return migrated;
+        saveSessions({});
+        return {};
       }
       if (!parsed || typeof parsed !== "object") return {};
 
@@ -63,6 +55,10 @@ function loadSessions() {
       let changed = false;
       for (const [token, session] of Object.entries(parsed)) {
         if (!session || typeof session !== "object") {
+          changed = true;
+          continue;
+        }
+        if (!Object.hasOwn(session, "globalRole")) {
           changed = true;
           continue;
         }
@@ -74,7 +70,7 @@ function loadSessions() {
         migrated[token] = {
           userId: session.userId || "admin",
           username: session.username || getAdminUsername(),
-          isAdmin: Boolean(session.isAdmin),
+          globalRole: session.globalRole === "root" ? "root" : normalizeGlobalRole(session.globalRole),
           expiresAt
         };
         if (!session.expiresAt) changed = true;
@@ -106,7 +102,7 @@ function generateSessionToken(user) {
   activeSessions[token] = {
     userId: user.userId || user.id,
     username: user.username,
-    isAdmin: Boolean(user.isAdmin),
+    globalRole: user.globalRole === "root" ? "root" : normalizeGlobalRole(user.globalRole),
     expiresAt: Date.now() + SESSION_MAX_AGE_MS
   };
   saveSessions(activeSessions);

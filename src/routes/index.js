@@ -44,9 +44,11 @@ const {
   getWorldConfig,
   getWorldThumbnail,
   getWorldRole,
+  getWorldAccessCounts,
   isWorldMember,
   isWorldPublicReadable,
   listWorldMembers,
+  listUserWorldAccess,
   addWorldMember,
   updateWorldMemberRole,
   removeWorldMember,
@@ -54,12 +56,15 @@ const {
   changeUserPassword,
   createUser,
   deleteUser,
+  getUserById,
   listLoginUsers,
   listUsers,
+  setUserGlobalRole,
   removeUserFromAllWorlds,
   saveWorldThumbnail,
   setHomePage
 } = require("../services");
+const { isGlobalAdmin, isRoot, isServerAdmin } = require("../utils/roles");
 
 function getRequestUrl(requestUrl) {
   return new URL(requestUrl, "http://localhost");
@@ -124,7 +129,7 @@ function getPublicUser(user) {
   return {
     userId: user.userId,
     username: user.username,
-    isAdmin: Boolean(user.isAdmin)
+    globalRole: user.globalRole || null
   };
 }
 
@@ -184,13 +189,13 @@ function createPayloadTooLargeError(limitBytes) {
 }
 
 function requireAdmin(response, user) {
-  if (user?.isAdmin) return true;
+  if (isGlobalAdmin(user)) return true;
   sendForbidden(response);
   return false;
 }
 
 async function requireWorldMemberOrAdmin(response, worldId, user) {
-  if (user?.isAdmin) return true;
+  if (isGlobalAdmin(user)) return true;
   if (!user) {
     sendJson(response, 401, { error: "Unauthorized" });
     return false;
@@ -207,7 +212,7 @@ async function requireWorldMemberOrAdmin(response, worldId, user) {
 }
 
 async function requireWorldManager(response, worldId, user) {
-  if (user?.isAdmin) return true;
+  if (isGlobalAdmin(user)) return true;
   if (!user) {
     sendJson(response, 401, { error: "Unauthorized" });
     return false;
@@ -298,14 +303,14 @@ async function router(request, response) {
 
         if (isAdminLogin && typeof password === "string" && safeCompare(password, masterPassword)) {
           const token = generateSessionToken({
-            userId: "admin",
+            userId: "root",
             username: getAdminUsername(),
-            isAdmin: true
+            globalRole: "root"
           });
           response.setHeader("Set-Cookie", createSessionCookie(token, request));
           return sendJson(response, 200, {
             success: true,
-            user: { userId: "admin", username: getAdminUsername(), isAdmin: true }
+            user: { userId: "root", username: getAdminUsername(), globalRole: "root" }
           });
         }
 
@@ -314,12 +319,12 @@ async function router(request, response) {
           const token = generateSessionToken({
             userId: user.id,
             username: user.username,
-            isAdmin: false
+            globalRole: user.globalRole
           });
           response.setHeader("Set-Cookie", createSessionCookie(token, request));
           return sendJson(response, 200, {
             success: true,
-            user: { userId: user.id, username: user.username, isAdmin: false }
+            user: { userId: user.id, username: user.username, globalRole: user.globalRole }
           });
         }
 
@@ -355,7 +360,7 @@ async function router(request, response) {
         const users = await listLoginUsers();
         return sendJson(response, 200, { items: users });
       } catch {
-        return sendJson(response, 200, { items: [{ id: "admin", username: getAdminUsername(), isAdmin: true }] });
+        return sendJson(response, 200, { items: [{ id: "root", username: getAdminUsername(), globalRole: "root" }] });
       }
     }
 
@@ -372,7 +377,13 @@ async function router(request, response) {
       if (request.method === "GET") {
         try {
           const users = await listUsers();
-          return sendJson(response, 200, { items: users });
+          const accessCounts = await getWorldAccessCounts();
+          return sendJson(response, 200, {
+            items: [
+              { id: "root", username: getAdminUsername(), globalRole: "root", worldCount: null },
+              ...users.map((user) => ({ ...user, worldCount: accessCounts[user.id] || 0 }))
+            ]
+          });
         } catch {
           return sendJson(response, 500, { error: "Failed to list users" });
         }
@@ -390,12 +401,49 @@ async function router(request, response) {
       }
     }
 
+    if (pathname.match(/^\/api\/users\/[^\/]+\/worlds$/) && request.method === "GET") {
+      if (!requireAdmin(response, currentUser)) return;
+      try {
+        const userId = decodeURIComponent(pathname.split("/")[3]);
+        const targetUser = userId === "root"
+          ? { id: "root", globalRole: "root" }
+          : await getUserById(userId);
+        if (!targetUser) return sendJson(response, 404, { error: "User not found" });
+        const worlds = await listUserWorldAccess(userId);
+        return sendJson(response, 200, { items: worlds });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
     if (pathname.match(/^\/api\/users\/[^\/]+\/password$/) && request.method === "PATCH") {
       if (!requireAdmin(response, currentUser)) return;
       try {
         const userId = decodeURIComponent(pathname.split("/")[3]);
+        const targetUser = await getUserById(userId);
+        if (!targetUser || (isServerAdmin(currentUser) && targetUser.globalRole === "server-admin")) {
+          return sendForbidden(response);
+        }
         const body = await parseJsonBody(request);
         const user = await changeUserPassword(userId, body.password);
+        clearSessionsForUser(userId);
+        return sendJson(response, 200, user);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (pathname.match(/^\/api\/users\/[^\/]+\/role$/) && request.method === "PATCH") {
+      if (!isRoot(currentUser)) return sendForbidden(response);
+      try {
+        const userId = decodeURIComponent(pathname.split("/")[3]);
+        if (userId === "root") return sendForbidden(response);
+        const body = await parseJsonBody(request);
+        const globalRole = body.globalRole === null ? null : body.globalRole;
+        const user = await setUserGlobalRole(userId, globalRole);
+        clearSessionsForUser(userId);
         return sendJson(response, 200, user);
       } catch (error) {
         const statusCode = getErrorStatusCode(error);
@@ -407,6 +455,10 @@ async function router(request, response) {
       if (!requireAdmin(response, currentUser)) return;
       try {
         const userId = decodeURIComponent(pathname.split("/")[3]);
+        const targetUser = await getUserById(userId);
+        if (!targetUser || (isServerAdmin(currentUser) && targetUser.globalRole === "server-admin")) {
+          return sendForbidden(response);
+        }
         const user = await deleteUser(userId);
         await removeUserFromAllWorlds(userId);
         clearSessionsForUser(userId);
@@ -456,6 +508,7 @@ async function router(request, response) {
       if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/members$/)) {
         try {
           const body = await parseJsonBody(request);
+          if (!body.userId && !isGlobalAdmin(currentUser)) return sendForbidden(response);
           const user = body.userId ? null : await createUser(body);
           const members = await addWorldMember(worldId, body.userId || user.id, body.role);
           return sendJson(response, 201, { items: members });

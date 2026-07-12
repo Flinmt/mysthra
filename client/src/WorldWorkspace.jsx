@@ -2467,7 +2467,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write') && !isDocumentLocked;
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
   const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
-  const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
+  const availableUsers = membersPanel.users.filter(user => !memberUserIds.has(user.id));
   const workspaceTheme = getWorldTheme(worldData?.theme || cachedWorldTheme).id;
   const workspaceThemeStyle = worldData?.customTheme
     ? getWorldThemeStyle(worldData.theme, worldData.customTheme)

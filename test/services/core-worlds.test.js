@@ -18,6 +18,8 @@ const {
   duplicateDocument,
   listAssets,
   listWorldMembers,
+  listUserWorldAccess,
+  getWorldAccessCounts,
   listWorlds,
   getFileTree,
   getDocumentAccess,
@@ -235,13 +237,23 @@ test("world members filter common user world access", async () => {
   const authenticated = await authenticateUser(username, "secret-pass");
   assert.equal(authenticated.username, username);
 
-  const visibleWorlds = await listWorlds({ userId: user.id, username, isAdmin: false });
+  const visibleWorlds = await listWorlds({ userId: user.id, username, globalRole: null });
   assert.equal(visibleWorlds.some((world) => world.id === worldA), true);
   assert.equal(visibleWorlds.some((world) => world.id === worldB), false);
 
-  const adminWorlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  const access = await listUserWorldAccess(user.id);
+  assert.equal(access.find((world) => world.id === worldA).role, "member");
+  assert.equal(access.find((world) => world.id === worldB).role, "none");
+  const accessCounts = await getWorldAccessCounts();
+  assert.equal(accessCounts[user.id], 1);
+
+  const adminWorlds = await listWorlds({ userId: "root", username: "admin", globalRole: "root" });
   assert.equal(adminWorlds.some((world) => world.id === worldA), true);
   assert.equal(adminWorlds.some((world) => world.id === worldB), true);
+
+  const serverAdminWorlds = await listWorlds({ userId: "server-admin", username: "operator", globalRole: "server-admin" });
+  assert.equal(serverAdminWorlds.some((world) => world.id === worldA), true);
+  assert.equal(serverAdminWorlds.some((world) => world.id === worldB), true);
 });
 
 test("world members support per-world admin roles", async () => {
@@ -261,7 +273,8 @@ test("world members support per-world admin roles", async () => {
 
   assert.equal(await getWorldRole(worldName, { userId: member.id, username: member.username }), "member");
   assert.equal(await getWorldRole(worldName, { userId: admin.id, username: admin.username }), "world-admin");
-  assert.equal(await getWorldRole(worldName, { userId: "admin", username: "admin", isAdmin: true }), "global-admin");
+  assert.equal(await getWorldRole(worldName, { userId: "root", username: "admin", globalRole: "root" }), "global-admin");
+  assert.equal(await getWorldRole(worldName, { userId: "server-admin", username: "operator", globalRole: "server-admin" }), "global-admin");
 
   members = await updateWorldMemberRole(worldName, member.id, "admin");
   assert.equal(members.find((item) => item.userId === member.id).role, "admin");
@@ -609,7 +622,7 @@ test("moveDocument clears home page when home leaves the root", async () => {
   const moved = await moveDocument(worldName, home.path, target.path);
   assert.equal(moved.homePage, null);
 
-  const worlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  const worlds = await listWorlds({ userId: "root", username: "admin", globalRole: "root" });
   assert.equal(worlds.find(world => world.id === worldName).homePage, null);
 });
 

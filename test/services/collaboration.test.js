@@ -185,7 +185,7 @@ test("hocuspocus providers sync and persist tab state", async () => {
     contentType: "wiki"
   });
 
-  const token = generateSessionToken({ userId: "admin", username: "admin", isAdmin: true });
+  const token = generateSessionToken({ userId: "root", username: "admin", globalRole: "root" });
   const server = createCollaborationServer();
   const WebSocketPolyfill = createLocalWebSocketPolyfill(server, `mysthra_session=${token}`);
   const roomName = `world:${worldName}:tab:${tab.uid}`;
