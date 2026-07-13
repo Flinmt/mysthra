@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Flame, KeyRound, LogIn, ShieldCheck, UserRound } from 'lucide-react'
+import { ChevronDown, KeyRound, LogIn, ShieldCheck, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 const ROOT_FALLBACK = { id: 'root', username: 'admin', globalRole: 'root' }
@@ -44,7 +44,7 @@ function UserCombobox({ users, query, selectedUser, error, onQueryChange, onSele
     const activeUser = filteredUsers[activeIndex]
     if (!activeUser) return
     listRef.current
-      ?.querySelector(`#login-user-option-${CSS.escape(activeUser.id)}`)
+      ?.querySelector(`[data-option-index="${activeIndex}"]`)
       ?.scrollIntoView({ block: 'nearest' })
   }, [activeIndex, filteredUsers, open])
 
@@ -106,7 +106,7 @@ function UserCombobox({ users, query, selectedUser, error, onQueryChange, onSele
             setOpen(true)
             setActiveIndex(-1)
           }}
-          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={t('login.username_placeholder')}
           autoComplete="off"
@@ -137,6 +137,7 @@ function UserCombobox({ users, query, selectedUser, error, onQueryChange, onSele
             return (
               <button
                 id={`login-user-option-${user.id}`}
+                data-option-index={index}
                 key={user.id}
                 type="button"
                 role="option"
@@ -214,8 +215,7 @@ export default function Login({ onLogin, languageSwitcher }) {
       <div className="auth-language">{languageSwitcher}</div>
       <section className="auth-panel" aria-labelledby="login-title">
         <div className="auth-brand">
-          <span className="auth-brand-mark"><Flame size={18} aria-hidden="true" /></span>
-          <div><h1 id="login-title">Mysthra</h1><p>{t('login.subtitle')}</p></div>
+          <div className="auth-brand-copy"><h1 id="login-title">Mysthra</h1><p>{t('login.subtitle')}</p></div>
         </div>
 
         <div className="auth-divider" aria-hidden="true" />

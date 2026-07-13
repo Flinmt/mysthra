@@ -3,9 +3,9 @@ import { Redirect, Route, Switch, useLocation } from 'wouter'
 import { LogOut, Plus, Settings, Trash2, Search, Share2, Users, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
-import UserSettingsPage from './UserSettingsPage'
-import Login from './Login'
-import DropdownSelect from './DropdownSelect'
+import UserSettingsPage from './features/users/UserSettingsPage'
+import Login from './features/auth/Login'
+import DropdownSelect from './components/ui/DropdownSelect'
 import {
   DEFAULT_WORLD_THEME,
   WORLD_THEMES,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Circle, Ellipse, Line, Arrow, Text, Image as KonvaImage, Group, Transformer } from 'react-konva'
 import { ArrowLeft, Circle as CircleIcon, Copy, Focus, Folder, FolderPlus, Grid2X2, Image, Link2, Minus, MousePointer2, Plus, Search, Settings, Square, StickyNote, Trash2, Type, Upload, Workflow, X } from 'lucide-react'
 import * as Y from 'yjs'
-import { useCollaborationRoom } from './useCollaborationRoom'
+import { useCollaborationRoom } from '../../hooks/useCollaborationRoom'
 
 const DEFAULT_CANVAS = {
   backgroundColor: '#0b0d11',

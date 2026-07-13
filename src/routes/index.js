@@ -1,18 +1,11 @@
 const { sendJson } = require("../utils/http");
 const { serveStaticFile } = require("../utils/static");
 const fs = require("node:fs");
-const {
-  createExpiredSessionCookie,
-  createSessionCookie,
-  generateSessionToken,
-  getAdminUsername,
-  getAuthenticatedUser,
-  getMasterPassword,
-  clearSession,
-  clearSessionsForUser,
-  safeCompare
-} = require("../utils/auth");
+const { getAuthenticatedUser } = require("../utils/auth");
 const path = require("node:path");
+const { handleAuthRoute } = require("./auth");
+const { getErrorMessage, getErrorStatusCode } = require("./errors");
+const { handleUserRoute } = require("./users");
 
 const {
   listWorlds,
@@ -44,27 +37,16 @@ const {
   getWorldConfig,
   getWorldThumbnail,
   getWorldRole,
-  getWorldAccessCounts,
   isWorldMember,
   isWorldPublicReadable,
   listWorldMembers,
-  listUserWorldAccess,
   addWorldMember,
   updateWorldMemberRole,
   removeWorldMember,
-  authenticateUser,
-  changeUserPassword,
-  createUser,
-  deleteUser,
-  getUserById,
-  listLoginUsers,
-  listUsers,
-  setUserGlobalRole,
-  removeUserFromAllWorlds,
   saveWorldThumbnail,
   setHomePage
 } = require("../services");
-const { isGlobalAdmin, isRoot, isServerAdmin } = require("../utils/roles");
+const { isGlobalAdmin } = require("../utils/roles");
 
 function getRequestUrl(requestUrl) {
   return new URL(requestUrl, "http://localhost");
@@ -86,31 +68,6 @@ function getWorldIdFromPath(requestUrl) {
   return null;
 }
 
-function getErrorStatusCode(error) {
-  if (error.code === "PAYLOAD_TOO_LARGE") return 413;
-  if (error.code === "INVALID_JSON") return 400;
-  if (error.code === "INVALID_PATH") return 400;
-  if (error.code === "DOCUMENT_LIMIT_EXCEEDED") return 400;
-  if (error.code === "INVALID_DOCUMENT_METADATA") return 400;
-  if (error.code === "INVALID_HOME_PAGE") return 400;
-  if (error.code === "INVALID_USER_INPUT") return 400;
-  if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL") return 400;
-  if (error.code === "USER_ALREADY_EXISTS") return 409;
-  if (error.code === "WORLD_ALREADY_EXISTS") return 409;
-  if (error.code === "WORLD_NOT_FOUND") return 404;
-  if (error.code === "DOCUMENT_NOT_FOUND") return 404;
-  if (error.code === "USER_NOT_FOUND") return 404;
-  if (error.code === "FORBIDDEN") return 403;
-  return 500;
-}
-
-function getErrorMessage(error, statusCode) {
-  if (statusCode === 400 || statusCode === 403 || statusCode === 404 || statusCode === 409 || statusCode === 413) {
-    return error.message;
-  }
-  return "Internal Server Error";
-}
-
 function isPublicReadRequest(method, pathname) {
   return method === "GET" && /^\/api\/worlds\/[^\/]+(\/.*)?$/.test(pathname);
 }
@@ -122,15 +79,6 @@ async function isPublicWorldReadRequest(method, pathname, worldId) {
   } catch {
     return false;
   }
-}
-
-function getPublicUser(user) {
-  if (!user) return null;
-  return {
-    userId: user.userId,
-    username: user.username,
-    globalRole: user.globalRole || null
-  };
 }
 
 function getVisitorUser() {
@@ -293,76 +241,7 @@ async function router(request, response) {
       return sendJson(response, 200, { status: "ok", service: "mysthra-backend" });
     }
 
-    if (request.method === "POST" && pathname === "/api/auth/login") {
-      try {
-        const body = await parseJsonBody(request);
-        const { password } = body;
-        const username = body.username || getAdminUsername();
-        const masterPassword = getMasterPassword();
-        const isAdminLogin = String(username).trim().toLowerCase() === getAdminUsername().toLowerCase();
-
-        if (isAdminLogin && typeof password === "string" && safeCompare(password, masterPassword)) {
-          const token = generateSessionToken({
-            userId: "root",
-            username: getAdminUsername(),
-            globalRole: "root"
-          });
-          response.setHeader("Set-Cookie", createSessionCookie(token, request));
-          return sendJson(response, 200, {
-            success: true,
-            user: { userId: "root", username: getAdminUsername(), globalRole: "root" }
-          });
-        }
-
-        const user = await authenticateUser(username, password);
-        if (user) {
-          const token = generateSessionToken({
-            userId: user.id,
-            username: user.username,
-            globalRole: user.globalRole
-          });
-          response.setHeader("Set-Cookie", createSessionCookie(token, request));
-          return sendJson(response, 200, {
-            success: true,
-            user: { userId: user.id, username: user.username, globalRole: user.globalRole }
-          });
-        }
-
-        sendJson(response, 401, { error: "Invalid username or password" });
-      } catch (error) {
-        const statusCode = getErrorStatusCode(error);
-        sendJson(response, statusCode, { error: statusCode === 413 ? getErrorMessage(error, statusCode) : "Invalid request" });
-      }
-      return;
-    }
-
-    if (request.method === "POST" && pathname === "/api/auth/logout") {
-      const cookieHeader = request.headers?.cookie;
-      if (cookieHeader) {
-        const cookies = cookieHeader.split(";").reduce((acc, cookie) => {
-          const [key, value] = cookie.trim().split("=");
-          acc[key] = value;
-          return acc;
-        }, {});
-        if (cookies.mysthra_session) clearSession(cookies.mysthra_session);
-      }
-      response.setHeader("Set-Cookie", createExpiredSessionCookie(request));
-      return sendJson(response, 200, { success: true });
-    }
-
-    if (request.method === "GET" && pathname === "/api/auth/verify") {
-      const user = getAuthenticatedUser(request);
-      return sendJson(response, 200, { authenticated: Boolean(user), user: getPublicUser(user) });
-    }
-
-    if (request.method === "GET" && pathname === "/api/auth/users") {
-      try {
-        const users = await listLoginUsers();
-        return sendJson(response, 200, { items: users });
-      } catch {
-        return sendJson(response, 200, { items: [{ id: "root", username: getAdminUsername(), globalRole: "root" }] });
-      }
-    }
+    if (await handleAuthRoute({ request, response, pathname, parseJsonBody })) return;
 
     const currentUser = getAuthenticatedUser(request);
     const publicWorldId = getWorldIdFromPath(request.url);
@@ -371,103 +250,7 @@ async function router(request, response) {
       return sendJson(response, 401, { error: "Unauthorized" });
     }
 
-    if (pathname === "/api/users") {
-      if (!requireAdmin(response, currentUser)) return;
-
-      if (request.method === "GET") {
-        try {
-          const users = await listUsers();
-          const accessCounts = await getWorldAccessCounts();
-          return sendJson(response, 200, {
-            items: [
-              { id: "root", username: getAdminUsername(), globalRole: "root", worldCount: null },
-              ...users.map((user) => ({ ...user, worldCount: accessCounts[user.id] || 0 }))
-            ]
-          });
-        } catch {
-          return sendJson(response, 500, { error: "Failed to list users" });
-        }
-      }
-
-      if (request.method === "POST") {
-        try {
-          const body = await parseJsonBody(request);
-          const user = await createUser(body);
-          return sendJson(response, 201, user);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-    }
-
-    if (pathname.match(/^\/api\/users\/[^\/]+\/worlds$/) && request.method === "GET") {
-      if (!requireAdmin(response, currentUser)) return;
-      try {
-        const userId = decodeURIComponent(pathname.split("/")[3]);
-        const targetUser = userId === "root"
-          ? { id: "root", globalRole: "root" }
-          : await getUserById(userId);
-        if (!targetUser) return sendJson(response, 404, { error: "User not found" });
-        const worlds = await listUserWorldAccess(userId);
-        return sendJson(response, 200, { items: worlds });
-      } catch (error) {
-        const statusCode = getErrorStatusCode(error);
-        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-      }
-    }
-
-    if (pathname.match(/^\/api\/users\/[^\/]+\/password$/) && request.method === "PATCH") {
-      if (!requireAdmin(response, currentUser)) return;
-      try {
-        const userId = decodeURIComponent(pathname.split("/")[3]);
-        const targetUser = await getUserById(userId);
-        if (!targetUser || (isServerAdmin(currentUser) && targetUser.globalRole === "server-admin")) {
-          return sendForbidden(response);
-        }
-        const body = await parseJsonBody(request);
-        const user = await changeUserPassword(userId, body.password);
-        clearSessionsForUser(userId);
-        return sendJson(response, 200, user);
-      } catch (error) {
-        const statusCode = getErrorStatusCode(error);
-        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-      }
-    }
-
-    if (pathname.match(/^\/api\/users\/[^\/]+\/role$/) && request.method === "PATCH") {
-      if (!isRoot(currentUser)) return sendForbidden(response);
-      try {
-        const userId = decodeURIComponent(pathname.split("/")[3]);
-        if (userId === "root") return sendForbidden(response);
-        const body = await parseJsonBody(request);
-        const globalRole = body.globalRole === null ? null : body.globalRole;
-        const user = await setUserGlobalRole(userId, globalRole);
-        clearSessionsForUser(userId);
-        return sendJson(response, 200, user);
-      } catch (error) {
-        const statusCode = getErrorStatusCode(error);
-        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-      }
-    }
-
-    if (pathname.match(/^\/api\/users\/[^\/]+$/) && request.method === "DELETE") {
-      if (!requireAdmin(response, currentUser)) return;
-      try {
-        const userId = decodeURIComponent(pathname.split("/")[3]);
-        const targetUser = await getUserById(userId);
-        if (!targetUser || (isServerAdmin(currentUser) && targetUser.globalRole === "server-admin")) {
-          return sendForbidden(response);
-        }
-        const user = await deleteUser(userId);
-        await removeUserFromAllWorlds(userId);
-        clearSessionsForUser(userId);
-        return sendJson(response, 200, user);
-      } catch (error) {
-        const statusCode = getErrorStatusCode(error);
-        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-      }
-    }
+    if (await handleUserRoute({ request, response, pathname, currentUser, parseJsonBody })) return;
 
     if (request.method === "GET" && pathname === "/api/worlds") {
       try {

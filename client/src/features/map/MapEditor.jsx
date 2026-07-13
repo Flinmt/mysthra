@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Rect, Line, Circle, Text, Image as KonvaImage, Group, Transformer, Path } from 'react-konva';
 import { Focus, Grid2X2, Grid3X3, Hexagon, Image, MapPin, Minus, MousePointer2, Plus, Trash2, Type, Upload, Users } from 'lucide-react';
-import DropdownSelect from './DropdownSelect';
+import DropdownSelect from '../../components/ui/DropdownSelect';
 import { __iconNode as BookIconNode } from 'lucide-react/dist/esm/icons/book.mjs';
 import { __iconNode as CastleIconNode } from 'lucide-react/dist/esm/icons/castle.mjs';
 import { __iconNode as CircleHelpIconNode } from 'lucide-react/dist/esm/icons/circle-question-mark.mjs';
@@ -18,7 +18,7 @@ import { __iconNode as StarIconNode } from 'lucide-react/dist/esm/icons/star.mjs
 import { __iconNode as SwordIconNode } from 'lucide-react/dist/esm/icons/sword.mjs';
 import { __iconNode as TentIconNode } from 'lucide-react/dist/esm/icons/tent.mjs';
 import { __iconNode as TreesIconNode } from 'lucide-react/dist/esm/icons/trees.mjs';
-import { useCollaborationRoom } from './useCollaborationRoom';
+import { useCollaborationRoom } from '../../hooks/useCollaborationRoom';
 
 const DEFAULT_CANVAS = {
   backgroundColor: '#0b0d11'

@@ -9,7 +9,7 @@ import { LanguageDescription, syntaxHighlighting, HighlightStyle } from '@codemi
 import { tags } from '@lezer/highlight'
 import { EditorView } from '@codemirror/view'
 import MarkdownIt from 'markdown-it'
-import { useCollaborationRoom } from '../useCollaborationRoom'
+import { useCollaborationRoom } from '../hooks/useCollaborationRoom'
 import WorkspaceInsertSearch from './WorkspaceInsertSearch'
 import { prepareAssetUpload } from './utils'
 import { isInternalPageLink } from './utils'

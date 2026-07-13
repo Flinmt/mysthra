@@ -39,7 +39,7 @@ import { BlockNoteView } from '@blocknote/mantine';
 import { blocksToYXmlFragment } from '@blocknote/core/yjs';
 import { locales as multiColumnLocales, multiColumnDropCursor, withMultiColumn } from '@blocknote/xl-multi-column';
 import '@blocknote/mantine/style.css';
-import { useCollaborationRoom } from '../useCollaborationRoom';
+import { useCollaborationRoom } from '../hooks/useCollaborationRoom';
 import WorkspaceInsertSearch from './WorkspaceInsertSearch';
 import { prepareAssetUpload } from './utils';
 import { isInternalPageLink } from './utils';

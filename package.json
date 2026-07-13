@@ -11,7 +11,7 @@
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
     "start": "node --env-file=.env src/server.js",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1 test/*/*.test.js"
   },
   "engines": {
     "node": ">=22"
