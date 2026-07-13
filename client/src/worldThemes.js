@@ -1,8 +1,8 @@
-export const DEFAULT_WORLD_THEME = 'default'
+export const DEFAULT_WORLD_THEME = 'ember-archive'
 
 export const WORLD_THEMES = [
   {
-    id: DEFAULT_WORLD_THEME,
+    id: 'default',
     labelKey: 'dashboard.theme_default',
     colors: {
       background: '#0b0d11',
@@ -15,7 +15,7 @@ export const WORLD_THEMES = [
     swatches: ['#0b0d11', '#1d2230', '#8b5cf6', '#f8fafc']
   },
   {
-    id: 'ember-archive',
+    id: DEFAULT_WORLD_THEME,
     labelKey: 'dashboard.theme_ember_archive',
     colors: {
       background: '#151c20',
@@ -43,7 +43,7 @@ export const WORLD_THEMES = [
 ]
 
 export function getWorldTheme(themeId) {
-  return WORLD_THEMES.find(theme => theme.id === themeId) || WORLD_THEMES[0]
+  return WORLD_THEMES.find(theme => theme.id === themeId) || WORLD_THEMES.find(theme => theme.id === DEFAULT_WORLD_THEME)
 }
 
 const CUSTOM_THEME_COLOR_KEYS = ['background', 'surface', 'text', 'mutedText', 'accent', 'secondaryAccent']

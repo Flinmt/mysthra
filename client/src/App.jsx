@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Redirect, Route, Switch, useLocation } from 'wouter'
-import { LogOut, Plus, Settings, Trash2, Search, Share2, Users, Upload } from 'lucide-react'
+import { Palette, Share2, SlidersHorizontal, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
 import UserSettingsPage from './features/users/UserSettingsPage'
 import Login from './features/auth/Login'
-import DropdownSelect from './components/ui/DropdownSelect'
+import WorldDashboard from './features/worlds/WorldDashboard'
+import WorldDialog from './features/worlds/WorldDialog'
 import {
   DEFAULT_WORLD_THEME,
   WORLD_THEMES,
   getThemeColors,
-  getThemeSwatches,
   getWorldTheme,
   normalizeCustomTheme
 } from './worldThemes'
@@ -102,7 +102,6 @@ function App() {
 }
 
 function Dashboard({ onLogout, currentUser }) {
-  const { t } = useTranslation()
   const [, setLocation] = useLocation()
   const [worlds, setWorlds] = useState([])
   const [loading, setLoading] = useState(true)
@@ -110,17 +109,18 @@ function Dashboard({ onLogout, currentUser }) {
   const [editingWorld, setEditingWorld] = useState(null)
   const [deletingWorld, setDeletingWorld] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const isGlobalAdmin = Boolean(currentUser?.globalRole)
-
+  const [loadError, setLoadError] = useState(false)
   const loadWorlds = async () => {
+    setLoading(true)
+    setLoadError(false)
     try {
       const res = await fetch('/api/worlds')
-      if (res.ok) {
-        const data = await res.json()
-        setWorlds(data.items || [])
-      }
+      if (!res.ok) throw new Error('Failed to load worlds')
+      const data = await res.json()
+      setWorlds(data.items || [])
     } catch (e) {
       console.error(e)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -143,87 +143,25 @@ function Dashboard({ onLogout, currentUser }) {
   }, [worlds, searchQuery])
 
   return (
-    <div className="dashboard-container">
-      {/* Main Content Nexus */}
-      <main className="nexus-main">
-        <header className="nexus-header">
-          <div className="welcome-msg">
-            <h1 className="nexus-title-mysthra">Mysthra</h1>
-            <p>{t('dashboard.subtitle')}</p>
-          </div>
+    <div>
+      <WorldDashboard
+        currentUser={currentUser}
+        worldCount={worlds.length}
+        filteredWorlds={filteredWorlds}
+        loading={loading}
+        error={loadError}
+        searchQuery={searchQuery}
+        languageSwitcher={<LanguageSwitcher />}
+        onSearchChange={setSearchQuery}
+        onRetry={loadWorlds}
+        onCreate={() => setShowModal(true)}
+        onOpen={world => setLocation(`/world/${world.id}`)}
+        onEdit={setEditingWorld}
+        onDelete={setDeletingWorld}
+        onManageUsers={() => setLocation('/settings/users')}
+        onLogout={handleLogout}
+      />
 
-          <div className="nexus-search-group">
-            <div className="nexus-search-wrapper">
-              <Search size={18} className="search-icon" />
-              <input 
-                type="text" 
-                className="nexus-search-bar"
-                placeholder={t('dashboard.search_universes')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            
-            <div className="dashboard-action-group">
-              <LanguageSwitcher />
-
-              {isGlobalAdmin && (
-                <button className="nexus-icon-btn dashboard-users-button" onClick={() => setLocation('/settings/users')} title={t('dashboard.manage_users')}>
-                  <Users size={18} />
-                </button>
-              )}
-
-              <button className="nexus-icon-btn logout-btn-nexus" onClick={handleLogout} title={t('dashboard.logout_tooltip')}>
-                <LogOut size={18} />
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {loading ? (
-          <div className="loading-state-dashboard">
-            <div className="spinner"></div>
-            <p>{t('dashboard.connecting_to_nexus')}</p>
-          </div>
-        ) : (
-          <div className="nexus-grid">
-            {filteredWorlds.map(world => (
-              <div key={world.id} className="nexus-card" onClick={() => setLocation(`/world/${world.id}`)}>
-                <div
-                  className={`nexus-card-bg ${world.thumbnail?.filename ? 'has-thumbnail' : ''}`}
-                  style={world.thumbnail?.filename ? { backgroundImage: `url(/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0})` } : undefined}
-                ></div>
-                {isGlobalAdmin && (
-                  <div className="nexus-card-actions">
-                    <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setEditingWorld(world); }}>
-                      <Settings size={14} />
-                    </button>
-                    <button className="nexus-icon-btn" onClick={(e) => { e.stopPropagation(); setDeletingWorld(world); }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                )}
-                <div className="nexus-card-content">
-                  <h3>{world.displayName || world.name}</h3>
-                  <p>{world.description || t('dashboard.default_world_description')}</p>
-                </div>
-              </div>
-            ))}
-            
-            {/* Create Card */}
-            {!searchQuery && isGlobalAdmin && (
-              <div className="nexus-card nexus-create-btn" onClick={() => setShowModal(true)}>
-                <div className="plus-circle-nexus">
-                  <Plus size={24} />
-                </div>
-                <div style={{ fontWeight: 600 }}>{t('dashboard.create_new_world')}</div>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* Modals remain the same */}
       {showModal && (
         <CreateWorldModal 
           onClose={() => setShowModal(false)} 
@@ -270,79 +208,68 @@ const CUSTOM_THEME_COLOR_FIELDS = [
   ['accent', 'dashboard.theme_color_accent'],
   ['secondaryAccent', 'dashboard.theme_color_secondary_accent']
 ]
-const CUSTOM_THEME_OPTION = 'custom'
-
 function buildCustomThemePayload(enabled, colors) {
   return enabled ? normalizeCustomTheme({ colors }) : null
 }
 
-function ThemeSelect({ value, customTheme, onChange }) {
+function ThemePresetSelect({ value, onChange }) {
   const { t } = useTranslation()
-  const isCustomTheme = value === CUSTOM_THEME_OPTION
-  const selectedTheme = isCustomTheme ? getWorldTheme(DEFAULT_WORLD_THEME) : getWorldTheme(value)
-  const swatches = getThemeSwatches(selectedTheme.id, customTheme)
-  const options = [
-    ...WORLD_THEMES.map(theme => ({ value: theme.id, label: t(theme.labelKey) })),
-    { value: CUSTOM_THEME_OPTION, label: t('dashboard.theme_custom') }
-  ]
 
   return (
-    <div className="input-group world-theme-field world-form-field">
-      <label>{t('dashboard.world_theme')}</label>
-      <DropdownSelect
-        className="world-theme-dropdown"
-        value={isCustomTheme ? CUSTOM_THEME_OPTION : selectedTheme.id}
-        onChange={onChange}
-        options={options}
-        placeholder={t('dashboard.world_theme')}
-      />
-      <div className="world-theme-preview" aria-hidden="true">
-        {swatches.map(color => (
-          <span key={color} style={{ backgroundColor: color }} />
+    <div className="world-theme-presets">
+      <div className="world-appearance-heading">
+        <strong>{t('dashboard.world_theme')}</strong>
+        <small>{t('dashboard.theme_preset_hint')}</small>
+      </div>
+      <div className="world-theme-preset-grid">
+        {WORLD_THEMES.map(preset => (
+          <button key={preset.id} type="button" className={value === preset.id ? 'active' : ''} aria-pressed={value === preset.id} onClick={() => onChange(preset.id)}>
+            <span className="world-theme-preset-swatches" aria-hidden="true">
+              {preset.swatches.map(color => <i key={color} style={{ backgroundColor: color }} />)}
+            </span>
+            <strong>{t(preset.labelKey)}</strong>
+          </button>
         ))}
       </div>
-      <small>{t('dashboard.world_theme_hint')}</small>
     </div>
   )
 }
 
-function ThemeColorPicker({ theme, enabled, colors, onColorsChange }) {
+function ThemeColorPicker({ theme, colors, onEnabledChange, onColorsChange }) {
   const { t } = useTranslation()
 
   const resetToPreset = () => {
     onColorsChange(getThemeColors(theme))
+    onEnabledChange(false)
   }
 
   return (
-    <div className="input-group world-custom-theme-field world-form-field">
-      {enabled && (
-        <div className="world-custom-theme-controls">
-          <div className="world-custom-theme-copy">
-            <strong>{t('dashboard.theme_customize_colors')}</strong>
-            <small>{t('dashboard.theme_customize_colors_hint')}</small>
-          </div>
-          <div className="world-custom-theme-grid">
-            {CUSTOM_THEME_COLOR_FIELDS.map(([key, labelKey]) => (
-              <label
-                key={key}
-                className="world-color-control"
-                style={{ backgroundColor: colors[key] }}
-                title={t(labelKey)}
-              >
-                <input
-                  type="color"
-                  aria-label={t(labelKey)}
-                  value={colors[key]}
-                  onChange={event => onColorsChange({ ...colors, [key]: event.target.value })}
-                />
-              </label>
-            ))}
-          </div>
-          <button type="button" className="btn-secondary world-custom-theme-reset" onClick={resetToPreset}>
-            {t('dashboard.theme_restore_preset')}
-          </button>
+    <div className="world-custom-theme-field">
+      <div className="world-custom-theme-controls">
+        <div className="world-custom-theme-copy">
+          <strong>{t('dashboard.theme_customize_colors')}</strong>
+          <small>{t('dashboard.theme_customize_colors_hint')}</small>
         </div>
-      )}
+        <div className="world-custom-theme-grid">
+          {CUSTOM_THEME_COLOR_FIELDS.map(([key, labelKey]) => (
+            <label key={key} className="world-native-color-control">
+              <input
+                type="color"
+                value={colors[key]}
+                aria-label={t(labelKey)}
+                onChange={event => {
+                  onEnabledChange(true)
+                  onColorsChange({ ...colors, [key]: event.target.value })
+                }}
+              />
+              <span><strong>{t(labelKey)}</strong><small>{colors[key].toUpperCase()}</small></span>
+            </label>
+          ))}
+        </div>
+        <button type="button" className="btn-secondary world-custom-theme-reset" onClick={resetToPreset}>
+          {t('dashboard.theme_restore_preset')}
+        </button>
+      </div>
     </div>
   )
 }
@@ -354,7 +281,6 @@ function WorldFormFields({
   setDescription,
   theme,
   setTheme,
-  customThemeEnabled,
   setCustomThemeEnabled,
   customThemeColors,
   setCustomThemeColors,
@@ -365,19 +291,24 @@ function WorldFormFields({
   isEditing
 }) {
   const { t } = useTranslation()
-  const customTheme = buildCustomThemePayload(customThemeEnabled, customThemeColors)
-  const selectedThemeValue = customThemeEnabled ? CUSTOM_THEME_OPTION : theme
-
+  const [activeTab, setActiveTab] = useState('general')
   return (
-    <div className="world-form-body">
-      <div className="world-form-grid">
-        <section className="world-form-section">
-          <div className="world-form-section-heading">
-            <span>{t('dashboard.world_form_identity')}</span>
-          </div>
+    <div className="world-form-tabs-layout">
+      <nav className="world-form-tabs" role="tablist" aria-label={t('dashboard.world_settings_tabs')}>
+        <button type="button" role="tab" aria-selected={activeTab === 'general'} aria-controls="world-general-panel" className={activeTab === 'general' ? 'active' : ''} onClick={() => setActiveTab('general')}>
+          <SlidersHorizontal size={15} />{t('dashboard.world_tab_general')}
+        </button>
+        <button type="button" role="tab" aria-selected={activeTab === 'appearance'} aria-controls="world-appearance-panel" className={activeTab === 'appearance' ? 'active' : ''} onClick={() => setActiveTab('appearance')}>
+          <Palette size={15} />{t('dashboard.world_tab_appearance')}
+        </button>
+      </nav>
+
+      {activeTab === 'general' && (
+        <section id="world-general-panel" className="world-form-section" role="tabpanel">
           <div className="input-group world-form-field">
-            <label>{t('dashboard.world_name')}</label>
+            <label htmlFor="world-name">{t('dashboard.world_name')}</label>
             <input
+              id="world-name"
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
@@ -388,8 +319,9 @@ function WorldFormFields({
           </div>
 
           <div className="input-group world-form-field">
-            <label>{t('dashboard.short_description')}</label>
+            <label htmlFor="world-description">{t('dashboard.short_description')}</label>
             <input
+              id="world-description"
               type="text"
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -398,30 +330,36 @@ function WorldFormFields({
           </div>
 
           <div className="input-group world-form-field world-form-thumbnail-field">
-            <label>{t('dashboard.world_thumbnail')}</label>
+            <label id="world-thumbnail-label">{t('dashboard.world_thumbnail')}</label>
             <label className="world-thumbnail-picker">
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} />
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleThumbnailChange} aria-labelledby="world-thumbnail-label" />
               {thumbnailPreview ? (
-                <img src={thumbnailPreview} alt="" />
+                <>
+                  <img src={thumbnailPreview} alt="" />
+                  <span className="world-thumbnail-change">{t('dashboard.change_thumbnail')}</span>
+                </>
               ) : (
                 <span><Upload size={18} /> {t('dashboard.choose_thumbnail')}</span>
               )}
             </label>
           </div>
-        </section>
 
-        <section className="world-form-section">
-          <div className="world-form-section-heading">
-            <span>{t('dashboard.world_form_appearance')}</span>
-          </div>
-          <ThemeSelect
-            value={selectedThemeValue}
-            customTheme={customTheme}
+          <label className="world-public-control">
+            <input type="checkbox" checked={publicRead} onChange={e => setPublicRead(e.target.checked)} />
+            <span className="world-public-switch" aria-hidden="true"><i /></span>
+            <span className="world-public-copy">
+              <strong>{t('dashboard.public_read')}</strong>
+              <small>{t('dashboard.public_read_hint')}</small>
+            </span>
+          </label>
+        </section>
+      )}
+
+      {activeTab === 'appearance' && (
+        <section id="world-appearance-panel" className="world-form-section" role="tabpanel">
+          <ThemePresetSelect
+            value={theme}
             onChange={nextTheme => {
-              if (nextTheme === CUSTOM_THEME_OPTION) {
-                setCustomThemeEnabled(true)
-                return
-              }
               setTheme(nextTheme)
               setCustomThemeEnabled(false)
               setCustomThemeColors(getThemeColors(nextTheme))
@@ -430,23 +368,12 @@ function WorldFormFields({
 
           <ThemeColorPicker
             theme={theme}
-            enabled={customThemeEnabled}
             colors={customThemeColors}
+            onEnabledChange={setCustomThemeEnabled}
             onColorsChange={setCustomThemeColors}
           />
-
-          <label className="settings-checkbox world-public-read-toggle">
-            <input
-              type="checkbox"
-              checked={publicRead}
-              onChange={e => setPublicRead(e.target.checked)}
-            />
-            <span>
-              <strong>{t('dashboard.public_read')}</strong>
-            </span>
-          </label>
         </section>
-      </div>
+      )}
     </div>
   )
 }
@@ -463,6 +390,10 @@ function CreateWorldModal({ onClose, onCreated }) {
   const [thumbnailFile, setThumbnailFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => () => {
+    if (thumbnailPreview.startsWith('blob:')) URL.revokeObjectURL(thumbnailPreview)
+  }, [thumbnailPreview])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -518,12 +449,9 @@ function CreateWorldModal({ onClose, onCreated }) {
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content glass-panel world-form-modal">
-        <form onSubmit={handleSubmit}>
-          <div className="world-form-header">
-            <h2>{t('dashboard.create_new_world')}</h2>
-          </div>
+    <WorldDialog title={t('dashboard.create_new_world')} description={t('dashboard.create_world_hint')} onClose={onClose} busy={saving}>
+        <form className="world-dialog-form" onSubmit={handleSubmit}>
+          <div className="world-dialog-body">
           <WorldFormFields
             name={name}
             setName={setName}
@@ -531,7 +459,6 @@ function CreateWorldModal({ onClose, onCreated }) {
             setDescription={setDescription}
             theme={theme}
             setTheme={setTheme}
-            customThemeEnabled={customThemeEnabled}
             setCustomThemeEnabled={setCustomThemeEnabled}
             customThemeColors={customThemeColors}
             setCustomThemeColors={setCustomThemeColors}
@@ -540,9 +467,10 @@ function CreateWorldModal({ onClose, onCreated }) {
             thumbnailPreview={thumbnailPreview}
             handleThumbnailChange={handleThumbnailChange}
           />
+          </div>
           {error && <div className="error-msg world-form-error">{error}</div>}
 
-          <div className="modal-actions world-form-actions">
+          <div className="world-dialog-actions world-form-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
               {t('common.cancel')}
             </button>
@@ -551,8 +479,7 @@ function CreateWorldModal({ onClose, onCreated }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </WorldDialog>
   )
 }
 
@@ -568,6 +495,10 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   const [thumbnailFile, setThumbnailFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => () => {
+    if (thumbnailPreview.startsWith('blob:')) URL.revokeObjectURL(thumbnailPreview)
+  }, [thumbnailPreview])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -622,12 +553,9 @@ function EditWorldModal({ world, onClose, onUpdated }) {
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content glass-panel world-form-modal">
-        <form onSubmit={handleSubmit}>
-          <div className="world-form-header">
-            <h2>{t('dashboard.edit_world')}</h2>
-          </div>
+    <WorldDialog title={t('dashboard.edit_world')} description={t('dashboard.edit_world_hint')} onClose={onClose} busy={saving}>
+        <form className="world-dialog-form" onSubmit={handleSubmit}>
+          <div className="world-dialog-body">
           <WorldFormFields
             name={name}
             setName={setName}
@@ -635,7 +563,6 @@ function EditWorldModal({ world, onClose, onUpdated }) {
             setDescription={setDescription}
             theme={theme}
             setTheme={setTheme}
-            customThemeEnabled={customThemeEnabled}
             setCustomThemeEnabled={setCustomThemeEnabled}
             customThemeColors={customThemeColors}
             setCustomThemeColors={setCustomThemeColors}
@@ -645,9 +572,10 @@ function EditWorldModal({ world, onClose, onUpdated }) {
             handleThumbnailChange={handleThumbnailChange}
             isEditing
           />
-          {error && <div className="error-msg">{error}</div>}
+          </div>
+          {error && <div className="error-msg world-form-error">{error}</div>}
 
-          <div className="modal-actions world-form-actions">
+          <div className="world-dialog-actions world-form-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
               {t('common.cancel')}
             </button>
@@ -656,8 +584,7 @@ function EditWorldModal({ world, onClose, onUpdated }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </WorldDialog>
   )
 }
 
@@ -698,16 +625,16 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content glass-panel" style={{ borderColor: 'var(--error-color)' }}>
-        <h2 style={{ color: 'var(--error-color)' }}>{t('dashboard.delete_world_title')}</h2>
-        <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
+    <WorldDialog title={t('dashboard.delete_world_title')} description={t('dashboard.delete_world_hint')} onClose={onClose} busy={deleting} tone="danger">
+      <form className="world-dialog-form" onSubmit={handleDelete}>
+        <div className="world-dialog-body world-delete-dialog-body">
+        <p className="world-delete-warning">
           {t('dashboard.delete_confirm_prefix')} <strong>{world.displayName || world.name}</strong>{t('dashboard.delete_confirm_suffix')}
         </p>
-        <form onSubmit={handleDelete}>
           <div className="input-group">
-            <label>{t('dashboard.confirm_name_label')}</label>
+            <label htmlFor="delete-world-name">{t('dashboard.confirm_name_label')}</label>
             <input 
+              id="delete-world-name"
               type="text" 
               value={confirmName} 
               onChange={e => setConfirmName(e.target.value)} 
@@ -716,20 +643,20 @@ function DeleteWorldModal({ world, onClose, onDeleted }) {
               autoFocus
             />
           </div>
+        </div>
 
-          {error && <div className="error-msg">{error}</div>}
+          {error && <div className="error-msg world-form-error">{error}</div>}
 
-          <div className="modal-actions">
+          <div className="world-dialog-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={deleting}>
               {t('common.cancel')}
             </button>
-            <button type="submit" className="btn-primary" style={{ backgroundColor: 'var(--error-color)' }} disabled={deleting || confirmName !== (world.displayName || world.name)}>
+            <button type="submit" className="btn-primary world-dialog-danger-action" disabled={deleting || confirmName !== (world.displayName || world.name)}>
               {deleting ? t('common.deleting') : t('dashboard.confirm_delete_world')}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </WorldDialog>
   )
 }
 
@@ -744,7 +671,7 @@ function WorldShareButton({ worldId }) {
 
   return (
     <button
-      className="nexus-icon-btn workspace-share-floating"
+      className="workspace-share-floating"
       onClick={shareWorld}
       title={t('workspace.share_world')}
     >

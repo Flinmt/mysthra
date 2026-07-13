@@ -58,7 +58,7 @@ function normalizePublicRead(value) {
 }
 
 function normalizeWorldTheme(value) {
-  return WORLD_THEMES.has(value) ? value : "default";
+  return WORLD_THEMES.has(value) ? value : "ember-archive";
 }
 
 function normalizeHexColor(value) {

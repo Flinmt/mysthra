@@ -69,7 +69,7 @@ test("createWorld stores lean world metadata", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, worldName);
   assert.equal(world.description, "A world in migration");
-  assert.equal(world.theme, "default");
+  assert.equal(world.theme, "ember-archive");
   assert.equal(world.publicRead, false);
   assert.equal("thumbnailUrl" in world, false);
 
