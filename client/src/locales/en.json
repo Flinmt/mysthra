@@ -128,6 +128,8 @@
     "user_create_error": "Error creating user",
     "user_update_error": "Error updating user",
     "no_users": "No users created.",
+    "no_users_found": "No users found.",
+    "user_settings_tabs": "User settings",
     "new_password": "New password",
     "update_password": "Update password",
     "global_role": "Global role",

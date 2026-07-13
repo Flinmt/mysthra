@@ -15,6 +15,7 @@ import {
   Users
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import WorldDialog from '../worlds/WorldDialog'
 
 async function readResponse(response, fallback) {
   const data = await response.json().catch(() => ({}))
@@ -31,19 +32,15 @@ function roleLabel(t, user) {
 function ConfirmDialog({ title, description, confirmLabel, danger = false, loading, error, onCancel, onConfirm }) {
   const { t } = useTranslation()
   return (
-    <div className="modal-backdrop user-settings-dialog-backdrop" role="presentation" onMouseDown={event => event.target === event.currentTarget && !loading && onCancel()}>
-      <div className="user-settings-dialog" role="alertdialog" aria-modal="true" aria-labelledby="user-confirm-title">
-        <h2 id="user-confirm-title">{title}</h2>
-        <p>{description}</p>
-        {error && <div className="user-admin-error">{error}</div>}
-        <div className="user-settings-dialog-actions">
-          <button type="button" className="user-admin-secondary" onClick={onCancel} disabled={loading}>{t('common.cancel')}</button>
-          <button type="button" className={danger ? 'user-admin-danger' : 'user-admin-primary'} onClick={onConfirm} disabled={loading}>
+    <WorldDialog title={title} description={description} onClose={onCancel} busy={loading} tone={danger ? 'danger' : 'default'}>
+        {error && <div className="user-settings-error dialog">{error}</div>}
+        <div className="world-dialog-actions">
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={loading}>{t('common.cancel')}</button>
+          <button type="button" className={danger ? 'btn-primary world-dialog-danger-action' : 'btn-primary'} onClick={onConfirm} disabled={loading}>
             {loading ? t('common.saving') : confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+    </WorldDialog>
   )
 }
 
@@ -54,37 +51,35 @@ function CreateUserDialog({ loading, error, onCancel, onCreate }) {
   const [showPassword, setShowPassword] = useState(false)
 
   return (
-    <div className="modal-backdrop user-settings-dialog-backdrop" role="presentation" onMouseDown={event => event.target === event.currentTarget && !loading && onCancel()}>
-      <form className="user-settings-dialog user-settings-create-dialog" role="dialog" aria-modal="true" aria-labelledby="create-user-title" onSubmit={event => {
+    <WorldDialog title={t('dashboard.create_user')} description={t('dashboard.create_user_hint')} onClose={onCancel} busy={loading}>
+      <form className="user-settings-create-dialog" onSubmit={event => {
         event.preventDefault()
         onCreate({ username, password })
       }}>
-        <div>
-          <h2 id="create-user-title">{t('dashboard.create_user')}</h2>
-          <p>{t('dashboard.create_user_hint')}</p>
-        </div>
-        <label>
+        <div className="world-dialog-body user-settings-create-body">
+        <label htmlFor="create-user-name">
           <span>{t('login.username')}</span>
-          <input value={username} onChange={event => setUsername(event.target.value)} autoFocus required />
+          <input id="create-user-name" value={username} onChange={event => setUsername(event.target.value)} autoFocus required />
         </label>
-        <label>
+        <label htmlFor="create-user-password">
           <span>{t('dashboard.password_access')}</span>
           <div className="user-settings-password-input">
-            <input type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} required />
+            <input id="create-user-password" type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} required />
             <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? t('dashboard.hide_password') : t('dashboard.show_password')}>
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
           </div>
         </label>
-        {error && <div className="user-admin-error">{error}</div>}
-        <div className="user-settings-dialog-actions">
-          <button type="button" className="user-admin-secondary" onClick={onCancel} disabled={loading}>{t('common.cancel')}</button>
-          <button type="submit" className="user-admin-primary" disabled={loading || !username.trim() || password.length < 4}>
+        </div>
+        {error && <div className="user-settings-error dialog">{error}</div>}
+        <div className="world-dialog-actions">
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={loading}>{t('common.cancel')}</button>
+          <button type="submit" className="btn-primary" disabled={loading || !username.trim() || password.length < 4}>
             {loading ? t('common.creating') : t('dashboard.create_user')}
           </button>
         </div>
       </form>
-    </div>
+    </WorldDialog>
   )
 }
 
@@ -242,11 +237,11 @@ export default function UserSettingsPage({ currentUser }) {
         <aside className="user-settings-directory" aria-label={t('dashboard.user_directory')}>
           <div className="user-settings-search">
             <Search size={17} />
-            <input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('dashboard.search_users')} />
+            <input value={query} onChange={event => setQuery(event.target.value)} placeholder={t('dashboard.search_users')} aria-label={t('dashboard.search_users')} />
           </div>
           <div className="user-settings-filters" aria-label={t('dashboard.filter_user_list')}>
             {['all', 'users', 'admins'].map(value => (
-              <button key={value} type="button" className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>
+              <button key={value} type="button" aria-pressed={filter === value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>
                 {t(`dashboard.filter_${value}`)}
               </button>
             ))}
@@ -257,7 +252,7 @@ export default function UserSettingsPage({ currentUser }) {
           </div>
           <div className="user-settings-user-list">
             {loadingUsers ? <div className="user-settings-empty">{t('common.loading')}</div> : filteredUsers.length === 0 ? (
-              <div className="user-settings-empty">{t('dashboard.no_users')}</div>
+              <div className="user-settings-empty">{query.trim() ? t('dashboard.no_users_found') : t('dashboard.no_users')}</div>
             ) : filteredUsers.map(user => (
               <button key={user.id} type="button" className={`user-settings-user-row ${selectedId === user.id ? 'active' : ''}`} onClick={() => selectUser(user)}>
                 <span className={`user-settings-avatar role-${user.globalRole || 'user'}`}>{user.username.slice(0, 1).toUpperCase()}</span>
@@ -272,7 +267,7 @@ export default function UserSettingsPage({ currentUser }) {
         </aside>
 
         <section className="user-settings-detail">
-          {pageError ? <div className="user-admin-error">{pageError}</div> : selectedUser ? (
+          {pageError ? <div className="user-settings-error">{pageError}</div> : selectedUser ? (
             <>
               <button type="button" className="user-settings-mobile-back" onClick={() => setSelectedId(null)}><ChevronLeft size={17} />{t('dashboard.all_users')}</button>
               <div className="user-settings-profile-header">
@@ -283,20 +278,20 @@ export default function UserSettingsPage({ currentUser }) {
                 </div>
               </div>
 
-              <nav className="user-settings-tabs">
-                <button type="button" className={activeTab === 'account' ? 'active' : ''} onClick={() => setActiveTab('account')}><UserRound size={16} />{t('dashboard.account_tab')}</button>
-                <button type="button" className={activeTab === 'worlds' ? 'active' : ''} onClick={() => setActiveTab('worlds')}><Users size={16} />{t('dashboard.user_step_worlds')}</button>
+              <nav className="user-settings-tabs" role="tablist" aria-label={t('dashboard.user_settings_tabs')}>
+                <button type="button" role="tab" aria-selected={activeTab === 'account'} aria-controls="user-account-panel" className={activeTab === 'account' ? 'active' : ''} onClick={() => setActiveTab('account')}><UserRound size={16} />{t('dashboard.account_tab')}</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'worlds'} aria-controls="user-worlds-panel" className={activeTab === 'worlds' ? 'active' : ''} onClick={() => setActiveTab('worlds')}><Users size={16} />{t('dashboard.user_step_worlds')}</button>
               </nav>
 
-              {actionError && <div className="user-admin-error user-settings-action-error">{actionError}</div>}
+              {actionError && <div className="user-settings-error user-settings-action-error">{actionError}</div>}
 
               {activeTab === 'account' ? (
-                <div className="user-settings-account">
+                <div id="user-account-panel" className="user-settings-account" role="tabpanel">
                   <section className="user-settings-section">
                     <div className="user-settings-section-heading"><div><h3>{t('dashboard.account_access')}</h3><p>{t('dashboard.account_access_hint')}</p></div></div>
                     <div className="user-settings-field-row"><span>{t('dashboard.global_role')}</span><strong>{roleLabel(t, selectedUser)}</strong></div>
                     {currentUser.globalRole === 'root' && selectedUser.id !== 'root' && (
-                      <button type="button" className="user-admin-secondary user-settings-inline-action" onClick={() => setConfirmAction({ type: 'role', user: selectedUser })}>
+                      <button type="button" className="user-settings-button secondary user-settings-inline-action" onClick={() => setConfirmAction({ type: 'role', user: selectedUser })}>
                         <ShieldCheck size={16} />{selectedUser.globalRole === 'server-admin' ? t('dashboard.demote_server_admin') : t('dashboard.promote_server_admin')}
                       </button>
                     )}
@@ -309,7 +304,7 @@ export default function UserSettingsPage({ currentUser }) {
                       <div className="user-settings-section-heading"><div><h3>{t('dashboard.password_access')}</h3><p>{t('dashboard.password_access_hint')}</p></div></div>
                       <div className="user-settings-password-row">
                         <label><KeyRound size={17} /><input type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} placeholder={t('dashboard.new_password')} /></label>
-                        <button type="button" className="user-admin-primary" disabled={action === 'password' || newPassword.length < 4} onClick={() => runAction('password', () => fetch(`/api/users/${encodeURIComponent(selectedUser.id)}/password`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: newPassword }) }), async () => setNewPassword(''))}>{t('dashboard.update_password')}</button>
+                        <button type="button" className="user-settings-button primary" disabled={action === 'password' || newPassword.length < 4} onClick={() => runAction('password', () => fetch(`/api/users/${encodeURIComponent(selectedUser.id)}/password`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: newPassword }) }), async () => setNewPassword(''))}>{t('dashboard.update_password')}</button>
                       </div>
                     </section>
                   )}
@@ -318,13 +313,13 @@ export default function UserSettingsPage({ currentUser }) {
                     <section className="user-settings-danger-zone">
                       <div><h3>{t('dashboard.account_actions')}</h3><p>{t('dashboard.account_actions_hint')}</p></div>
                       <div>
-                        <button type="button" className="user-admin-danger" onClick={() => setConfirmAction({ type: 'delete', user: selectedUser })}><Trash2 size={16} />{t('dashboard.delete_user')}</button>
+                        <button type="button" className="user-settings-button danger" onClick={() => setConfirmAction({ type: 'delete', user: selectedUser })}><Trash2 size={16} />{t('dashboard.delete_user')}</button>
                       </div>
                     </section>
                   )}
                 </div>
               ) : (
-                <div className="user-settings-worlds">
+                <div id="user-worlds-panel" className="user-settings-worlds" role="tabpanel">
                   <div className="user-settings-section-heading"><div><h3>{t('dashboard.world_access')}</h3><p>{t('dashboard.world_access_hint')}</p></div></div>
                   {selectedUser.globalRole ? (
                     <section className="user-settings-notice"><ShieldCheck size={20} /><div><strong>{t('dashboard.global_access')}</strong><p>{t('dashboard.global_access_hint')}</p></div></section>
@@ -333,7 +328,7 @@ export default function UserSettingsPage({ currentUser }) {
                       {worlds.map(world => (
                         <div key={world.id} className="user-settings-world-row">
                           <span>{world.displayName || world.name}</span>
-                          <div className="user-admin-role-segments">
+                          <div className="user-settings-role-segments">
                             {['none', 'member', 'admin'].map(role => (
                               <button key={role} type="button" className={world.role === role ? 'active' : ''} disabled={action === `world:${world.id}`} onClick={() => updateWorldRole(world, role)}>{role === 'none' ? t('dashboard.no_access') : t(`workspace.member_role_${role}`)}</button>
                             ))}
