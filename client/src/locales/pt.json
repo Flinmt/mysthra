@@ -38,11 +38,12 @@
     "server_admin_user": "admin do servidor",
     "open_user_dropdown": "Abrir lista de usuários",
     "close_user_dropdown": "Fechar lista de usuários",
-    "master_password": "Master Password",
-    "password_placeholder": "Digite sua senha de mestre...",
+    "available_users": "Usuários disponíveis",
+    "password": "Senha",
+    "password_placeholder": "Digite sua senha",
     "failed": "Falha no login",
     "authenticating": "Autenticando...",
-    "enter_nexus": "Entrar no Nexus"
+    "enter": "Entrar"
   },
   "dashboard": {
     "subtitle": "Seus universos estão prontos para serem forjados.",

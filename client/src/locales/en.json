@@ -38,11 +38,12 @@
     "server_admin_user": "server admin",
     "open_user_dropdown": "Open user list",
     "close_user_dropdown": "Close user list",
-    "master_password": "Master Password",
-    "password_placeholder": "Enter your master password...",
+    "available_users": "Available users",
+    "password": "Password",
+    "password_placeholder": "Enter your password",
     "failed": "Login failed",
     "authenticating": "Authenticating...",
-    "enter_nexus": "Enter the Nexus"
+    "enter": "Sign in"
   },
   "dashboard": {
     "subtitle": "Your universes are ready to be forged.",

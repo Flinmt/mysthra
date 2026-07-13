@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Redirect, Route, Switch, useLocation } from 'wouter'
-import { LogOut, Plus, Settings, Trash2, Key, ShieldCheck, Sparkles, Search, Share2, ChevronDown, ChevronUp, Users, Upload } from 'lucide-react'
+import { LogOut, Plus, Settings, Trash2, Search, Share2, Users, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import WorldWorkspace from './WorldWorkspace'
 import UserSettingsPage from './UserSettingsPage'
+import Login from './Login'
 import DropdownSelect from './DropdownSelect'
 import {
   DEFAULT_WORLD_THEME,
@@ -52,7 +53,7 @@ function App() {
   }, [])
 
   if (isLoading) {
-    return <div className="login-container">{t('common.loading')}</div>
+    return <div className="auth-shell"><div className="auth-loading">{t('common.loading')}</div></div>
   }
 
   return (
@@ -63,7 +64,7 @@ function App() {
         ) : isAuthenticated ? (
           <Redirect to="/" />
         ) : (
-          <Login onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />
+          <Login languageSwitcher={<LanguageSwitcher />} onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />
         )}
       </Route>
       <Route path="/world/:id">
@@ -80,7 +81,7 @@ function App() {
               </>
             );
           }
-          return <Login onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />;
+          return <Login languageSwitcher={<LanguageSwitcher />} onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />;
         }}
       </Route>
       <Route path="/">
@@ -93,179 +94,11 @@ function App() {
             }}
           />
         ) : (
-          <Login onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />
+          <Login languageSwitcher={<LanguageSwitcher />} onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />
         )}
       </Route>
     </Switch>
   );
-}
-
-function Login({ onLogin }) {
-  const { t } = useTranslation()
-  const [username, setUsername] = useState('')
-  const [userQuery, setUserQuery] = useState('')
-  const [loginUsers, setLoginUsers] = useState([{ id: 'root', username: 'admin', globalRole: 'root' }])
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/auth/users')
-      .then(async res => {
-        if (!res.ok) return
-        const data = await res.json()
-        const users = data.items?.length ? data.items : [{ id: 'root', username: 'admin', globalRole: 'root' }]
-        setLoginUsers(users)
-      })
-      .catch(() => {})
-  }, [])
-
-  const filteredLoginUsers = useMemo(() => {
-    const query = userQuery.trim().toLowerCase()
-    if (!query) return loginUsers
-    return loginUsers.filter(user => user.username.toLowerCase().includes(query))
-  }, [loginUsers, userQuery])
-
-  const selectLoginUser = (user) => {
-    setUsername(user.username)
-    setUserQuery(user.username)
-    setIsUserMenuOpen(false)
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    const selectedUser = loginUsers.find(user => user.username.toLowerCase() === userQuery.trim().toLowerCase())
-    if (!selectedUser) {
-      setError(t('login.select_user_first'))
-      return
-    }
-    setUsername(selectedUser.username)
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: selectedUser.username, password })
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        onLogin(data.user)
-      } else {
-        const data = await res.json()
-        setError(data.error || t('login.failed'))
-      }
-    } catch {
-      setError(t('common.error_connection'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="login-container login-nexus">
-      <div className="login-language-wrapper">
-        <LanguageSwitcher />
-      </div>
-      <div className="login-card login-nexus-panel">
-        <div className="login-nexus-glow" aria-hidden="true" />
-        <div className="login-brand-mark">
-          <Sparkles size={22} />
-        </div>
-        <h1>Mysthra</h1>
-        <p>{t('login.subtitle')}</p>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label htmlFor="username">
-              <ShieldCheck size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-              {t('login.username')}
-            </label>
-            <div className="login-user-combobox">
-              <input
-                id="username"
-                type="text"
-                value={userQuery}
-                onChange={(e) => {
-                  setUserQuery(e.target.value)
-                  setUsername('')
-                  setIsUserMenuOpen(true)
-                }}
-                onFocus={() => setIsUserMenuOpen(true)}
-                onBlur={() => setTimeout(() => setIsUserMenuOpen(false), 120)}
-                placeholder={t('login.username_placeholder')}
-                autoComplete="off"
-                autoFocus
-              />
-              <button
-                type="button"
-                className="login-user-menu-toggle"
-                onMouseDown={(event) => {
-                  event.preventDefault()
-                  setIsUserMenuOpen(prev => !prev)
-                }}
-                aria-label={isUserMenuOpen ? t('login.close_user_dropdown') : t('login.open_user_dropdown')}
-              >
-                {isUserMenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-              {isUserMenuOpen && (
-                <div className="login-user-menu">
-                  {filteredLoginUsers.length === 0 ? (
-                    <div className="login-user-empty">{t('login.no_users_found')}</div>
-                  ) : (
-                    filteredLoginUsers.map(user => (
-                      <button
-                        key={user.id}
-                        type="button"
-                        className={`login-user-option ${user.username === username ? 'active' : ''}`}
-                        onMouseDown={(event) => {
-                          event.preventDefault()
-                          selectLoginUser(user)
-                        }}
-                      >
-                        <span>{user.username}</span>
-                        {user.globalRole && <small>{t(`login.${user.globalRole === 'root' ? 'root_user' : 'server_admin_user'}`)}</small>}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="input-group">
-            <label htmlFor="password">
-              <Key size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-              {t('login.master_password')}
-            </label>
-            <input 
-              id="password"
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('login.password_placeholder')}
-            />
-          </div>
-          
-          {error && <div className="error-msg">{error}</div>}
-          
-          <button type="submit" className="login-submit-button" disabled={loading}>
-            {loading ? (
-              <span>{t('login.authenticating')}</span>
-            ) : (
-              <>
-                <ShieldCheck size={18} />
-                <span>{t('login.enter_nexus')}</span>
-              </>
-            )}
-          </button>
-        </form>
-      </div>
-    </div>
-  )
 }
 
 function Dashboard({ onLogout, currentUser }) {
