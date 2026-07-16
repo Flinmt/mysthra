@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { getWorldTheme } from '../../worldThemes'
 import WorldDialog from './WorldDialog'
 
-function WorldActions({ world, onEdit, onDelete }) {
+function WorldActions({ world, canEdit, canDelete, onEdit, onDelete }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
@@ -37,21 +37,15 @@ function WorldActions({ world, onEdit, onDelete }) {
       </button>
       {open && (
         <div className="world-dashboard-action-menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(world) }}>
-            <Settings size={15} />
-            <span>{t('common.edit')}</span>
-          </button>
-          <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); onDelete(world) }}>
-            <Trash2 size={15} />
-            <span>{t('common.delete')}</span>
-          </button>
+          {canEdit && <button type="button" role="menuitem" onClick={() => { setOpen(false); onEdit(world) }}><Settings size={15} /><span>{t('common.edit')}</span></button>}
+          {canDelete && <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); onDelete(world) }}><Trash2 size={15} /><span>{t('common.delete')}</span></button>}
         </div>
       )}
     </div>
   )
 }
 
-function WorldCard({ world, canManage, onOpen, onEdit, onDelete }) {
+function WorldCard({ world, canEdit, canDelete, onOpen, onEdit, onDelete }) {
   const { t } = useTranslation()
   const name = world.displayName || world.name
   const theme = getWorldTheme(world.theme)
@@ -73,7 +67,7 @@ function WorldCard({ world, canManage, onOpen, onEdit, onDelete }) {
           <span className="world-dashboard-card-description">{world.description || t('dashboard.default_world_description')}</span>
         </span>
       </button>
-      {canManage && <WorldActions world={world} onEdit={onEdit} onDelete={onDelete} />}
+      {(canEdit || canDelete) && <WorldActions world={world} canEdit={canEdit} canDelete={canDelete} onEdit={onEdit} onDelete={onDelete} />}
     </article>
   )
 }
@@ -168,7 +162,7 @@ export default function WorldDashboard({
   onLogout
 }) {
   const { t } = useTranslation()
-  const canManage = Boolean(currentUser?.globalRole)
+  const canManageGlobally = Boolean(currentUser?.globalRole)
   const hasSearch = searchQuery.trim().length > 0
   const showSearch = worldCount >= 7 || hasSearch
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -185,12 +179,12 @@ export default function WorldDashboard({
         action={<button type="button" className="world-dashboard-secondary-button" onClick={onRetry}><RefreshCw size={15} />{t('dashboard.try_again')}</button>}
       />
     )
-  } else if (filteredWorlds.length === 0 && (hasSearch || !canManage)) {
+  } else if (filteredWorlds.length === 0 && (hasSearch || !canManageGlobally)) {
     content = (
       <DashboardState
         icon={<Globe2 size={22} />}
         title={hasSearch ? t('dashboard.no_search_results') : t('dashboard.no_worlds_available')}
-        description={hasSearch ? t('dashboard.no_search_results_hint') : canManage ? t('dashboard.no_worlds_admin_hint') : t('dashboard.no_worlds_member_hint')}
+        description={hasSearch ? t('dashboard.no_search_results_hint') : canManageGlobally ? t('dashboard.no_worlds_admin_hint') : t('dashboard.no_worlds_member_hint')}
         action={hasSearch
           ? <button type="button" className="world-dashboard-secondary-button" onClick={() => onSearchChange('')}><X size={15} />{t('dashboard.clear_search')}</button>
           : null}
@@ -199,10 +193,11 @@ export default function WorldDashboard({
   } else {
     content = (
       <div className="world-dashboard-grid">
-        {canManage && !hasSearch && <CreateWorldCard onCreate={onCreate} />}
-        {filteredWorlds.map(world => (
-          <WorldCard key={world.id} world={world} canManage={canManage} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} />
-        ))}
+        {canManageGlobally && !hasSearch && <CreateWorldCard onCreate={onCreate} />}
+        {filteredWorlds.map(world => {
+          const isWorldAdmin = world.members?.some(member => member.userId === currentUser?.userId && member.role === 'admin')
+          return <WorldCard key={world.id} world={world} canEdit={canManageGlobally || isWorldAdmin} canDelete={canManageGlobally} onOpen={onOpen} onEdit={onEdit} onDelete={onDelete} />
+        })}
       </div>
     )
   }
@@ -228,7 +223,7 @@ export default function WorldDashboard({
               </label>
             )}
             <div className="world-dashboard-language">{languageSwitcher}</div>
-            <SessionMenu currentUser={currentUser} canManage={canManage} onManageUsers={onManageUsers} onLogout={() => setConfirmLogout(true)} />
+            <SessionMenu currentUser={currentUser} canManage={canManageGlobally} onManageUsers={onManageUsers} onLogout={() => setConfirmLogout(true)} />
           </div>
         </header>
         <section className="world-dashboard-content" aria-label={t('dashboard.worlds_section')}>

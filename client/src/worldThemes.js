@@ -111,6 +111,7 @@ export function getThemeSwatches(themeId, customTheme = null) {
 export function getWorldThemeStyle(themeId, customTheme = null) {
   const colors = getThemeColors(themeId, customTheme)
   return {
+    ...getWorldThemeShellStyle(themeId, customTheme),
     '--bg-color': colors.background,
     '--panel-bg': rgba(colors.surface, 0.74),
     '--border-color': rgba(colors.accent, 0.16),
@@ -133,5 +134,23 @@ export function getWorldThemeStyle(themeId, customTheme = null) {
     '--theme-custom-accent-border': rgba(colors.accent, 0.34),
     '--theme-custom-secondary': colors.secondaryAccent,
     '--theme-custom-secondary-soft': rgba(colors.secondaryAccent, 0.2)
+  }
+}
+
+export function getWorldThemeShellStyle(themeId, customTheme = null) {
+  const colors = getThemeColors(themeId, customTheme)
+  return {
+    '--world-theme-background': colors.background,
+    '--world-theme-surface': colors.surface,
+    '--world-theme-text': colors.text,
+    '--world-theme-muted': colors.mutedText,
+    '--world-theme-accent': colors.accent,
+    '--world-theme-accent-hover': mixHex(colors.accent, '#ffffff', 0.16),
+    '--world-theme-accent-soft': rgba(colors.accent, 0.14),
+    '--world-theme-accent-border': rgba(colors.accent, 0.34),
+    '--world-theme-accent-glow': rgba(colors.accent, 0.28),
+    '--world-theme-secondary': colors.secondaryAccent,
+    '--world-theme-secondary-hover': mixHex(colors.secondaryAccent, '#ffffff', 0.16),
+    '--world-theme-secondary-soft': rgba(colors.secondaryAccent, 0.2)
   }
 }

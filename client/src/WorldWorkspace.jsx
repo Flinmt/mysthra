@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './features/map/MapEditor';
 import BoardEditor from './features/board/BoardEditor';
 import { useCollaborationRoom } from './hooks/useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import WikiBlockEditor from './workspace/WikiBlockEditor';
-import { DocumentPermissionsDialog, WorldMembersDialog } from './features/world/WorldAccessDialogs';
-import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeStyle } from './worldThemes';
+import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
+import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
+import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
+import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeShellStyle, getWorldThemeStyle } from './worldThemes';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -262,7 +264,7 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
           event.dataTransfer.setData('text/plain', node.name);
         }}
         onContextMenu={(event) => {
-          if (isVisitor || isRenaming) return;
+          if (isRenaming || (isVisitor && isFolder)) return;
           event.preventDefault();
           event.stopPropagation();
           onContextMenu(event, node);
@@ -306,63 +308,44 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
         {!isVisitor && !isRenaming && (
           <span className="tree-node-actions asset-node-actions">
             {isFolder && (
-              <span
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 className="node-action-btn"
                 onClick={(event) => {
                   event.stopPropagation();
                   setIsOpen(true);
                   onCreateFolder(node.path);
                 }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    setIsOpen(true);
-                    onCreateFolder(node.path);
-                  }
-                }}
                 title={t('common.create')}
+                aria-label={t('common.create')}
               >
                 <Plus size={14} />
-              </span>
+              </button>
             )}
-            <span
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               className="node-action-btn"
               onClick={(event) => {
                 event.stopPropagation();
                 onRequestRename(node);
               }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onRequestRename(node);
-                }
-              }}
               title={t('common.rename')}
+              aria-label={t('common.rename')}
             >
               <Edit2 size={14} />
-            </span>
-            <span
-              role="button"
-              tabIndex={0}
+            </button>
+            <button
+              type="button"
               className="node-action-btn danger"
               onClick={(event) => {
                 event.stopPropagation();
                 onDelete(node);
               }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onDelete(node);
-                }
-              }}
               title={t('common.delete')}
+              aria-label={t('common.delete')}
             >
               <Trash2 size={14} />
-            </span>
+            </button>
           </span>
         )}
       </div>
@@ -488,6 +471,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
           {canWriteNode && (
             <>
               <button
+                type="button"
                 className="node-action-btn"
                 onClick={(e) => { e.stopPropagation(); setIsOpen(true); onCreateChild(node.path); }}
                 title={t('common.create')}
@@ -495,6 +479,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
                 <Plus size={14} />
               </button>
               <button
+                type="button"
                 className="node-action-btn"
                 onClick={(e) => { e.stopPropagation(); onRequestRename(node); }}
                 title={t('common.rename')}
@@ -503,6 +488,7 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
               </button>
               {canAdminNode && (
                 <button
+                  type="button"
                   className="node-action-btn danger"
                   onClick={(e) => { e.stopPropagation(); onDelete(node); }}
                   title={t('common.delete')}
@@ -522,6 +508,8 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
 const DOCUMENT_ACCESS_RANK = { none: 0, read: 1, write: 2, admin: 3 };
 const MAX_TABS_PER_DOCUMENT = 5;
 const WORLD_THEME_CACHE_PREFIX = 'mysthra:world-theme:';
+const SIDEBAR_COLLAPSED_KEY = 'mysthra:workspace-sidebar-collapsed';
+const SIDEBAR_MOBILE_QUERY = '(max-width: 900px)';
 
 function getCachedWorldTheme(worldId) {
   try {
@@ -539,25 +527,22 @@ function setCachedWorldTheme(worldId, themeId) {
   }
 }
 
-function WorkspaceBootScreen({ theme, title, label }) {
-  return (
-    <div className="workspace-container workspace-boot" data-world-theme={theme}>
-      <div className="workspace-boot-card">
-        <div className="workspace-boot-mark" aria-hidden="true" />
-        <div>
-          <strong>{title}</strong>
-          <span>{label}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function hasDocumentAccess(access, required) {
   return (DOCUMENT_ACCESS_RANK[access] || 0) >= (DOCUMENT_ACCESS_RANK[required] || 0);
 }
 
-export default function WorldWorkspace({ params, isVisitor = false, currentUser = null }) {
+function getDocumentBreadcrumb(nodes, targetPath, ancestors = []) {
+  for (const node of nodes || []) {
+    if (node.type !== 'container') continue;
+    const branch = [...ancestors, { name: node.name, path: node.path }];
+    if (node.path === targetPath) return branch;
+    const match = getDocumentBreadcrumb(node.children, targetPath, branch);
+    if (match.length > 0) return match;
+  }
+  return [];
+}
+
+export default function WorldWorkspace({ params, isVisitor = false, currentUser = null, languageSwitcher = null }) {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const worldId = decodeURIComponent(params.id);
@@ -573,10 +558,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isSidebarMobile, setIsSidebarMobile] = useState(() => window.matchMedia?.(SIDEBAR_MOBILE_QUERY).matches || false);
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [assetTree, setAssetTree] = useState([]);
   const [assetLoading, setAssetLoading] = useState(false);
   const [assetUploading, setAssetUploading] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [previewAsset, setPreviewAsset] = useState(null);
   const [selectedAssetFolderPath, setSelectedAssetFolderPath] = useState('');
   const [worldData, setWorldData] = useState(null);
   const [worldDataLoaded, setWorldDataLoaded] = useState(false);
@@ -593,7 +588,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [tabContextMenu, setTabContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [worldActionsMenu, setWorldActionsMenu] = useState(false);
-  const [membersPanel, setMembersPanel] = useState({ isOpen: false, loading: false, members: [], users: [], userId: '', username: '', password: '', error: '' });
+  const [worldSettingsOpen, setWorldSettingsOpen] = useState(false);
   const [documentPermissionsPanel, setDocumentPermissionsPanel] = useState({ isOpen: false, loading: false, members: [], visitorAccess: "none", draft: { inherit: true, users: {} }, error: '' });
   const [worldPresenceUsers, setWorldPresenceUsers] = useState([]);
   const [activeTabVisitorCount, setActiveTabVisitorCount] = useState(0);
@@ -618,6 +613,31 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const skipTitleRenameRef = useRef(false);
   const initialSharedSelectionRef = useRef(false);
   const [coverUploading, setCoverUploading] = useState(false);
+  const closeSidebarDrawer = useCallback(() => setIsSidebarDrawerOpen(false), []);
+  const toggleSidebar = useCallback(() => {
+    if (isSidebarMobile) setIsSidebarDrawerOpen(prev => !prev);
+    else setIsSidebarCollapsed(prev => !prev);
+  }, [isSidebarMobile]);
+  const closeAssetPreview = useCallback(() => setPreviewAsset(null), []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.(SIDEBAR_MOBILE_QUERY);
+    if (!mediaQuery) return undefined;
+    const handleChange = event => {
+      setIsSidebarMobile(event.matches);
+      setIsSidebarDrawerOpen(false);
+    };
+    mediaQuery.addEventListener?.('change', handleChange);
+    return () => mediaQuery.removeEventListener?.('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
+    } catch {
+      // Session storage may be unavailable in restricted browsing contexts.
+    }
+  }, [isSidebarCollapsed]);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -673,38 +693,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       setAssetLoading(false);
     }
   }, [addToast, t, worldId]);
-
-  const fetchMembersPanelData = useCallback(async () => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const [membersRes, usersRes] = await Promise.all([
-        fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`),
-        fetch(`/api/worlds/${encodeURIComponent(worldId)}/available-users`)
-      ]);
-      if (!membersRes.ok || !usersRes.ok) {
-        setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
-        return;
-      }
-      const membersData = await membersRes.json();
-      const usersData = await usersRes.json();
-      setMembersPanel(prev => ({
-        ...prev,
-        loading: false,
-        members: membersData.items || [],
-        users: usersData.items || [],
-        error: ''
-      }));
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  }, [t, worldData?.canManageMembers, worldId]);
-
-  const openMembersPanel = () => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, isOpen: true, error: '' }));
-    fetchMembersPanelData();
-  };
 
   const handleWorldPresenceStateless = useCallback(({ payload }) => {
     try {
@@ -863,10 +851,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
 
   useEffect(() => {
-    if (!isVisitor && activeSidebarTab === 'assets') {
+    if (activeSidebarTab === 'assets') {
       fetchAssets();
     }
-  }, [activeSidebarTab, fetchAssets, isVisitor]);
+  }, [activeSidebarTab, fetchAssets]);
 
   useEffect(() => {
     if (activeTab?.contentType === 'map' || activeTab?.contentType === 'board') {
@@ -878,12 +866,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
     setViewMode('edit');
   }, [activeTab?.uid]);
-
-  useEffect(() => {
-    if (isVisitor && activeSidebarTab !== 'wiki') {
-      setActiveSidebarTab('wiki');
-    }
-  }, [activeSidebarTab, isVisitor]);
 
   useEffect(() => {
     if (!worldActionsMenu) return undefined;
@@ -982,6 +964,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const selectContainer = async (node) => {
     setSelectedContainer(node);
+    if (isSidebarMobile) setIsSidebarDrawerOpen(false);
     const firstTab = getFirstOrderedTab(node);
     if (firstTab) {
       selectTab(firstTab);
@@ -1235,6 +1218,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             type: 'tab',
             contentType,
             name: tabName,
+            ...((contentType === 'map' || contentType === 'board') ? { documentCoverHidden: true } : {}),
             ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {})
           }
         })
@@ -1247,7 +1231,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           icon: null,
           type: 'tab',
           contentType,
-          metadata: { type: 'tab', contentType, name: tabName, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
+          metadata: {
+            type: 'tab',
+            contentType,
+            name: tabName,
+            ...((contentType === 'map' || contentType === 'board') ? { documentCoverHidden: true } : {}),
+            ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {})
+          }
         };
 
         await fetchTree();
@@ -1298,7 +1288,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           content: '', 
           metadata: { 
             type: prompt.type,
-            contentType: prompt.type === 'tab' ? prompt.contentType : null
+            contentType: prompt.type === 'tab' ? prompt.contentType : null,
+            ...(prompt.type === 'tab' && (prompt.contentType === 'map' || prompt.contentType === 'board')
+              ? { documentCoverHidden: true }
+              : {})
           } 
         })
       });
@@ -1383,98 +1376,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       addToast(t('workspace.home_page_failed'), 'error');
-    }
-  };
-
-  const addExistingMember = async () => {
-    if (!worldData?.canManageMembers || !membersPanel.userId) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: membersPanel.userId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [], userId: '' }));
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  };
-
-  const createAndAddMember = async () => {
-    if (!worldData?.canManageMembers || !membersPanel.username.trim() || !membersPanel.password) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: membersPanel.username.trim(),
-          password: membersPanel.password
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({
-          ...prev,
-          loading: false,
-          members: data.items || [],
-          username: '',
-          password: ''
-        }));
-        await fetchMembersPanelData();
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  };
-
-  const removeMember = async (userId) => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  };
-
-  const updateMemberRole = async (userId, role) => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
     }
   };
 
@@ -2172,7 +2073,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const handleCoverUpload = async (event) => {
     const [file] = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!file || isVisitor || !selectedContainer || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board') return;
+    if (!file || isVisitor || !selectedContainer || !canWriteSelectedContainer || isDocumentLocked) return;
 
     setCoverUploading(true);
     try {
@@ -2202,7 +2103,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          path: activeTab.path,
+          path: selectedContainer.path,
           metadata: {
             coverAssetPath: uploaded.path,
             coverPositionX: 50,
@@ -2219,7 +2120,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
-      updateActiveTabMetadata({
+      updateSelectedContainerMetadata({
         coverAssetPath: uploaded.path,
         coverPositionX: 50,
         coverPositionY: 50,
@@ -2248,6 +2149,30 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: activeTab.path, metadata })
+      });
+      if (!res.ok) {
+        addToast(t('common.error'), 'error');
+        return false;
+      }
+      await fetchTree();
+      return true;
+    } catch {
+      addToast(t('common.error'), 'error');
+      return false;
+    }
+  };
+
+  const updateSelectedContainerMetadata = (metadata) => {
+    setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
+  };
+
+  const saveSelectedContainerMetadata = async (metadata) => {
+    if (!selectedContainer) return false;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata })
       });
       if (!res.ok) {
         addToast(t('common.error'), 'error');
@@ -2303,17 +2228,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeCover = async () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
+    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
     const metadata = { coverAssetPath: null, coverPositionX: 50, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null };
-    updateActiveTabMetadata(metadata);
+    updateSelectedContainerMetadata(metadata);
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
-    const saved = await saveActiveTabMetadata(metadata);
+    const saved = await saveSelectedContainerMetadata(metadata);
     if (saved) addToast(t('common.saved'), 'success');
   };
 
   const getCurrentCoverPosition = () => {
-    const explicitX = activeTab?.metadata?.coverPositionX;
-    const explicitY = activeTab?.metadata?.coverPositionY;
+    const explicitX = documentCoverMetadata?.coverPositionX;
+    const explicitY = documentCoverMetadata?.coverPositionY;
     if (explicitX !== undefined || explicitY !== undefined) {
       return {
         x: clampCoverPosition(explicitX ?? 50),
@@ -2321,8 +2246,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       };
     }
 
-    const area = normalizeCoverArea(activeTab?.metadata?.coverCroppedArea);
-    if (!area) return { x: 50, y: clampCoverPosition(activeTab?.metadata?.coverPositionY) };
+    const area = normalizeCoverArea(documentCoverMetadata?.coverCroppedArea);
+    if (!area) return { x: 50, y: clampCoverPosition(documentCoverMetadata?.coverPositionY) };
     const maxX = Math.max(0, 100 - area.width);
     const maxY = Math.max(0, 100 - area.height);
     return {
@@ -2332,7 +2257,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const startCoverReposition = () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
+    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
     const position = getCurrentCoverPosition();
     setCoverReposition({
       isEditing: true,
@@ -2358,7 +2283,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, []);
 
   const saveCoverReposition = async () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
+    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
     const metadata = {
       coverPositionX: coverReposition.x,
       coverPositionY: coverReposition.y,
@@ -2366,8 +2291,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       coverZoom: 1,
       coverCroppedArea: null
     };
-    updateActiveTabMetadata(metadata);
-    const saved = await saveActiveTabMetadata(metadata);
+    updateSelectedContainerMetadata(metadata);
+    const saved = await saveSelectedContainerMetadata(metadata);
     if (saved) {
       setCoverReposition(prev => ({
         isEditing: false,
@@ -2441,22 +2366,29 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const sidebarTabs = [
     { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
     { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
-  ].filter(tab => !isVisitor || tab.id === 'wiki');
+  ];
   const selectedTabs = getTabsForNode(selectedContainer);
   const hasReachedTabLimit = selectedTabs.length >= MAX_TABS_PER_DOCUMENT;
-  const activeCoverPath = activeTab && activeTab.contentType !== 'map' && activeTab.contentType !== 'board' ? activeTab?.metadata?.coverAssetPath : null;
-  const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
-  const coverPositionX = coverReposition.isEditing
-    ? coverReposition.x
-    : hasInlineCoverPosition ? clampCoverPosition(activeTab?.metadata?.coverPositionX) : undefined;
-  const coverPositionY = coverReposition.isEditing
-    ? coverReposition.y
-    : hasInlineCoverPosition ? clampCoverPosition(activeTab?.metadata?.coverPositionY) : undefined;
-  const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
-  const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMapTab = activeTab?.contentType === 'map';
   const isBoardTab = activeTab?.contentType === 'board';
   const isCanvasTab = isMapTab || isBoardTab;
+  const hasDocumentCoverMetadata = Object.prototype.hasOwnProperty.call(selectedContainer?.metadata || {}, 'coverAssetPath');
+  const legacyCoverTab = selectedTabs.find(tab => tab.metadata?.coverAssetPath);
+  const documentCoverMetadata = hasDocumentCoverMetadata
+    ? selectedContainer?.metadata
+    : legacyCoverTab?.metadata || selectedContainer?.metadata;
+  const documentCoverPath = documentCoverMetadata?.coverAssetPath || null;
+  const isCoverHiddenOnActiveTab = activeTab?.metadata?.documentCoverHidden ?? isCanvasTab;
+  const activeCoverPath = activeTab && !isCoverHiddenOnActiveTab ? documentCoverPath : null;
+  const hasInlineCoverPosition = documentCoverMetadata?.coverPositionX !== undefined || documentCoverMetadata?.coverPositionY !== undefined;
+  const coverPositionX = coverReposition.isEditing
+    ? coverReposition.x
+    : hasInlineCoverPosition ? clampCoverPosition(documentCoverMetadata?.coverPositionX) : undefined;
+  const coverPositionY = coverReposition.isEditing
+    ? coverReposition.y
+    : hasInlineCoverPosition ? clampCoverPosition(documentCoverMetadata?.coverPositionY) : undefined;
+  const coverBackgroundVars = getCoverBackgroundVars(documentCoverMetadata?.coverCroppedArea, coverPositionX, coverPositionY);
+  const coverActionLabel = documentCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMarkdownTab = activeTab?.contentType === 'markdown';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
@@ -2466,12 +2398,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const isDocumentLocked = selectedContainer?.metadata?.locked === true;
   const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write') && !isDocumentLocked;
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
-  const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
-  const availableUsers = membersPanel.users.filter(user => !memberUserIds.has(user.id));
   const workspaceTheme = getWorldTheme(worldData?.theme || cachedWorldTheme).id;
-  const workspaceThemeStyle = worldData?.customTheme
-    ? getWorldThemeStyle(worldData.theme, worldData.customTheme)
-    : {};
+  const workspaceThemeStyle = getWorldThemeStyle(workspaceTheme, worldData?.customTheme);
+  const workspaceShellThemeStyle = getWorldThemeShellStyle(workspaceTheme, worldData?.customTheme);
   const isWorkspaceBooting = !worldDataLoaded || !treeLoaded;
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
@@ -2480,11 +2409,25 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       : isDirty
         ? t('workspace.save_status_pending')
         : t('workspace.save_status_saved');
+  const documentBreadcrumbs = useMemo(
+    () => getDocumentBreadcrumb(tree, selectedContainer?.path),
+    [selectedContainer?.path, tree]
+  );
+
+  const toggleActiveTabCoverVisibility = async () => {
+    if (!activeTab || !documentCoverPath || !canWriteActiveTab) return;
+    const wasHidden = isCoverHiddenOnActiveTab;
+    const metadata = { documentCoverHidden: !wasHidden };
+    updateActiveTabMetadata(metadata);
+    const saved = await saveActiveTabMetadata(metadata);
+    if (!saved) updateActiveTabMetadata({ documentCoverHidden: wasHidden });
+  };
 
   if (isWorkspaceBooting) {
     return (
       <WorkspaceBootScreen
         theme={workspaceTheme}
+        themeStyle={workspaceThemeStyle}
         title={worldData?.displayName || worldId}
         label={t('workspace.loading_world')}
       />
@@ -2493,11 +2436,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const editorControls = !isVisitor ? (
     <div className="editor-cover-controls">
-      {activeTab && (
-        <span className={`editor-save-status ${saveStatus}`}>
-          {saveStatusLabel}
-        </span>
-      )}
       {activeTab && activeTabVisitorCount > 0 && (
         <span className="editor-visitor-count" title={t('workspace.visitors_viewing_file')}>
           <Users size={14} />
@@ -2505,23 +2443,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             {activeTabVisitorCount} {activeTabVisitorCount === 1 ? t('workspace.visitor_count_singular') : t('workspace.visitor_count_plural')}
           </span>
         </span>
-      )}
-      {worldPresenceUsers.length > 0 && (
-        <div className="world-presence" title={t('workspace.online_users')}>
-          {worldPresenceUsers.slice(0, 5).map(user => (
-            <span
-              key={user.id}
-              className="world-presence-avatar"
-              style={{ '--presence-color': user.color }}
-              title={user.name}
-            >
-              {String(user.name || '?').slice(0, 1).toUpperCase()}
-            </span>
-          ))}
-          {worldPresenceUsers.length > 5 && (
-            <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
-          )}
-        </div>
       )}
       {activeTab && isMarkdownTab && canWriteActiveTab && (
         <button
@@ -2533,50 +2454,57 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           {viewMode === 'edit' ? <Eye size={16} /> : <Edit2 size={16} />}
         </button>
       )}
-      {selectedContainer && canLockDocument && (
-        <button
-          type="button"
-          className={`editor-document-lock${selectedContainer.metadata?.locked ? ' locked' : ''}`}
-          onClick={toggleDocumentLock}
-          title={selectedContainer.metadata?.locked ? t('workspace.document_unlock') : t('workspace.document_lock')}
-        >
-          {selectedContainer.metadata?.locked ? <Lock size={16} /> : <LockOpen size={16} />}
-        </button>
-      )}
-      {selectedContainer && canManageDocumentPermissions && (
-        <button
-          type="button"
-          className="editor-permissions-toggle"
-          onClick={openDocumentPermissionsPanel}
-          title={t('workspace.document_permissions')}
-        >
-          <Shield size={16} />
-        </button>
-      )}
       {selectedContainer && (
         <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
           <button
             type="button"
             className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
             onClick={() => setWorldActionsMenu(prev => !prev)}
-            title={t('workspace.world_actions')}
+            title={t('workspace.document_actions')}
+            aria-label={t('workspace.document_actions')}
           >
             <MoreVertical size={16} />
           </button>
           {worldActionsMenu && (
             <div className="editor-world-actions-menu glass-panel">
-              <button type="button" onClick={shareWorld}>
-                <Share2 size={14} />
-                <span>{t('workspace.share_world')}</span>
-              </button>
+              {canManageDocumentPermissions && (
+                <button type="button" onClick={() => { setWorldActionsMenu(false); openDocumentPermissionsPanel(); }}>
+                  <Shield size={14} />
+                  <span>{t('workspace.document_permissions')}</span>
+                </button>
+              )}
+              {canLockDocument && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorldActionsMenu(false);
+                    toggleDocumentLock();
+                  }}
+                >
+                  {selectedContainer.metadata?.locked ? <LockOpen size={14} /> : <Lock size={14} />}
+                  <span>{selectedContainer.metadata?.locked ? t('workspace.document_unlock') : t('workspace.document_lock')}</span>
+                </button>
+              )}
               {activeTab && (
                 <button type="button" onClick={shareCurrentTab}>
                   <Copy size={14} />
                   <span>{t('workspace.share_tab')}</span>
                 </button>
               )}
-              {activeTab && !isCanvasTab && canWriteActiveTab && (
+              {canWriteSelectedContainer && !isDocumentLocked && (
                 <>
+                  {activeTab && documentCoverPath && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWorldActionsMenu(false);
+                        toggleActiveTabCoverVisibility();
+                      }}
+                    >
+                      {isCoverHiddenOnActiveTab ? <Eye size={14} /> : <EyeOff size={14} />}
+                      <span>{isCoverHiddenOnActiveTab ? t('workspace.show_cover_on_tab') : t('workspace.hide_cover_on_tab')}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -2588,18 +2516,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <Image size={14} />
                     <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
                   </button>
-                  {activeCoverPath && (
+                  {documentCoverPath && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWorldActionsMenu(false);
-                          startCoverReposition();
-                        }}
-                      >
-                        <MoveVertical size={14} />
-                        <span>{t('workspace.reposition_cover')}</span>
-                      </button>
+                      {activeCoverPath && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorldActionsMenu(false);
+                            startCoverReposition();
+                          }}
+                        >
+                          <MoveVertical size={14} />
+                          <span>{t('workspace.reposition_cover')}</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="danger"
@@ -2666,104 +2596,62 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     </div>
   );
   const tabRow = (
-    <div className="editor-tab-row">
-      {selectedTabs.map(tab => (
-        renamingTab.path === tab.path ? (
-          <input
-            key={tab.uid}
-            className="editor-tab-rename-input"
-            value={renamingTab.value}
-            onChange={event => setRenamingTab(prev => ({ ...prev, value: event.target.value }))}
-            onBlur={() => commitTabRename(tab)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-              if (event.key === 'Escape') {
-                setRenamingTab({ path: '', value: '' });
-              }
-            }}
-            autoFocus
-            onFocus={event => event.target.select()}
-          />
-        ) : (
-          <button
-            key={tab.uid}
-            type="button"
-            className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`}
-            onClick={() => selectTab(tab)}
-            onContextMenu={event => {
-              if (isVisitor || !hasDocumentAccess(tab.metadata?.currentUserAccess, 'write')) return;
-              event.preventDefault();
-              event.stopPropagation();
-              setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
-            }}
-          >
-            {React.createElement(getTabTypeIcon(tab.contentType), { size: 14 })}
-            <span>{tab.name}</span>
-          </button>
-        )
-      ))}
-      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && !hasReachedTabLimit && (
-        <button
-          type="button"
-          className="editor-tab-add"
-          onClick={openTabCreationPanel}
-          title={t('workspace.create_tab')}
-        >
-          <Plus size={16} />
-        </button>
-      )}
-    </div>
+    <WorkspaceTabRow
+      tabs={selectedTabs}
+      activeTab={activeTab}
+      renamingTab={renamingTab}
+      canCreate={!isVisitor && canWriteSelectedContainer && !isDocumentLocked && !hasReachedTabLimit}
+      createLabel={t('workspace.create_tab')}
+      getTabIcon={getTabTypeIcon}
+      onSelect={selectTab}
+      onContextMenu={(event, tab) => {
+        if (isVisitor || !hasDocumentAccess(tab.metadata?.currentUserAccess, 'write')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
+      }}
+      onRenameChange={value => setRenamingTab(prev => ({ ...prev, value }))}
+      onRenameCommit={commitTabRename}
+      onRenameCancel={() => setRenamingTab({ path: '', value: '' })}
+      onCreate={openTabCreationPanel}
+    />
   );
 
   return (
-    <div
-      className="workspace-container"
-      data-world-theme={workspaceTheme}
-      data-custom-theme={worldData?.customTheme ? 'true' : undefined}
-      style={{ ...workspaceThemeStyle, flexDirection: 'row' }}
-    >
-      <aside className="workspace-sidebar sidebar-nexus">
-        <div className="sidebar-header sidebar-nexus-header">
-          <div className="sidebar-nexus-glow" aria-hidden="true" />
-          <div className="sidebar-topline">
-            <h1 className="sidebar-world-title">{worldData?.displayName || worldId}</h1>
-            {!isVisitor && (
-              <button className="sidebar-icon-button" onClick={() => setLocation('/')} title={t('common.back')}>
-                <ArrowLeft size={18} />
-              </button>
-            )}
-            {canManageMembers && (
-              <button className="sidebar-icon-button" onClick={openMembersPanel} title={t('workspace.manage_members')}>
-                <Users size={18} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {!isVisitor && (
-          <div className="sidebar-nexus-tabs" role="tablist" aria-label={t('workspace.sidebar_tabs_label')}>
-            {sidebarTabs.map(tab => {
-              const TabIcon = tab.icon;
-              const isActive = activeSidebarTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`sidebar-nexus-tab ${isActive ? 'active' : ''}`}
-                  onClick={() => setActiveSidebarTab(tab.id)}
-                  role="tab"
-                  aria-selected={isActive}
-                >
-                  <TabIcon size={14} />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+    <div className="workspace-container workspace-studio-shell" style={workspaceShellThemeStyle}>
+      <WorkspaceTopbar
+        worldName={worldData?.displayName || worldId}
+        breadcrumbs={documentBreadcrumbs}
+        navigatorOpen={isSidebarMobile ? isSidebarDrawerOpen : !isSidebarCollapsed}
+        canManageWorld={canManageMembers}
+        saveStatus={saveStatus}
+        saveStatusLabel={activeTab && !isVisitor ? saveStatusLabel : ''}
+        presenceUsers={worldPresenceUsers}
+        navigatorLabel={isSidebarMobile ? t('workspace.expand_sidebar') : isSidebarCollapsed ? t('workspace.expand_sidebar') : t('workspace.collapse_sidebar')}
+        backLabel={t('common.back')}
+        settingsLabel={t('workspace.world_settings')}
+        worldMenuLabel={t('workspace.world_actions')}
+        shareLabel={t('workspace.share_world')}
+        onToggleNavigator={toggleSidebar}
+        onBack={() => setLocation('/')}
+        onSelectBreadcrumb={selectContainer}
+        onOpenSettings={() => setWorldSettingsOpen(true)}
+        onShareWorld={shareWorld}
+        languageSwitcher={languageSwitcher}
+      />
+      <WorkspaceBody>
+      <WorkspaceSidebar
+        isVisitor={isVisitor}
+        tabs={sidebarTabs}
+        activeTab={activeSidebarTab}
+        tabsLabel={t('workspace.sidebar_tabs_label')}
+        onTabChange={setActiveSidebarTab}
+        isCollapsed={isSidebarCollapsed}
+        isDrawerOpen={isSidebarDrawerOpen}
+        isMobile={isSidebarMobile}
+        collapseLabel={t('workspace.collapse_sidebar')}
+        onClose={closeSidebarDrawer}
+      >
 
         {activeSidebarTab === 'wiki' ? (
           <>
@@ -2811,31 +2699,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             </nav>
 
             <div className="sidebar-search-dock">
-              {tree.length > 0 && !isVisitor && (
-                <div className="wiki-toolbar">
-                  <button type="button" onClick={() => createDocumentInline()}>
-                    <Plus size={14} />
-                    <span>{t('workspace.create_root_document')}</span>
-                  </button>
+              <div className="sidebar-context-bar">
+                <div className="sidebar-search-bar">
+                  <Search size={14} />
+                  <input
+                    aria-label={t('workspace.search_tree')}
+                    placeholder={t('workspace.search_tree')}
+                    value={searchQuery}
+                    onChange={event => setSearchQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape') setSearchQuery('');
+                    }}
+                  />
+                  {searchQuery && (
+                    <button type="button" onClick={() => setSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
-              )}
-              <div className="sidebar-search-bar">
-                <Search size={15} />
-                <input
-                  placeholder={t('workspace.search_tree')}
-                  value={searchQuery}
-                  onChange={event => setSearchQuery(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Escape') setSearchQuery('');
-                  }}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    title={t('common.cancel')}
-                  >
-                    <X size={14} />
+                {!isVisitor && (
+                  <button type="button" className="sidebar-context-action" onClick={() => createDocumentInline()} title={t('workspace.create_root_document')} aria-label={t('workspace.create_root_document')}>
+                    <Plus size={15} />
                   </button>
                 )}
               </div>
@@ -2897,60 +2781,35 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               )}
             </div>
 
-            {selectedAsset && (
-              <div className="asset-preview-panel">
-                <div className="asset-preview-header">
-                  <strong>{selectedAsset.name}</strong>
-                  <span>{formatAssetSize(selectedAsset.size)}</span>
-                </div>
-                {selectedAsset.mediaType === 'audio' ? (
-                  <audio controls src={getAssetUrl(selectedAsset.path)} />
-                ) : (
-                  <img src={getAssetUrl(selectedAsset.path)} alt={selectedAsset.name} />
-                )}
-              </div>
-            )}
-
             <div className="assets-bottom-dock">
-              {!isVisitor && (
-                <div className="assets-toolbar">
+              <input ref={assetFileInputRef} type="file" multiple accept="image/*,.gif,audio/*" onChange={handleAssetUpload} hidden />
+              <div className="sidebar-context-bar">
+                <div className="sidebar-search-bar">
+                  <Search size={14} />
                   <input
-                    ref={assetFileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.gif,audio/*"
-                    onChange={handleAssetUpload}
-                    hidden
+                    aria-label={t('workspace.assets_search')}
+                    placeholder={t('workspace.assets_search')}
+                    value={assetSearchQuery}
+                    onChange={event => setAssetSearchQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape') setAssetSearchQuery('');
+                    }}
                   />
-                  <button type="button" onClick={() => openAssetUpload()} disabled={assetUploading}>
-                    <Upload size={14} />
-                    <span>{assetUploading ? t('common.uploading') : t('workspace.assets_upload')}</span>
-                  </button>
-                  <button type="button" onClick={() => createAssetFolderInline()}>
-                    <FolderPlus size={14} />
-                    <span>{t('workspace.assets_new_folder')}</span>
-                  </button>
+                  {assetSearchQuery && (
+                    <button type="button" onClick={() => setAssetSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
-              )}
-
-              <div className="sidebar-search-bar">
-                <Search size={15} />
-                <input
-                  placeholder={t('workspace.assets_search')}
-                  value={assetSearchQuery}
-                  onChange={event => setAssetSearchQuery(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Escape') setAssetSearchQuery('');
-                  }}
-                />
-                {assetSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setAssetSearchQuery('')}
-                    title={t('common.cancel')}
-                  >
-                    <X size={14} />
-                  </button>
+                {!isVisitor && (
+                  <>
+                    <button type="button" className="sidebar-context-action" onClick={() => openAssetUpload()} disabled={assetUploading} title={assetUploading ? t('common.uploading') : t('workspace.assets_upload')} aria-label={assetUploading ? t('common.uploading') : t('workspace.assets_upload')}>
+                      <Upload size={15} />
+                    </button>
+                    <button type="button" className="sidebar-context-action" onClick={() => createAssetFolderInline()} title={t('workspace.assets_new_folder')} aria-label={t('workspace.assets_new_folder')}>
+                      <FolderPlus size={15} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -2966,15 +2825,18 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             </div>
           </div>
         )}
-      </aside>
+      </WorkspaceSidebar>
 
       {/* Área Principal */}
-      <main className="workspace-main workspace-editor-main">
+      <main
+        className="workspace-main workspace-editor-main workspace-content-theme"
+        data-world-theme={workspaceTheme}
+      >
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${!isCanvasTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && activeTab && !isCanvasTab && canWriteActiveTab && (
+              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
+                {!isVisitor && selectedContainer && canWriteSelectedContainer && !isDocumentLocked && (
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -2983,7 +2845,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     hidden
                   />
                 )}
-                {!isCanvasTab && activeCoverPath && (
+                {activeCoverPath && (
                   <div
                     ref={coverRef}
                     className={`editor-page-cover has-image ${coverReposition.isEditing ? 'is-repositioning' : ''} ${coverReposition.isDragging ? 'is-dragging' : ''}`}
@@ -3015,15 +2877,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     )}
                   </div>
                 )}
-                <div className="document-chrome">
-                  <header className="document-chrome-title">
-                    {pageTitleBlock}
-                    {tabRow}
-                  </header>
-                  <div className="document-chrome-controls">
-                    {editorControls}
-                  </div>
-                </div>
+                <DocumentChrome title={pageTitleBlock} tabs={tabRow} controls={editorControls} />
 
                 <section className="editor-page-body document-content-frame">
                   {tabCreationPanel.isOpen ? (
@@ -3153,6 +3007,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         isVisitor={isVisitor}
                         locked={!canWriteActiveTab}
                         initialMapAssetPath={activeTab.metadata?.mapBackgroundAssetPath}
+                        themeBackground={workspaceThemeStyle['--bg-color']}
+                        themeAccent={workspaceThemeStyle['--accent-color']}
                         documentTree={tree}
                         assetImages={assetImages}
                         getAssetUrl={getAssetUrl}
@@ -3211,6 +3067,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         currentUser={currentUser}
                         isVisitor={isVisitor}
                         locked={!canWriteActiveTab}
+                        themeBackground={workspaceThemeStyle['--bg-color']}
+                        themeAccent={workspaceThemeStyle['--accent-color']}
+                        themeGlow={workspaceThemeStyle['--accent-glow']}
                         assetImages={assetImages}
                         assetTree={assetTree}
                         getAssetUrl={getAssetUrl}
@@ -3386,6 +3245,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </div>
         )}
       </main>
+      </WorkspaceBody>
 
       {/* Modals & Overlays */}
       {documentIconPicker.isOpen && (
@@ -3816,16 +3676,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         </div>
       )}
 
-      <WorldMembersDialog
-        t={t}
-        panel={membersPanel}
-        setPanel={setMembersPanel}
-        availableUsers={availableUsers}
-        addExistingMember={addExistingMember}
-        createAndAddMember={createAndAddMember}
-        removeMember={removeMember}
-        updateMemberRole={updateMemberRole}
-      />
+      {worldSettingsOpen && worldData && (
+        <WorldSettingsDialog
+          mode="edit"
+          world={{ ...worldData, id: worldId }}
+          currentUser={currentUser}
+          onClose={() => setWorldSettingsOpen(false)}
+          onSaved={updatedWorld => {
+            const nextTheme = getWorldTheme(updatedWorld.theme).id;
+            setWorldData(previous => ({
+              ...previous,
+              ...updatedWorld,
+              canManageMembers: previous?.canManageMembers,
+              currentUserRole: previous?.currentUserRole
+            }));
+            setCachedWorldThemeState(nextTheme);
+            setCachedWorldTheme(worldId, nextTheme);
+            setWorldSettingsOpen(false);
+          }}
+        />
+      )}
       <DocumentPermissionsDialog
         t={t}
         panel={documentPermissionsPanel}
@@ -3947,55 +3817,50 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             style={{ top: assetContextMenu.y, left: assetContextMenu.x }}
             onClick={(event) => event.stopPropagation()}
           >
-            {assetContextMenu.node ? (
-              <>
-                {assetContextMenu.node.type === 'folder' && (
-                  <>
-                    <button onClick={() => { openAssetUpload(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                      <Upload size={14} /> {t('workspace.assets_upload_here')}
-                    </button>
-                    <button onClick={() => { createAssetFolderInline(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                      <Plus size={14} /> {t('workspace.assets_new_folder')}
-                    </button>
-                  </>
-                )}
-                <button onClick={() => { setAssetDuplicatePrompt({ isOpen: true, node: assetContextMenu.node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Copy size={14} /> {t('workspace.duplicate_asset')}
-                </button>
-                {assetContextMenu.node.type !== 'folder' && (
-                  <button
-                    onClick={async () => {
-                      await copyTextToClipboard(`{{asset:${assetContextMenu.node.path}}}`);
-                      addToast(t('workspace.asset_reference_copied'), 'success');
-                      setAssetContextMenu(prev => ({ ...prev, isOpen: false }));
-                    }}
-                  >
-                    <Copy size={14} /> {t('workspace.copy_asset_reference')}
-                  </button>
-                )}
-                <button onClick={() => { openAssetMovePrompt(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <MoveRight size={14} /> {t('workspace.move_asset')}
-                </button>
-                <button onClick={() => { setAssetRenamingPath(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Edit2 size={14} /> {t('common.rename')}
-                </button>
-                <button className="danger" onClick={() => { handleAssetDelete(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Trash2 size={14} /> {t('common.delete')}
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => { setAssetContextMenu(prev => ({ ...prev, isOpen: false })); openAssetUpload(''); }}>
-                  <Upload size={14} /> {t('workspace.assets_upload_here')}
-                </button>
-                <button onClick={() => { setAssetContextMenu(prev => ({ ...prev, isOpen: false })); createAssetFolderInline(''); }}>
-                  <Plus size={14} /> {t('workspace.assets_new_folder')}
-                </button>
-              </>
-            )}
+            <AssetContextMenu
+              node={assetContextMenu.node}
+              isVisitor={isVisitor}
+              labels={{
+                preview: t('workspace.preview_asset'),
+                copyReference: t('workspace.copy_asset_reference'),
+                uploadHere: t('workspace.assets_upload_here'),
+                newFolder: t('workspace.assets_new_folder'),
+                duplicate: t('workspace.duplicate_asset'),
+                move: t('workspace.move_asset'),
+                rename: t('common.rename'),
+                delete: t('common.delete')
+              }}
+              onPreview={node => { setPreviewAsset(node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onCopyReference={async node => {
+                await copyTextToClipboard(`{{asset:${node.path}}}`);
+                addToast(t('workspace.asset_reference_copied'), 'success');
+                setAssetContextMenu(prev => ({ ...prev, isOpen: false }));
+              }}
+              onUpload={path => { openAssetUpload(path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onCreateFolder={path => { createAssetFolderInline(path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onDuplicate={node => { setAssetDuplicatePrompt({ isOpen: true, node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onMove={node => { openAssetMovePrompt(node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onRename={node => { setAssetRenamingPath(node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onDelete={node => { handleAssetDelete(node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+            />
           </div>
         </div>
       )}
+
+      <AssetPreviewDialog
+        asset={previewAsset}
+        source={previewAsset ? getAssetUrl(previewAsset.path) : ''}
+        sizeLabel={previewAsset ? formatAssetSize(previewAsset.size) : ''}
+        typeLabel={previewAsset?.mediaType === 'audio' ? t('workspace.asset_preview_audio') : t('workspace.asset_preview_image')}
+        labels={{
+          close: t('workspace.close_asset_preview'),
+          path: t('workspace.asset_preview_path'),
+          size: t('workspace.asset_preview_size'),
+          loading: t('workspace.asset_preview_loading'),
+          error: t('workspace.asset_preview_error')
+        }}
+        onClose={closeAssetPreview}
+      />
 
       {/* Toasts */}
       <div className="toast-container">

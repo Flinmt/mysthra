@@ -2,7 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export default function WorldDialog({ title, description, onClose, busy = false, tone = 'default', children }) {
+export default function WorldDialog({ title, description, onClose, busy = false, tone = 'default', className = '', style, children }) {
   const { t } = useTranslation()
   const titleId = useId()
   const descriptionId = useId()
@@ -53,7 +53,8 @@ export default function WorldDialog({ title, description, onClose, busy = false,
     >
       <section
         ref={dialogRef}
-        className={`world-dialog ${tone === 'danger' ? 'is-danger' : ''}`}
+        className={`world-dialog ${tone === 'danger' ? 'is-danger' : ''} ${className}`.trim()}
+        style={style}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

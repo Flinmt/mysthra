@@ -24,14 +24,19 @@ const TOOL_LABELS = {
 }
 
 const NOTE_COLORS = ['#fde68a', '#bfdbfe', '#bbf7d0', '#fecdd3', '#ddd6fe']
-const DEFAULT_SHAPE_STROKE = '#a78bfa'
+const FALLBACK_THEME_ACCENT = '#b96f3d'
 const DEFAULT_TEXT_FILL = 'rgba(15, 23, 42, 0.74)'
 const DEFAULT_TEXT_COLOR = '#f8fafc'
 const DEFAULT_TEXT_FONT_SIZE = 22
 const DEFAULT_TEXT_FONT_WEIGHT = '700'
-const SHAPE_STROKE_COLORS = ['#a78bfa', '#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#f8fafc']
+const SHAPE_STROKE_COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#f8fafc']
 const INLINE_TEXT_TYPES = new Set(['note', 'text'])
 const CONNECTABLE_ITEM_TYPES = new Set(['note', 'text', 'rect', 'circle', 'image'])
+
+function resolveCanvasBackground(backgroundColor, themeBackground) {
+  if (!backgroundColor || backgroundColor.toLowerCase() === '#0b0d11') return themeBackground
+  return backgroundColor
+}
 
 function readCssVariable(element, name, fallback) {
   if (!element) return fallback
@@ -398,6 +403,9 @@ export default function BoardEditor({
   currentUser,
   isVisitor = false,
   locked = false,
+  themeBackground = DEFAULT_CANVAS.backgroundColor,
+  themeAccent = FALLBACK_THEME_ACCENT,
+  themeGlow = 'rgba(185, 111, 61, 0.28)',
   assetImages = [],
   assetTree = [],
   getAssetUrl,
@@ -424,7 +432,7 @@ export default function BoardEditor({
   const [size, setSize] = useState({ width: 960, height: 640 })
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 })
   const [tool, setTool] = useState('select')
-  const [state, setState] = useState({ canvas: DEFAULT_CANVAS, settings: DEFAULT_SETTINGS, items: [] })
+  const [state, setState] = useState({ canvas: { ...DEFAULT_CANVAS, backgroundColor: themeBackground }, settings: DEFAULT_SETTINGS, items: [] })
   const [selectedId, setSelectedId] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [hoveredId, setHoveredId] = useState('')
@@ -444,9 +452,10 @@ export default function BoardEditor({
   const [connectorPulse, setConnectorPulse] = useState(0)
   const [inlineEditor, setInlineEditor] = useState({ isOpen: false, itemId: '', text: '' })
   const [selectionTheme, setSelectionTheme] = useState({
-    accent: '#8b5cf6',
-    glow: 'rgba(139, 92, 246, 0.34)'
+    accent: themeAccent,
+    glow: themeGlow
   })
+  const shapeStrokeColors = useMemo(() => [selectionTheme.accent, ...SHAPE_STROKE_COLORS.filter(color => color.toLowerCase() !== selectionTheme.accent.toLowerCase())], [selectionTheme.accent])
 
   const collaboration = useCollaborationRoom({
     roomName: collaborationRoom,
@@ -543,20 +552,20 @@ export default function BoardEditor({
     const element = containerRef.current
     if (!element) return undefined
     setSelectionTheme({
-      accent: readCssVariable(element, '--accent-color', '#8b5cf6'),
-      glow: readCssVariable(element, '--accent-glow', 'rgba(139, 92, 246, 0.34)')
+      accent: readCssVariable(element, '--accent-color', themeAccent),
+      glow: readCssVariable(element, '--accent-glow', themeGlow)
     })
     const observer = new ResizeObserver(([entry]) => {
       const rect = entry.contentRect
       setSize({ width: Math.max(320, rect.width), height: Math.max(320, rect.height) })
       setSelectionTheme({
-        accent: readCssVariable(element, '--accent-color', '#8b5cf6'),
-        glow: readCssVariable(element, '--accent-glow', 'rgba(139, 92, 246, 0.34)')
+        accent: readCssVariable(element, '--accent-color', themeAccent),
+        glow: readCssVariable(element, '--accent-glow', themeGlow)
       })
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [])
+  }, [themeAccent, themeGlow])
 
   useEffect(() => {
     if (!yState) return undefined
@@ -566,7 +575,7 @@ export default function BoardEditor({
     const initialize = () => {
       if (readOnly || !collaborationSynced) return
       doc.transact(() => {
-        if (!yCanvas.has('backgroundColor')) yCanvas.set('backgroundColor', DEFAULT_CANVAS.backgroundColor)
+        if (!yCanvas.has('backgroundColor')) yCanvas.set('backgroundColor', themeBackground)
         if (!yCanvas.has('gridVisible')) yCanvas.set('gridVisible', DEFAULT_CANVAS.gridVisible)
         if (!yCanvas.has('gridSize')) yCanvas.set('gridSize', DEFAULT_CANVAS.gridSize)
         if (!ySettings.has('snapToGrid')) ySettings.set('snapToGrid', DEFAULT_SETTINGS.snapToGrid)
@@ -583,7 +592,7 @@ export default function BoardEditor({
       ySettings.unobserve(updateState)
       yItems.unobserve(updateState)
     }
-  }, [collaborationDirty, collaborationSaveStatus, collaborationSynced, onCollaborationSaveState, readOnly, yState])
+  }, [collaborationDirty, collaborationSaveStatus, collaborationSynced, onCollaborationSaveState, readOnly, themeBackground, yState])
 
   useEffect(() => {
     if (!yState) {
@@ -775,7 +784,7 @@ export default function BoardEditor({
     if (type === 'circle') {
       const width = 160
       const height = 120
-      return { id, type, x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: DEFAULT_SHAPE_STROKE, ...props } }
+      return { id, type, x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: selectionTheme.accent, ...props } }
     }
     if (type === 'image') {
       const width = 240
@@ -784,8 +793,8 @@ export default function BoardEditor({
     }
     const width = 180
     const height = 110
-    return { id, type: 'rect', x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: DEFAULT_SHAPE_STROKE, ...props } }
-  }, [labels.noteDefault, labels.textDefault])
+    return { id, type: 'rect', x: point.x - width / 2, y: point.y - height / 2, width, height, props: { fill: 'transparent', stroke: selectionTheme.accent, ...props } }
+  }, [labels.noteDefault, labels.textDefault, selectionTheme.accent])
 
   const commitInlineEdit = useCallback(() => {
     if (!inlineEditor.isOpen) return
@@ -812,14 +821,14 @@ export default function BoardEditor({
       props: {
         sourceId,
         targetId,
-        stroke: DEFAULT_SHAPE_STROKE,
+        stroke: selectionTheme.accent,
         arrowEnd: true
       }
     }
     yState.yItems.push([connector])
     setSelection([connector.id])
     setHoveredId('')
-  }, [readOnly, setSelection, state.items, yState])
+  }, [readOnly, selectionTheme.accent, setSelection, state.items, yState])
 
   const selectBoardItem = useCallback((event, itemId) => {
     event.cancelBubble = true
@@ -1003,7 +1012,7 @@ export default function BoardEditor({
       height: box.height,
       props: {
         fill: 'transparent',
-        stroke: DEFAULT_SHAPE_STROKE
+        stroke: selectionTheme.accent
       }
     }
     yState.yItems.push([item])
@@ -1011,7 +1020,7 @@ export default function BoardEditor({
     setHoveredId('')
     setTool('select')
     return true
-  }, [drawingShape, getNormalizedShapeDraft, readOnly, setSelection, yState])
+  }, [drawingShape, getNormalizedShapeDraft, readOnly, selectionTheme.accent, setSelection, yState])
 
   const endViewportPan = useCallback(() => {
     if (finishSelectionMarquee()) return
@@ -1436,14 +1445,14 @@ export default function BoardEditor({
         className={`board-stage tool-${tool} ${drawingShape ? 'is-drawing-shape' : ''} ${connectorDraft ? 'is-connecting' : ''} ${isViewportPanning ? 'is-panning' : ''}`.trim()}
       >
         <Layer>
-          <Rect x={-100000} y={-100000} width={200000} height={200000} fill={state.canvas.backgroundColor} listening={false} />
+          <Rect x={-100000} y={-100000} width={200000} height={200000} fill={resolveCanvasBackground(state.canvas.backgroundColor, themeBackground)} listening={false} />
           {state.canvas.gridVisible && <BoardGrid viewport={viewport} size={size} gridSize={state.canvas.gridSize || 48} />}
           {previewItems.filter(item => item.type === 'connector').map(item => {
             const points = getConnectorPoints(item, previewItems)
             if (points.length === 0) return null
             const isSelected = selectedItemIds.includes(item.id)
             const isHovered = hoveredId === item.id
-            const stroke = isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.82)' : item.props?.stroke || DEFAULT_SHAPE_STROKE
+            const stroke = isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.82)' : item.props?.stroke || selectionTheme.accent
             const isEndpointSelected = selectedItemIds.includes(item.props?.sourceId) || selectedItemIds.includes(item.props?.targetId)
             return (
               <Arrow
@@ -1525,7 +1534,7 @@ export default function BoardEditor({
                   radiusX={(item.width || 160) / 2}
                   radiusY={(item.height || 120) / 2}
                   fill={item.props?.fill || 'transparent'}
-                  stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || DEFAULT_SHAPE_STROKE}
+                  stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || selectionTheme.accent}
                   strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2}
                   onTransformEnd={event => {
                     const node = event.target
@@ -1617,7 +1626,7 @@ export default function BoardEditor({
                 </Group>
               )
             }
-            return <Rect key={item.id} {...common} fill={item.props?.fill || 'transparent'} stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || DEFAULT_SHAPE_STROKE} strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2} cornerRadius={10} />
+            return <Rect key={item.id} {...common} fill={item.props?.fill || 'transparent'} stroke={isSelected ? selectionTheme.accent : isHovered ? 'rgba(255,255,255,0.62)' : item.props?.stroke || selectionTheme.accent} strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 2} cornerRadius={10} />
           })}
           {selectionMarquee?.active && (() => {
             const x = Math.min(selectionMarquee.start.x, selectionMarquee.current.x)
@@ -1945,11 +1954,11 @@ export default function BoardEditor({
                 <div className="board-popover-section">
                   <span>{labels.shapeBorderColor || 'Border color'}</span>
                   <div className="board-stroke-color-row">
-                    {SHAPE_STROKE_COLORS.map(color => (
+                    {shapeStrokeColors.map(color => (
                       <button
                         key={color}
                         type="button"
-                        className={(editedItem.props?.stroke || DEFAULT_SHAPE_STROKE) === color ? 'active' : ''}
+                        className={(editedItem.props?.stroke || selectionTheme.accent) === color ? 'active' : ''}
                         style={{ '--stroke-color': color }}
                         onClick={() => updateEditedItemProps({ stroke: color })}
                         title={color}

@@ -39,6 +39,7 @@ const {
   getWorldRole,
   isWorldMember,
   isWorldPublicReadable,
+  listUsers,
   listWorldMembers,
   addWorldMember,
   updateWorldMemberRole,

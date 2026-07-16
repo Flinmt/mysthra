@@ -1,0 +1,78 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const sourceRoot = path.resolve(import.meta.dirname, '../..')
+const globalStyles = fs.readFileSync(path.join(sourceRoot, 'index.css'), 'utf8')
+const workspaceEntry = fs.readFileSync(path.join(import.meta.dirname, 'index.css'), 'utf8')
+const workspaceFiles = fs.readdirSync(import.meta.dirname).filter(file => file.endsWith('.css'))
+const workspaceStyles = workspaceFiles.map(file => fs.readFileSync(path.join(import.meta.dirname, file), 'utf8')).join('\n')
+
+describe('workspace style boundaries', () => {
+  it('keeps workspace-owned selectors out of the global stylesheet', () => {
+    expect(globalStyles).not.toMatch(/\.(?:workspace-|sidebar-nexus|world-navigator|document-|editor-|map-|board-)/)
+    expect(globalStyles).not.toContain('[data-world-theme=')
+  })
+
+  it('loads every workspace domain in a stable cascade order', () => {
+    const imports = [...workspaceEntry.matchAll(/@import '\.\/(.+\.css)'/g)].map(match => match[1])
+
+    expect(imports).toEqual([
+      'shell.css',
+      'tokens.css',
+      'primitives.css',
+      'topbar.css',
+      'document.css',
+      'editors.css',
+      'map.css',
+      'board.css',
+      'overlays.css',
+      'themes.css',
+      'permissions.css',
+      'sidebar.css',
+      'responsive.css'
+    ])
+  })
+
+  it('keeps palette ownership centralized and free from the legacy purple theme', () => {
+    expect(workspaceStyles).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe|5d34d0|a855f7|7c3aed|00f0ff)/i)
+    expect(fs.readFileSync(path.join(import.meta.dirname, 'themes.css'), 'utf8')).not.toContain('[data-world-theme=')
+  })
+
+  it('defines the studio shell in a single module', () => {
+    const shellOwners = workspaceFiles.filter(file => fs.readFileSync(path.join(import.meta.dirname, file), 'utf8').includes('.workspace-container.workspace-studio-shell'))
+
+    expect(shellOwners).toEqual(['shell.css'])
+  })
+
+  it('keeps the world navigator final cascade in its component stylesheet', () => {
+    const imports = [...workspaceEntry.matchAll(/@import '\.\/(.+\.css)'/g)].map(match => match[1])
+    const navigatorSelectors = /(?:tree-node|asset-tree-node|sidebar-search-bar|sidebar-nexus-tab|sidebar-empty|world-navigator)/
+    const competingFiles = workspaceFiles.filter(file => file !== 'sidebar.css' && navigatorSelectors.test(fs.readFileSync(path.join(import.meta.dirname, file), 'utf8')))
+
+    expect(imports.indexOf('sidebar.css')).toBeGreaterThan(imports.indexOf('themes.css'))
+    expect(fs.readFileSync(path.join(import.meta.dirname, 'sidebar.css'), 'utf8')).toContain('--navigator-accent: var(--world-theme-accent)')
+    expect(competingFiles).toEqual([])
+  })
+
+  it('keeps document permission styling isolated from shared editor and overlay styles', () => {
+    const imports = [...workspaceEntry.matchAll(/@import '\.\/(.+\.css)'/g)].map(match => match[1])
+    const competingFiles = workspaceFiles.filter(file => file !== 'permissions.css' && fs.readFileSync(path.join(import.meta.dirname, file), 'utf8').includes('document-permissions'))
+    const permissions = fs.readFileSync(path.join(import.meta.dirname, 'permissions.css'), 'utf8')
+
+    expect(imports.indexOf('permissions.css')).toBeGreaterThan(imports.indexOf('themes.css'))
+    expect(permissions).toContain('--permissions-accent: var(--world-theme-accent)')
+    expect(permissions).toContain('--permissions-text: var(--workspace-shell-text)')
+    expect(competingFiles).toEqual([])
+  })
+
+  it('keeps authored text neutral while allowing themed surfaces and controls', () => {
+    const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
+    const markdownTheme = fs.readFileSync(path.join(sourceRoot, 'workspace/markdownTheme.js'), 'utf8')
+
+    expect(tokens).toContain('--workspace-editor-text: var(--workspace-shell-text)')
+    expect(tokens).toContain('--workspace-editor-muted: var(--workspace-shell-muted)')
+    expect(markdownTheme).toContain("color: 'var(--workspace-editor-text)'")
+    expect(markdownTheme).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe)/i)
+  })
+})

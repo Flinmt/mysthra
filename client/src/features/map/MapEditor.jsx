@@ -66,7 +66,7 @@ const MARKER_ICON_NODES = {
 };
 
 const MARKER_ICON_OPTIONS = Object.keys(MARKER_ICON_NODES);
-const MARKER_COLORS = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#64748b'];
+const MARKER_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#64748b'];
 
 function createId(prefix = 'map') {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -337,6 +337,8 @@ export default function MapEditor({
   currentUser,
   isVisitor = false,
   locked = false,
+  themeBackground = DEFAULT_CANVAS.backgroundColor,
+  themeAccent = '#b96f3d',
   initialMapAssetPath = '',
   documentTree = [],
   assetImages = [],
@@ -366,6 +368,7 @@ export default function MapEditor({
     items: []
   });
   const [selectedId, setSelectedId] = useState('');
+  const markerColors = useMemo(() => [themeAccent, ...MARKER_COLORS.filter(color => color.toLowerCase() !== themeAccent.toLowerCase())], [themeAccent]);
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [markerEditor, setMarkerEditor] = useState({ isOpen: false, itemId: '', x: 0, y: 0 });
   const [uploading, setUploading] = useState(false);
@@ -457,7 +460,7 @@ export default function MapEditor({
     const initialize = () => {
       if (readOnly || !collaborationSynced) return;
       doc.transact(() => {
-        if (!yCanvas.has('backgroundColor')) yCanvas.set('backgroundColor', DEFAULT_CANVAS.backgroundColor);
+        if (!yCanvas.has('backgroundColor')) yCanvas.set('backgroundColor', themeBackground);
         if (!yCanvas.has('backgroundAssetPath') && initialMapAssetPath) yCanvas.set('backgroundAssetPath', initialMapAssetPath);
         if (!ySettings.has('gridMode')) ySettings.set('gridMode', DEFAULT_SETTINGS.gridMode);
         if (!ySettings.has('gridSize')) ySettings.set('gridSize', DEFAULT_SETTINGS.gridSize);
@@ -488,6 +491,7 @@ export default function MapEditor({
     initialMapAssetPath,
     onCollaborationSaveState,
     readOnly,
+    themeBackground,
     selectedId,
     setAwarenessField,
     tool
@@ -627,7 +631,7 @@ export default function MapEditor({
         ? {
           label: labels.markerDefault || 'Point',
           description: '',
-          color: '#8b5cf6',
+          color: themeAccent,
           icon: 'MapPin',
           linkedDocumentPath: '',
           linkedTabPath: '',
@@ -638,7 +642,7 @@ export default function MapEditor({
     collaboration.doc.transact(() => collaboration.yItems.push([item]));
     setSelectedId(item.id);
     setTool('select');
-  }, [collaboration, labels.markerDefault, readOnly]);
+  }, [collaboration, labels.markerDefault, readOnly, themeAccent]);
 
   const addImageItem = useCallback((asset) => {
     const point = stagePointToWorld();
@@ -961,7 +965,7 @@ export default function MapEditor({
               >
                 <Circle
                   radius={18}
-                  fill={item.props?.color || '#8b5cf6'}
+                  fill={item.props?.color || themeAccent}
                   stroke={isSelected ? '#f8fafc' : 'rgba(255,255,255,0.9)'}
                   strokeWidth={isSelected ? 3 : 2}
                   shadowColor="#000"
@@ -1147,7 +1151,7 @@ export default function MapEditor({
           <div className="map-marker-section">
             <span>{labels.markerColor || 'Color'}</span>
             <div className="map-marker-color-row">
-              {MARKER_COLORS.map(color => (
+              {markerColors.map(color => (
                 <button
                   key={color}
                   type="button"

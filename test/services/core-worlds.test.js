@@ -446,6 +446,7 @@ test("document tree supports collaborative board tabs", async () => {
   assert.equal(tree[0].children[0].name, "Board");
   assert.equal(tree[0].children[0].type, "tab");
   assert.equal(tree[0].children[0].contentType, "board");
+  assert.equal(tree[0].children[0].metadata.documentCoverHidden, true);
 
   await assert.rejects(
     () => readDocument(worldName, board.path),
@@ -492,11 +493,24 @@ test("document metadata changes do not move physical paths", async () => {
 
   const result = await updateDocumentMetadata(worldName, document.path, {
     icon: "Castle",
-    order: 2
+    order: 2,
+    coverAssetPath: "covers/places.webp",
+    coverPositionY: 38
   });
   assert.equal(result.metadata.name, "Places");
   assert.equal(result.metadata.icon, "Castle");
   assert.equal(result.metadata.order, 2);
+  assert.equal(result.metadata.coverAssetPath, "covers/places.webp");
+  assert.equal(result.metadata.coverPositionY, 38);
+
+  const tab = await createDocument(worldName, `${document.path}/Overview`, "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+  const tabResult = await updateDocumentMetadata(worldName, tab.path, {
+    documentCoverHidden: true
+  });
+  assert.equal(tabResult.metadata.documentCoverHidden, true);
 });
 
 test("document metadata updates reject structural fields", async () => {

@@ -5,6 +5,7 @@ import './styles/auth.css'
 import './styles/user-settings.css'
 import './styles/world-dashboard.css'
 import './styles/world-dialogs.css'
+import './styles/workspace/index.css'
 import './i18n'
 import App from './App.jsx'
 

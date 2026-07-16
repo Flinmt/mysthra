@@ -36,7 +36,8 @@ const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "coverPositionY",
   "coverCrop",
   "coverZoom",
-  "coverCroppedArea"
+  "coverCroppedArea",
+  "documentCoverHidden"
 ]);
 
 const DOCUMENT_ACCESS_LEVELS = ["none", "read", "write", "admin"];
@@ -348,6 +349,7 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
     }
   }
 
+  const contentType = metadata.contentType || currentMeta.contentType || (metadata.type === "tab" ? "wiki" : null);
   const nextMeta = {
     ...currentMeta,
     ...metadata,
@@ -355,7 +357,10 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
     uid,
     order: order ?? 0,
     type: metadata.type || currentMeta.type || "container",
-    contentType: metadata.contentType || currentMeta.contentType || (metadata.type === "tab" ? "wiki" : null)
+    contentType,
+    ...(metadata.type === "tab" && (contentType === "map" || contentType === "board") && metadata.documentCoverHidden === undefined
+      ? { documentCoverHidden: true }
+      : {})
   };
   await writeDocumentMetadata(pagesDir, safePath, nextMeta);
   

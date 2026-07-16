@@ -1,0 +1,57 @@
+/* The shell owns neutral controls. These scopes explicitly opt into the world's palette. */
+.workspace-container.workspace-boot,
+.workspace-container .workspace-content-theme,
+.workspace-container .tab-creation-panel,
+.workspace-container .duplicate-modal,
+.workspace-container .icon-selector-dropdown {
+  --bg-color: var(--world-theme-background);
+  --panel-bg: color-mix(in srgb, var(--world-theme-surface) 74%, transparent);
+  --border-color: color-mix(in srgb, var(--world-theme-accent) 16%, transparent);
+  --text-primary: var(--world-theme-text);
+  --text-secondary: var(--world-theme-muted);
+  --accent-color: var(--world-theme-accent);
+  --accent-hover: var(--world-theme-accent-hover);
+  --accent-glow: var(--world-theme-accent-glow);
+  --primary-color: var(--world-theme-accent);
+  --arcane-color: var(--world-theme-secondary);
+  --arcane-hover: var(--world-theme-secondary-hover);
+  --scrollbar-track: color-mix(in srgb, var(--world-theme-surface) 28%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--world-theme-accent) 34%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--world-theme-accent) 58%, transparent);
+  --theme-custom-bg: var(--world-theme-background);
+  --theme-custom-bg-soft: color-mix(in srgb, var(--world-theme-background) 92%, white);
+  --theme-custom-surface: var(--world-theme-surface);
+  --theme-custom-accent: var(--world-theme-accent);
+  --theme-custom-accent-soft: color-mix(in srgb, var(--world-theme-accent) 16%, transparent);
+  --theme-custom-accent-border: var(--world-theme-accent-border);
+  --theme-custom-secondary: var(--world-theme-secondary);
+  --theme-custom-secondary-soft: var(--world-theme-secondary-soft);
+  --workspace-theme-panel-solid: color-mix(in srgb, var(--bg-color) 58%, var(--accent-color) 8%);
+  --workspace-theme-surface-soft: color-mix(in srgb, var(--panel-bg) 78%, transparent);
+  --workspace-theme-accent-soft: color-mix(in srgb, var(--accent-color) 18%, transparent);
+  --workspace-theme-accent-hover: color-mix(in srgb, var(--accent-color) 28%, transparent);
+  --workspace-theme-accent-border: color-mix(in srgb, var(--accent-color) 38%, transparent);
+  --workspace-theme-secondary-soft: color-mix(in srgb, var(--arcane-color) 18%, transparent);
+  --workspace-theme-secondary-border: color-mix(in srgb, var(--arcane-color) 36%, transparent);
+}
+
+.workspace-container .workspace-content-theme {
+  --workspace-editor-text: var(--workspace-shell-text);
+  --workspace-editor-muted: var(--workspace-shell-muted);
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.workspace-container .workspace-content-theme .document-workspace,
+.workspace-container .workspace-content-theme .editor-page,
+.workspace-container .workspace-content-theme .editor-page-scroll {
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+}
+
+.workspace-container .workspace-content-theme .wiki-block-editor,
+.workspace-container .workspace-content-theme .markdown-html-editor {
+  color: var(--workspace-editor-text);
+  background-color: var(--bg-color);
+}

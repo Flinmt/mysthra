@@ -127,6 +127,22 @@ describe('WorldDashboard', () => {
     expect(screen.queryByRole('button', { name: 'Actions for Ember Archive' })).toBeNull()
   })
 
+  it('lets a world admin edit their world without exposing global actions', async () => {
+    const user = userEvent.setup()
+    const worldAdminWorld = { ...worlds[0], members: [{ userId: 'user-1', role: 'admin' }] }
+    const props = renderDashboard({
+      currentUser: { userId: 'user-1', username: 'world-admin', globalRole: null },
+      filteredWorlds: [worldAdminWorld]
+    })
+
+    expect(screen.queryByRole('button', { name: 'Create new world' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Manage users' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Actions for Ember Archive' }))
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull()
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    expect(props.onEdit).toHaveBeenCalledWith(worldAdminWorld)
+  })
+
   it('opens the world menu and routes edit without opening the world', async () => {
     const user = userEvent.setup()
     const props = renderDashboard()
