@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './features/map/MapEditor';
 import BoardEditor from './features/board/BoardEditor';
 import { useCollaborationRoom } from './hooks/useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
-import WikiBlockEditor from './workspace/WikiBlockEditor';
+import NotionEditor from './features/notion/NotionEditor';
 import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
 import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
@@ -2379,6 +2379,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     : legacyCoverTab?.metadata || selectedContainer?.metadata;
   const documentCoverPath = documentCoverMetadata?.coverAssetPath || null;
   const isCoverHiddenOnActiveTab = activeTab?.metadata?.documentCoverHidden ?? isCanvasTab;
+  const isWideContentOnActiveTab = activeTab?.metadata?.wideContent === true;
   const activeCoverPath = activeTab && !isCoverHiddenOnActiveTab ? documentCoverPath : null;
   const hasInlineCoverPosition = documentCoverMetadata?.coverPositionX !== undefined || documentCoverMetadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
@@ -2404,6 +2405,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const isWorkspaceBooting = !worldDataLoaded || !treeLoaded;
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
+    : saveStatus === 'offline'
+      ? t('workspace.save_status_offline')
+      : saveStatus === 'readonly'
+        ? t('workspace.save_status_readonly')
     : saveStatus === 'error'
       ? t('workspace.save_status_error')
       : isDirty
@@ -2421,6 +2426,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     updateActiveTabMetadata(metadata);
     const saved = await saveActiveTabMetadata(metadata);
     if (!saved) updateActiveTabMetadata({ documentCoverHidden: wasHidden });
+  };
+
+  const toggleActiveTabContentWidth = async () => {
+    if (!activeTab || isCanvasTab || !canWriteActiveTab) return;
+    const wasWide = isWideContentOnActiveTab;
+    const metadata = { wideContent: !wasWide };
+    updateActiveTabMetadata(metadata);
+    const saved = await saveActiveTabMetadata(metadata);
+    if (!saved) updateActiveTabMetadata({ wideContent: wasWide });
   };
 
   if (isWorkspaceBooting) {
@@ -2489,6 +2503,18 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <button type="button" onClick={shareCurrentTab}>
                   <Copy size={14} />
                   <span>{t('workspace.share_tab')}</span>
+                </button>
+              )}
+              {activeTab && !isCanvasTab && canWriteActiveTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorldActionsMenu(false);
+                    toggleActiveTabContentWidth();
+                  }}
+                >
+                  {isWideContentOnActiveTab ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                  <span>{isWideContentOnActiveTab ? t('workspace.use_compact_content') : t('workspace.use_wide_content')}</span>
                 </button>
               )}
               {canWriteSelectedContainer && !isDocumentLocked && (
@@ -2835,7 +2861,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
+              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${isWideContentOnActiveTab ? 'is-wide-content' : ''} ${activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
                 {!isVisitor && selectedContainer && canWriteSelectedContainer && !isDocumentLocked && (
                   <input
                     ref={coverFileInputRef}
@@ -2916,8 +2942,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'wiki' }))}
                         >
                           <FileText size={22} />
-                          <strong>{t('workspace.tab_type_notion_like')}</strong>
-                          <span>{t('workspace.tab_type_wiki_hint')}</span>
+                          <strong>{t('workspace.tab_type_notion')}</strong>
+                          <span>{t('workspace.tab_type_notion_hint')}</span>
                         </button>
                         <button
                           type="button"
@@ -3158,7 +3184,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           resultTypeImage: t('workspace.result_type_image'),
                           resultTypeAudio: t('workspace.result_type_audio'),
                           previewPath: t('workspace.preview_path'),
-                          tabTypeWiki: t('workspace.tab_type_notion_like'),
+                          tabTypeNotion: t('workspace.tab_type_notion'),
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
                           tabTypeBoard: t('workspace.tab_type_board'),
@@ -3167,7 +3193,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         onCollaborationSaveState={handleCollaborationSaveState}
                       />
                       ) : (
-                      <WikiBlockEditor
+                      <NotionEditor
                         key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
                         contentKey={activeTab.path}
                         content={fileContent}
@@ -3184,6 +3210,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         documentTree={tree}
                         onNavigateToPageLink={navigateToPageLink}
                         labels={{
+                          emptyPlaceholder: t('workspace.notion_empty_placeholder'),
+                          blockPlaceholder: t('workspace.notion_block_placeholder'),
+                          commandGroupText: t('workspace.notion_command_group_text'),
+                          commandGroupLists: t('workspace.notion_command_group_lists'),
+                          commandGroupStructure: t('workspace.notion_command_group_structure'),
+                          commandGroupMedia: t('workspace.notion_command_group_media'),
                           insertImage: t('workspace.insert_image'),
                           noAssetImages: t('workspace.no_asset_images'),
                           pageLink: t('workspace.page_link'),
@@ -3199,7 +3231,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           resultTypeImage: t('workspace.result_type_image'),
                           resultTypeAudio: t('workspace.result_type_audio'),
                           previewPath: t('workspace.preview_path'),
-                          tabTypeWiki: t('workspace.tab_type_notion_like'),
+                          tabTypeNotion: t('workspace.tab_type_notion'),
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
                           tabTypeBoard: t('workspace.tab_type_board'),
@@ -3357,7 +3389,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     }}
                   >
                     <FileText size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_notion_like')}</span>
+                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_notion')}</span>
                   </button>
                   <button 
                     onClick={() => setPrompt({ ...prompt, contentType: 'map' })}

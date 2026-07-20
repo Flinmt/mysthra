@@ -508,9 +508,11 @@ test("document metadata changes do not move physical paths", async () => {
     contentType: "wiki"
   });
   const tabResult = await updateDocumentMetadata(worldName, tab.path, {
-    documentCoverHidden: true
+    documentCoverHidden: true,
+    wideContent: true
   });
   assert.equal(tabResult.metadata.documentCoverHidden, true);
+  assert.equal(tabResult.metadata.wideContent, true);
 });
 
 test("document metadata updates reject structural fields", async () => {

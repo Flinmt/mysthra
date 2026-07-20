@@ -37,7 +37,8 @@ const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "coverCrop",
   "coverZoom",
   "coverCroppedArea",
-  "documentCoverHidden"
+  "documentCoverHidden",
+  "wideContent"
 ]);
 
 const DOCUMENT_ACCESS_LEVELS = ["none", "read", "write", "admin"];

@@ -24,6 +24,7 @@ describe('workspace style boundaries', () => {
       'topbar.css',
       'document.css',
       'editors.css',
+      'notion.css',
       'map.css',
       'board.css',
       'overlays.css',
@@ -32,6 +33,27 @@ describe('workspace style boundaries', () => {
       'sidebar.css',
       'responsive.css'
     ])
+  })
+
+  it('keeps BlockNote styling isolated in the Notion domain', () => {
+    const notion = fs.readFileSync(path.join(import.meta.dirname, 'notion.css'), 'utf8')
+    const competingFiles = workspaceFiles.filter(file => file !== 'notion.css' && /(?:\.bn-|\[data-file-block\])/.test(fs.readFileSync(path.join(import.meta.dirname, file), 'utf8')))
+
+    expect(notion).toContain('.notion-editor')
+    expect(notion).not.toContain('.wiki-block-editor')
+    expect(competingFiles).toEqual([])
+  })
+
+  it('keeps the Notion writing surface compact and avoids a fixed editor height', () => {
+    const notion = fs.readFileSync(path.join(import.meta.dirname, 'notion.css'), 'utf8')
+    const document = fs.readFileSync(path.join(import.meta.dirname, 'document.css'), 'utf8')
+
+    expect(notion).not.toContain('min-height: 420px')
+    expect(notion).toContain('font-size: 13px')
+    expect(notion).toContain('padding: 0 28px')
+    expect(document).toContain('width: min(780px,100% - 80px)')
+    expect(document).toContain('.editor-page.is-wiki-page.is-wide-content .document-content-frame')
+    expect(document).toContain('height: 148px')
   })
 
   it('keeps palette ownership centralized and free from the legacy purple theme', () => {

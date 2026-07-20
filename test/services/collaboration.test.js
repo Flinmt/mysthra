@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const test = require("node:test");
 
 const {
@@ -235,6 +236,94 @@ test("hocuspocus providers sync and persist tab state", async () => {
       reloadProvider.destroy();
       reloadDoc.destroy();
     }
+  } finally {
+    firstProvider.destroy();
+    secondProvider.destroy();
+    firstDoc.destroy();
+    secondDoc.destroy();
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+});
+
+test("notion migration is applied once and acknowledged after persistence", async () => {
+  const worldName = `collab-notion-migration-${Date.now()}`;
+  createdWorlds.add(worldName);
+  await createWorld({ name: worldName });
+  const legacyContent = "# Legacy page";
+  const tab = await createDocument(worldName, "Legacy Wiki", legacyContent, {
+    type: "tab",
+    contentType: "wiki"
+  });
+
+  const token = generateSessionToken({ userId: "root", username: "admin", globalRole: "root" });
+  const server = createCollaborationServer();
+  const WebSocketPolyfill = createLocalWebSocketPolyfill(server, `mysthra_session=${token}`);
+  const roomName = `world:${worldName}:tab:${tab.uid}`;
+  const firstDoc = new Y.Doc();
+  const secondDoc = new Y.Doc();
+  const firstMessages = [];
+  const secondMessages = [];
+  let authenticated = 0;
+  const firstProvider = new HocuspocusProvider({
+    url: "ws://local/collaboration",
+    name: roomName,
+    document: firstDoc,
+    WebSocketPolyfill,
+    onAuthenticated: () => { authenticated += 1; },
+    onStateless: ({ payload }) => firstMessages.push(JSON.parse(payload))
+  });
+  const secondProvider = new HocuspocusProvider({
+    url: "ws://local/collaboration",
+    name: roomName,
+    document: secondDoc,
+    WebSocketPolyfill,
+    onAuthenticated: () => { authenticated += 1; },
+    onStateless: ({ payload }) => secondMessages.push(JSON.parse(payload))
+  });
+
+  function createMigrationUpdate(label) {
+    const migrationDoc = new Y.Doc();
+    const block = new Y.XmlElement("block");
+    block.setAttribute("label", label);
+    migrationDoc.getXmlFragment("blocknote").insert(0, [block]);
+    const update = Buffer.from(Y.encodeStateAsUpdate(migrationDoc)).toString("base64");
+    migrationDoc.destroy();
+    return update;
+  }
+
+  const sourceHash = crypto.createHash("sha256").update(legacyContent, "utf8").digest("hex");
+  try {
+    await waitFor(() => assert.equal(authenticated, 2));
+    firstProvider.sendStateless(JSON.stringify({
+      type: "notion:migrate",
+      version: 1,
+      requestId: "first",
+      sourceHash,
+      update: createMigrationUpdate("first")
+    }));
+    secondProvider.sendStateless(JSON.stringify({
+      type: "notion:migrate",
+      version: 1,
+      requestId: "second",
+      sourceHash,
+      update: createMigrationUpdate("second")
+    }));
+
+    await waitFor(() => {
+      const results = [...firstMessages, ...secondMessages].filter(message => message.type === "notion:migration-result");
+      assert.equal(results.length, 2);
+      assert.deepEqual(results.map(message => message.status).sort(), ["accepted", "already-migrated"]);
+    });
+    await waitFor(() => {
+      assert.equal(firstDoc.getXmlFragment("blocknote").length, 1);
+      assert.equal(secondDoc.getXmlFragment("blocknote").length, 1);
+    });
+    await waitFor(() => {
+      const persisted = [...firstMessages, ...secondMessages].find(message => message.type === "document-persisted");
+      assert.ok(persisted?.stateVector);
+    });
+
+    assert.equal(legacyContent, await fs.readFile(path.join(getDataRoot(), "worlds", worldName, "pages", tab.path, "index.md"), "utf8"));
   } finally {
     firstProvider.destroy();
     secondProvider.destroy();

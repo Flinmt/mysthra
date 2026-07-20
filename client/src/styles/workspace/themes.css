@@ -60,9 +60,7 @@
   box-shadow: 0 0 0 3px var(--workspace-theme-accent-soft);
 }
 
-.workspace-container .tab-creation-input::placeholder,
-.workspace-container .wiki-block-editor .bn-block-content[data-is-empty-and-focused] .bn-inline-content::before,
-.workspace-container .wiki-block-editor .bn-block-content[data-is-empty-and-focused]::before {
+.workspace-container .tab-creation-input::placeholder {
   color: color-mix(in srgb, var(--workspace-editor-muted) 72%, transparent);
 }
 
@@ -284,36 +282,11 @@
     var(--theme-custom-surface);
 }
 
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-root[data-color-scheme="dark"] {
-  --bn-colors-editor-text: var(--workspace-editor-text);
-  --bn-colors-editor-background: transparent;
-  --bn-colors-menu-text: var(--text-primary);
-  --bn-colors-menu-background: var(--theme-custom-surface);
-  --bn-colors-tooltip-text: var(--text-primary);
-  --bn-colors-tooltip-background: var(--theme-custom-surface);
-  --bn-colors-hovered-text: var(--text-primary);
-  --bn-colors-hovered-background: var(--workspace-theme-accent-soft);
-  --bn-colors-selected-text: var(--text-primary);
-  --bn-colors-selected-background: var(--workspace-theme-accent-hover);
-  --bn-colors-disabled-text: color-mix(in srgb, var(--text-secondary) 48%, transparent);
-  --bn-colors-disabled-background: color-mix(in srgb, var(--theme-custom-surface) 68%, transparent);
-  --bn-colors-shadow: color-mix(in srgb, var(--bg-color) 72%, black);
-  --bn-colors-border: var(--workspace-theme-accent-border);
-  --bn-colors-side-menu: var(--arcane-color);
-}
-
-.workspace-container .workspace-content-theme .wiki-block-editor,
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-container,
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-editor,
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-block-content,
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-inline-content,
 .workspace-container .workspace-content-theme .markdown-html-editor,
 .workspace-container .workspace-content-theme .markdown-html-source {
   color: var(--workspace-editor-text);
 }
 
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-block-content[data-is-empty-and-focused] .bn-inline-content::before,
-.workspace-container .workspace-content-theme .wiki-block-editor .bn-block-content[data-is-empty-and-focused]::before,
 .workspace-container .workspace-content-theme .markdown-html-source .cm-placeholder {
   color: color-mix(in srgb, var(--workspace-editor-muted) 72%, transparent);
 }

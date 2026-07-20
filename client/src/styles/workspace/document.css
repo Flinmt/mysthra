@@ -726,7 +726,7 @@
 
 .workspace-container .editor-page-cover {
   background-color: var(--bg-color);
-  height: 172px;
+  height: 148px;
   box-shadow: none;
   border: 0;
   border-radius: 0;
@@ -797,7 +797,7 @@
 
 .workspace-container .document-chrome {
   z-index: 28;
-  min-height: 94px;
+  min-height: 82px;
   color: var(--text-primary);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -831,8 +831,8 @@
 
 .workspace-container .document-chrome .editor-page-title-row {
   gap: 9px;
-  min-height: 51px;
-  padding: 14px 148px 3px 34px;
+  min-height: 45px;
+  padding: 10px 148px 2px 28px;
 }
 
 .workspace-container .document-chrome .editor-page-icon {
@@ -867,7 +867,7 @@
   color: var(--text-primary);
   letter-spacing: 0;
   text-shadow: none;
-  font-size: 1.22rem;
+  font-size: 1.1rem;
   font-weight: 700;
   line-height: 1.18;
 }
@@ -885,16 +885,16 @@
   background: 0 0;
   border: 0;
   gap: 2px;
-  height: 43px;
+  height: 37px;
   margin: 0;
-  padding: 3px 12px 0 34px;
+  padding: 2px 12px 0 28px;
   animation: none;
   overflow-x: auto;
 }
 
 .workspace-container .document-chrome .editor-tab-pill {
   max-width: 168px;
-  min-height: 31px;
+  min-height: 29px;
   color: var(--text-secondary);
   box-shadow: none;
   background: 0 0;
@@ -963,8 +963,8 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   border-bottom: 0;
-  height: 172px;
-  min-height: 172px;
+  height: 148px;
+  min-height: 148px;
   position: absolute;
   top: 0;
   left: 0;
@@ -978,10 +978,10 @@
 }
 
 .workspace-container .editor-page.has-cover .document-chrome .editor-page-title-row {
-  min-height: 49px;
-  padding: 10px 148px 3px 34px;
+  min-height: 45px;
+  padding: 8px 148px 2px 28px;
   position: absolute;
-  bottom: 43px;
+  bottom: 37px;
   left: 0;
   right: 0;
 }
@@ -996,13 +996,13 @@
 .workspace-container .editor-page.has-cover .document-chrome .editor-title-copy h1,.workspace-container .editor-page.has-cover .document-chrome .editor-title-input {
   color: #fff;
   text-shadow: 0 2px 10px #0000009e;
-  font-size: 1.22rem;
+  font-size: 1.1rem;
 }
 
 .workspace-container .editor-page.has-cover .document-chrome .editor-tab-row {
   border-top: 0;
-  height: 43px;
-  padding: 4px 18px 0 34px;
+  height: 37px;
+  padding: 2px 18px 0 28px;
   position: absolute;
   bottom: 0;
   left: 0;
@@ -1012,7 +1012,7 @@
 .workspace-container .editor-page.has-cover .document-chrome .editor-tab-pill {
   color: #f4f3efb8;
   text-shadow: 0 1px 5px #00000094;
-  min-height: 35px;
+  min-height: 31px;
 }
 
 .workspace-container .editor-page.has-cover .document-chrome .editor-tab-pill:hover {
@@ -1103,11 +1103,15 @@
 
 .workspace-container .editor-page.is-wiki-page .document-content-frame,.workspace-container .editor-page.is-wiki-page.has-cover .document-content-frame {
   flex: 1 0 0;
-  width: min(880px,100% - 68px);
+  width: min(780px,100% - 80px);
   min-height: 0;
-  margin: 0 auto 0 34px;
-  padding: 14px 0 32px;
+  margin: 0 auto;
+  padding: 28px 0;
   animation: none;
+}
+
+.workspace-container .editor-page.is-wiki-page.is-wide-content .document-content-frame {
+  width: calc(100% - 64px);
 }
 
 .workspace-container .editor-page.is-wiki-page {
@@ -1150,7 +1154,7 @@
 }
 
 .workspace-container .editor-page.is-map-page.has-cover .editor-page-cover {
-  flex: 0 0 172px;
+  flex: 0 0 148px;
 }
 
 .workspace-container .editor-empty-state,.workspace-container .editor-placeholder,.workspace-container .editor-local-loading {

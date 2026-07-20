@@ -50,7 +50,7 @@
   background-color: var(--bg-color);
 }
 
-.workspace-container .workspace-content-theme .wiki-block-editor,
+.workspace-container .workspace-content-theme .notion-editor,
 .workspace-container .workspace-content-theme .markdown-html-editor {
   color: var(--workspace-editor-text);
   background-color: var(--bg-color);
