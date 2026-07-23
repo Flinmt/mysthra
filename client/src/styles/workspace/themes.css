@@ -65,6 +65,12 @@
   background: var(--workspace-theme-surface-soft);
 }
 
+.workspace-container .editor-world-actions-menu {
+  background: color-mix(in srgb, var(--theme-custom-surface) 94%, var(--theme-custom-bg));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .workspace-container .context-menu button:hover,
 .workspace-container .editor-world-actions-menu button:hover:not(:disabled) {
   color: var(--text-primary);

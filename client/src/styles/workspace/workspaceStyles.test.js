@@ -117,6 +117,18 @@ describe('workspace style boundaries', () => {
     expect(tokens).toContain('.workspace-container .editor-world-actions-menu')
     expect(themes).toContain('color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary))')
     expect(themes).toContain('background: var(--workspace-theme-secondary-soft)')
+    expect(themes).toMatch(/\.workspace-container \.editor-world-actions-menu \{\s+background: color-mix\(in srgb, var\(--theme-custom-surface\) 94%, var\(--theme-custom-bg\)\);\s+-webkit-backdrop-filter: none;\s+backdrop-filter: none;/)
+  })
+
+  it('scopes the experimental slash menu to the selected world theme', () => {
+    const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
+    const slashMenuStyles = tiptap.slice(tiptap.indexOf('.tiptap-slash-menu-group +'))
+
+    expect(tiptap).toContain('.workspace-container .workspace-content-theme .tiptap-editor')
+    expect(tiptap).toContain('--tiptap-menu-surface: color-mix(in srgb, var(--theme-custom-surface) 94%, var(--theme-custom-bg))')
+    expect(tiptap).toContain('--tiptap-menu-accent: var(--accent-color)')
+    expect(slashMenuStyles).not.toContain('var(--workspace-shell-copper)')
+    expect(slashMenuStyles).not.toContain('var(--workspace-shell-raised)')
   })
 
   it('scopes workspace notifications to the selected world theme', () => {

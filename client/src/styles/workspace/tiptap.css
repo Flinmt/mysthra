@@ -15,6 +15,18 @@
   margin-left: -22px;
 }
 
+.workspace-container .workspace-content-theme .tiptap-editor {
+  --tiptap-menu-surface: color-mix(in srgb, var(--theme-custom-surface) 94%, var(--theme-custom-bg));
+  --tiptap-menu-border: var(--workspace-theme-accent-border);
+  --tiptap-menu-text: var(--text-primary);
+  --tiptap-menu-muted: var(--text-secondary);
+  --tiptap-menu-hover: var(--workspace-theme-accent-soft);
+  --tiptap-menu-selected: var(--workspace-theme-accent-hover);
+  --tiptap-menu-accent: var(--accent-color);
+  --tiptap-menu-accent-hover: var(--accent-hover);
+  --tiptap-menu-shadow: color-mix(in srgb, var(--theme-custom-bg) 72%, transparent);
+}
+
 .tiptap-editor .ProseMirror {
   min-height: 320px;
   padding: 0 0 80px;
@@ -151,7 +163,7 @@
 
 .tiptap-slash-menu-group-label {
   padding: 5px 7px 3px;
-  color: var(--workspace-shell-muted);
+  color: var(--tiptap-menu-muted);
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
@@ -167,9 +179,7 @@
 }
 
 .tiptap-toolbar button:hover,
-.tiptap-toolbar button.is-active,
-.tiptap-slash-menu button:hover,
-.tiptap-slash-menu button.is-selected {
+.tiptap-toolbar button.is-active {
   color: var(--workspace-shell-text);
   background: color-mix(in srgb, var(--workspace-shell-text) 7%, transparent);
   opacity: 1;
@@ -182,14 +192,14 @@
 
 .tiptap-slash-menu {
   width: 238px;
-  max-height: 220px;
+  max-height: var(--tiptap-slash-menu-max-height, 220px);
   padding: 5px;
   overflow-y: auto;
-  color: var(--workspace-shell-text);
-  background: var(--workspace-shell-raised);
-  border: 1px solid var(--workspace-shell-border);
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-surface);
+  border: 1px solid var(--tiptap-menu-border);
   border-radius: 5px;
-  box-shadow: 0 12px 28px var(--bg-color);
+  box-shadow: 0 12px 28px var(--tiptap-menu-shadow);
 }
 
 .tiptap-slash-menu button {
@@ -201,10 +211,19 @@
   font: inherit;
   font-size: 12px;
   text-align: left;
+  color: var(--tiptap-menu-muted);
+}
+
+.tiptap-slash-menu button:hover,
+.tiptap-slash-menu button.is-selected {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+  opacity: 1;
 }
 
 .tiptap-slash-menu button.is-selected {
-  box-shadow: inset 2px 0 var(--workspace-shell-copper);
+  background: var(--tiptap-menu-selected);
+  box-shadow: inset 2px 0 var(--tiptap-menu-accent);
 }
 
 .tiptap-slash-menu-icon {
@@ -212,19 +231,19 @@
   align-items: center;
   justify-content: center;
   width: 20px;
-  color: var(--workspace-shell-copper);
+  color: var(--tiptap-menu-accent);
   font-weight: 700;
 }
 
 .tiptap-slash-menu button:hover .tiptap-slash-menu-icon,
 .tiptap-slash-menu button.is-selected .tiptap-slash-menu-icon {
-  color: var(--workspace-shell-copper-hover);
+  color: var(--tiptap-menu-accent-hover);
 }
 
 .tiptap-slash-menu-empty,
 .tiptap-slash-menu-close {
   padding: 7px;
-  color: var(--workspace-shell-muted);
+  color: var(--tiptap-menu-muted);
   font-size: 11px;
 }
 

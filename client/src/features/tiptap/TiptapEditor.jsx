@@ -12,6 +12,7 @@ import Text from '@tiptap/extension-text'
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror'
 import TiptapSlashMenu from './TiptapSlashMenu'
 import { TIPTAP_COMMANDS } from './tiptapCommands'
+import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { useTiptapDocument } from './useTiptapDocument'
 import {
   TiptapBlockquote,
@@ -111,12 +112,15 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     const query = match[1].toLowerCase()
     const items = TIPTAP_COMMANDS.filter(item => item.label.toLowerCase().includes(query))
     const coords = editor.view.coordsAtPos(lineStart)
+    const position = getTiptapMenuPosition(coords, {
+      width: window.innerWidth,
+      height: window.innerHeight
+    })
     setSlashState(current => ({
       query,
       items,
       selectedIndex: Math.min(current?.selectedIndex || 0, Math.max(items.length - 1, 0)),
-      top: coords.bottom + 6,
-      left: coords.left,
+      ...position,
       range: { from: from - textBeforeCursor.length, to: from }
     }))
   }, [editor])
@@ -126,6 +130,12 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     editor.on('transaction', updateSlashMenu)
     return () => editor.off('transaction', updateSlashMenu)
   }, [editor, updateSlashMenu])
+
+  useEffect(() => {
+    if (!slashState) return undefined
+    window.addEventListener('resize', updateSlashMenu)
+    return () => window.removeEventListener('resize', updateSlashMenu)
+  }, [slashState, updateSlashMenu])
 
   const executeSlashCommand = useCallback((item) => {
     if (!editor || !slashState) return
@@ -180,7 +190,16 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
           </div>
         )}
         {slashState && editor && (
-          <div className="tiptap-slash-menu-anchor" style={{ top: slashState.top, left: slashState.left }}>
+          <div
+            className="tiptap-slash-menu-anchor"
+            data-placement={slashState.placement}
+            style={{
+              top: slashState.top,
+              left: slashState.left,
+              transform: slashState.placement === 'above' ? 'translateY(-100%)' : undefined,
+              '--tiptap-slash-menu-max-height': `${slashState.maxHeight}px`
+            }}
+          >
             <TiptapSlashMenu
               items={slashState.items}
               selectedIndex={slashState.selectedIndex}
