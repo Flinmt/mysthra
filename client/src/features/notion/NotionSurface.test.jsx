@@ -96,7 +96,7 @@ describe('NotionSurface editing modes', () => {
     expect(surfaceMocks.editorOptions.tabBehavior).toBe('prefer-navigate-ui')
     expect(surfaceMocks.editorOptions.uploadFile).toEqual(expect.any(Function))
     expect(surfaceMocks.suggestionMenuProps.getItems).toEqual(expect.any(Function))
-    expect(surfaceMocks.suggestionMenuProps.suggestionMenuComponent).toBeUndefined()
+    expect(surfaceMocks.suggestionMenuProps.suggestionMenuComponent).toEqual(expect.any(Function))
   })
 
   it('does not expose editing tools or uploads in readonly mode', () => {

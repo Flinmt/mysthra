@@ -2,7 +2,6 @@ function getErrorStatusCode(error) {
   if (error.code === "PAYLOAD_TOO_LARGE") return 413;
   if (error.code === "INVALID_JSON") return 400;
   if (error.code === "INVALID_PATH") return 400;
-  if (error.code === "DOCUMENT_LIMIT_EXCEEDED") return 400;
   if (error.code === "INVALID_DOCUMENT_METADATA") return 400;
   if (error.code === "INVALID_HOME_PAGE") return 400;
   if (error.code === "INVALID_USER_INPUT") return 400;

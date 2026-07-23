@@ -1,0 +1,248 @@
+.tiptap-editor {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.workspace-container .editor-page.is-wiki-page .tiptap-editor {
+  width: 100%;
+}
+
+.workspace-container .editor-page.is-wiki-page.is-wide-content .tiptap-editor {
+  width: calc(100% + 28px);
+  margin-left: -22px;
+}
+
+.tiptap-editor .ProseMirror {
+  min-height: 320px;
+  padding: 0 0 80px;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.tiptap-editor .ProseMirror > * { margin: 0 0 10px; }
+.tiptap-editor .ProseMirror > *:last-child { margin-bottom: 0; }
+.tiptap-editor .ProseMirror p { min-height: 21px; }
+.tiptap-editor .ProseMirror h1,
+.tiptap-editor .ProseMirror h2,
+.tiptap-editor .ProseMirror h3 { margin: 0 0 10px; line-height: 1.25; }
+.tiptap-editor .ProseMirror h2 { font-size: 20px; }
+.tiptap-editor .ProseMirror ul,
+.tiptap-editor .ProseMirror ol { margin: 0 0 10px; padding-left: 24px; }
+.tiptap-editor .ProseMirror blockquote {
+  margin: 0 0 10px;
+  padding-left: 12px;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--arcane-color);
+}
+.tiptap-editor .ProseMirror .tiptap-expand {
+  margin: 0 0 10px;
+  position: relative;
+  padding-left: 22px;
+}
+.tiptap-expand::before {
+  position: absolute;
+  top: 9px;
+  bottom: 0;
+  left: 8px;
+  width: 1px;
+  content: '';
+  background: var(--workspace-shell-border);
+}
+.tiptap-expand-trigger {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 20px;
+  height: 22px;
+  color: var(--workspace-shell-copper);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+}
+.tiptap-expand-trigger::before {
+  display: block;
+  content: '›';
+  font-size: 18px;
+  line-height: 18px;
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+.tiptap-expand[data-open="true"] .tiptap-expand-trigger::before {
+  transform: rotate(90deg);
+}
+.tiptap-expand-trigger:hover {
+  color: var(--workspace-shell-copper-hover);
+  background: color-mix(in srgb, var(--workspace-shell-text) 7%, transparent);
+}
+.tiptap-expand-content {
+  min-width: 0;
+}
+.tiptap-expand-content > p:first-child {
+  min-height: 26px;
+  margin: 0 0 7px;
+  color: var(--workspace-shell-text);
+  font-weight: 600;
+}
+.tiptap-expand-content > *:not(:first-child) { padding-left: 8px; }
+.tiptap-editor .ProseMirror pre {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  color: var(--text-primary);
+  background: var(--theme-custom-surface);
+  border: 1px solid var(--workspace-theme-accent-border);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.tiptap-editor .ProseMirror em { color: var(--text-secondary); }
+.tiptap-editor .ProseMirror u { text-decoration-color: var(--arcane-color); }
+.tiptap-editor .ProseMirror s { opacity: .72; }
+
+.tiptap-placeholder {
+  position: absolute;
+  z-index: 0;
+  color: var(--workspace-editor-muted, var(--text-secondary));
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: .88;
+  pointer-events: none;
+}
+
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--text-secondary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap-editor .ProseMirror strong { color: var(--text-primary); }
+.tiptap-editor .ProseMirror hr { border: 0; border-top: 1px solid var(--workspace-theme-accent-border); }
+
+.tiptap-toolbar {
+  display: flex;
+  gap: 3px;
+  min-height: 26px;
+  padding: 0 28px 3px;
+  border-bottom: 0;
+  opacity: .82;
+}
+
+.tiptap-toolbar button,
+.tiptap-slash-menu button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  color: var(--workspace-shell-muted);
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.tiptap-slash-menu-group + .tiptap-slash-menu-group { margin-top: 4px; }
+
+.tiptap-slash-menu-group-label {
+  padding: 5px 7px 3px;
+  color: var(--workspace-shell-muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: .75;
+}
+
+.tiptap-toolbar button {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tiptap-toolbar button:hover,
+.tiptap-toolbar button.is-active,
+.tiptap-slash-menu button:hover,
+.tiptap-slash-menu button.is-selected {
+  color: var(--workspace-shell-text);
+  background: color-mix(in srgb, var(--workspace-shell-text) 7%, transparent);
+  opacity: 1;
+}
+
+.tiptap-slash-menu-anchor {
+  position: fixed;
+  z-index: 100;
+}
+
+.tiptap-slash-menu {
+  width: 238px;
+  max-height: 220px;
+  padding: 5px;
+  overflow-y: auto;
+  color: var(--workspace-shell-text);
+  background: var(--workspace-shell-raised);
+  border: 1px solid var(--workspace-shell-border);
+  border-radius: 5px;
+  box-shadow: 0 12px 28px var(--bg-color);
+}
+
+.tiptap-slash-menu button {
+  width: 100%;
+  min-height: 28px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.tiptap-slash-menu button.is-selected {
+  box-shadow: inset 2px 0 var(--workspace-shell-copper);
+}
+
+.tiptap-slash-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  color: var(--workspace-shell-copper);
+  font-weight: 700;
+}
+
+.tiptap-slash-menu button:hover .tiptap-slash-menu-icon,
+.tiptap-slash-menu button.is-selected .tiptap-slash-menu-icon {
+  color: var(--workspace-shell-copper-hover);
+}
+
+.tiptap-slash-menu-empty,
+.tiptap-slash-menu-close {
+  padding: 7px;
+  color: var(--workspace-shell-muted);
+  font-size: 11px;
+}
+
+.tiptap-slash-menu-close {
+  display: block;
+  width: 100%;
+  cursor: default;
+  opacity: .65;
+}
+
+@media (width <= 760px) {
+  .workspace-container .editor-page.is-wiki-page.is-wide-content .tiptap-editor {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .tiptap-editor .ProseMirror,
+  .tiptap-toolbar { padding-inline: 18px; }
+
+  .tiptap-placeholder { left: 18px; }
+}

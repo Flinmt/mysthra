@@ -30,6 +30,14 @@ import {
 } from '@blocknote/react'
 import { ArrowDownToLine, ArrowUpToLine, Copy, Link2, Trash2, WandSparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  NotionMenuDropdown,
+  NotionMenuDivider,
+  NotionMenuItem,
+  NotionMenuRoot,
+  NotionMenuTrigger,
+  NotionToolbarButton
+} from './notionUi'
 
 function copyBlockWithoutIds(block) {
   const copy = { ...block }
@@ -69,9 +77,8 @@ function DuplicateBlockItem() {
 
   if (!components || !block) return null
 
-  const MenuItem = components.Generic.Menu.Item
   return (
-    <MenuItem
+    <NotionMenuItem
       className="bn-menu-item notion-block-menu-item"
       icon={<Copy size={14} />}
       onClick={() => {
@@ -87,7 +94,7 @@ function DuplicateBlockItem() {
       }}
     >
       {t('workspace.notion_duplicate_block')}
-    </MenuItem>
+    </NotionMenuItem>
   )
 }
 
@@ -98,9 +105,8 @@ function DeleteBlockItem() {
 
   if (!components || !block) return null
 
-  const MenuItem = components.Generic.Menu.Item
   return (
-    <MenuItem
+    <NotionMenuItem
       className="bn-menu-item notion-block-menu-item is-danger"
       icon={<Trash2 size={14} />}
       onClick={() => {
@@ -109,7 +115,7 @@ function DeleteBlockItem() {
       }}
     >
       {t('workspace.notion_delete_block')}
-    </MenuItem>
+    </NotionMenuItem>
   )
 }
 
@@ -130,23 +136,22 @@ function TransformBlockItem() {
 
   if (!components || !block || !items.length) return null
 
-  const Menu = components.Generic.Menu
   return (
-    <Menu.Root sub>
-      <Menu.Trigger sub>
-        <Menu.Item
+    <NotionMenuRoot sub>
+      <NotionMenuTrigger sub>
+        <NotionMenuItem
           className="bn-menu-item notion-block-menu-item"
           subTrigger
           icon={<WandSparkles size={14} />}
         >
           {t('workspace.notion_transform_block')}
-        </Menu.Item>
-      </Menu.Trigger>
-      <Menu.Dropdown sub className="bn-drag-handle-submenu">
+        </NotionMenuItem>
+      </NotionMenuTrigger>
+      <NotionMenuDropdown sub className="bn-drag-handle-submenu">
         {items.map(item => {
           const Icon = item.icon
           return (
-            <Menu.Item
+            <NotionMenuItem
               key={item.type}
               className="bn-menu-item notion-block-menu-item"
               icon={<Icon size={14} />}
@@ -162,11 +167,11 @@ function TransformBlockItem() {
               }}
             >
               {item.name}
-            </Menu.Item>
+            </NotionMenuItem>
           )
         })}
-      </Menu.Dropdown>
-    </Menu.Root>
+      </NotionMenuDropdown>
+    </NotionMenuRoot>
   )
 }
 
@@ -190,21 +195,20 @@ function MoveBlockItem() {
 
   if (!components || !block || !destinations.length) return null
 
-  const Menu = components.Generic.Menu
   return (
-    <Menu.Root sub>
-      <Menu.Trigger sub>
-        <Menu.Item
+    <NotionMenuRoot sub>
+      <NotionMenuTrigger sub>
+        <NotionMenuItem
           className="bn-menu-item notion-block-menu-item"
           subTrigger
           icon={<ArrowUpToLine size={14} />}
         >
           {t('workspace.notion_move_block')}
-        </Menu.Item>
-      </Menu.Trigger>
-      <Menu.Dropdown sub className="bn-drag-handle-submenu">
+        </NotionMenuItem>
+      </NotionMenuTrigger>
+      <NotionMenuDropdown sub className="bn-drag-handle-submenu">
         {destinations.map(({ block: target, label }) => (
-          <Menu.Item
+          <NotionMenuItem
             key={target.id}
             className="bn-menu-item notion-block-menu-item"
             icon={<ArrowDownToLine size={14} />}
@@ -216,10 +220,10 @@ function MoveBlockItem() {
             }}
           >
             {t('workspace.notion_move_before', { name: label })}
-          </Menu.Item>
+          </NotionMenuItem>
         ))}
-      </Menu.Dropdown>
-    </Menu.Root>
+      </NotionMenuDropdown>
+    </NotionMenuRoot>
   )
 }
 
@@ -231,8 +235,10 @@ function NotionDragHandleMenu() {
       <TransformBlockItem />
       <BlockColorsItem>{dictionary.drag_handle.colors_menuitem}</BlockColorsItem>
       <MoveBlockItem />
+      <NotionMenuDivider />
       <TableRowHeaderItem>{dictionary.drag_handle.header_row_menuitem}</TableRowHeaderItem>
       <TableColumnHeaderItem>{dictionary.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
+      <NotionMenuDivider />
       <DeleteBlockItem />
     </DragHandleMenu>
   )
@@ -240,7 +246,7 @@ function NotionDragHandleMenu() {
 
 export function NotionSideMenu() {
   return (
-    <SideMenu>
+    <SideMenu className="notion-ui-side-menu">
       <AddBlockButton />
       <DragHandleButton dragHandleMenu={NotionDragHandleMenu} />
     </SideMenu>
@@ -249,7 +255,7 @@ export function NotionSideMenu() {
 
 export function NotionFormattingToolbar({ onOpenPageLink, pageLinkLabel }) {
   return (
-    <FormattingToolbar>
+    <FormattingToolbar className="notion-ui-toolbar">
       <BlockTypeSelect />
       <TableCellMergeButton />
       <FileCaptionButton />
@@ -268,17 +274,16 @@ export function NotionFormattingToolbar({ onOpenPageLink, pageLinkLabel }) {
       <NestBlockButton />
       <UnnestBlockButton />
       <CreateLinkButton />
-      <button
-        type="button"
-        className="bn-button page-link-toolbar-button"
+      <NotionToolbarButton
+        className="page-link-toolbar-button"
+        icon={<Link2 size={16} />}
+        mainTooltip={pageLinkLabel || 'Page link'}
         onMouseDown={(event) => {
           event.preventDefault()
           onOpenPageLink?.()
         }}
-        title={pageLinkLabel || 'Page link'}
-      >
-        <Link2 size={16} />
-      </button>
+        label={pageLinkLabel || 'Page link'}
+      />
     </FormattingToolbar>
   )
 }

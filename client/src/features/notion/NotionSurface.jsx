@@ -16,6 +16,7 @@ import { createNotionMigrationUpdate, parseNotionContent, resolveNotionBlocks } 
 import { NOTION_EDITING_OPTIONS } from './notionEditing'
 import { getNotionDictionary, isAllowedNotionLink, NOTION_SCHEMA } from './notionSchema'
 import { NotionFormattingToolbar, NotionSideMenu } from './notionTools'
+import { NotionSuggestionMenu } from './NotionSuggestionMenu'
 import { uploadNotionImage, useNotionAssets } from './useNotionAssets'
 
 export default function NotionSurface({
@@ -251,6 +252,7 @@ export default function NotionSurface({
             <SuggestionMenuController
               triggerCharacter="/"
               getItems={getSlashMenuItems}
+              suggestionMenuComponent={NotionSuggestionMenu}
             />
           </>
         )}

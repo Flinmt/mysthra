@@ -80,6 +80,20 @@ vi.mock('@blocknote/react', () => {
             <button type="button" className={className} onClick={onClick}>{children}</button>
           )
         }
+      },
+      FormattingToolbar: {
+        Button: ({ children, label, mainTooltip, onClick, onMouseDown, icon, className }) => (
+          <button
+            type="button"
+            className={className}
+            title={mainTooltip || label}
+            onClick={onClick}
+            onMouseDown={onMouseDown}
+          >
+            {icon}
+            {children}
+          </button>
+        )
       }
     }),
     useDictionary: () => ({

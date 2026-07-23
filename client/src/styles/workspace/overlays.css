@@ -145,11 +145,6 @@
   box-shadow: 0 10px 30px #0006;
 }
 
-.editor-page.is-map-page .editor-page-body:has(.tab-creation-panel) {
-  padding-top: 98px;
-  display: block;
-}
-
 .asset-move-target-list {
   flex-direction: column;
   gap: 6px;
@@ -195,84 +190,6 @@
   white-space: nowrap;
   min-width: 0;
   overflow: hidden;
-}
-
-.tab-creation-panel {
-  background: radial-gradient(circle at 18% 0,color-mix(in srgb, var(--accent-color) 11%, transparent),#0000 34%),#ffffff06;
-  border: 1px solid #94a3b81f;
-  border-radius: 18px;
-  width: min(780px,100%);
-  margin: 18px auto 0;
-  padding: 18px;
-  animation: .32s cubic-bezier(.16,1,.3,1) editorBodyIn;
-  box-shadow: 0 22px 60px #0000002e;
-}
-
-.tab-creation-header {
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
-  display: flex;
-}
-
-.tab-creation-icon {
-  color: color-mix(in srgb, var(--accent-color) 46%, var(--text-primary));
-  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, transparent);
-  border-radius: 10px;
-  flex: none;
-  justify-content: center;
-  align-items: center;
-  width: 42px;
-  height: 42px;
-  display: inline-flex;
-}
-
-.tab-creation-header h2 {
-  color: #f8fafcf0;
-  margin: 0;
-  font-size: 1.22rem;
-}
-
-.tab-creation-header p {
-  color: #94a3b8c7;
-  margin: 3px 0 0;
-  font-size: .88rem;
-}
-
-.tab-creation-label {
-  color: #94a3b8d1;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  font-size: .78rem;
-  font-weight: 760;
-  display: block;
-}
-
-.tab-creation-input {
-  color: #f8fafcf0;
-  background: #0000002e;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 18%, transparent);
-  border-radius: 12px;
-  outline: none;
-  width: 100%;
-  height: 44px;
-  margin-bottom: 16px;
-  padding: 0 12px;
-  transition: border-color .16s,background .16s,box-shadow .16s;
-}
-
-.tab-creation-input:focus {
-  background: #00000042;
-  border-color: color-mix(in srgb, var(--accent-color) 46%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 13%, transparent);
-}
-
-.tab-creation-actions {
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 18px;
-  display: flex;
 }
 
 .icon-picker-backdrop {
@@ -635,18 +552,18 @@
   background: #ef44441f;
 }
 
-.workspace-container .tab-creation-icon,.workspace-container .duplicate-modal-icon,.workspace-container .delete-modal-icon {
+.workspace-container .duplicate-modal-icon,.workspace-container .delete-modal-icon {
   border-color: var(--workspace-theme-accent-border);
   background: var(--workspace-theme-accent-soft);
 }
 
-.workspace-container .editor-tab-rename-input,.workspace-container .tab-creation-input {
+.workspace-container .editor-tab-rename-input {
   color: var(--text-primary);
   border-color: var(--workspace-theme-accent-border);
   background: color-mix(in srgb, var(--bg-color) 74%, transparent);
 }
 
-.workspace-container .editor-tab-rename-input:focus,.workspace-container .tab-creation-input:focus {
+.workspace-container .editor-tab-rename-input:focus {
   border-color: var(--workspace-theme-secondary-border);
   box-shadow: 0 0 0 3px var(--workspace-theme-accent-soft);
 }
@@ -872,11 +789,6 @@
 
 .workspace-topbar-menu-popover button:hover {
   background: #ffffff0f;
-}
-
-.workspace-container .editor-page.is-map-page .document-content-frame:has(.tab-creation-panel) {
-  padding-top: 94px;
-  display: block;
 }
 
 @keyframes bootPulse {

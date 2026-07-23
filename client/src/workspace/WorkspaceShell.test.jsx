@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Book, Image } from 'lucide-react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -258,5 +258,80 @@ describe('WorkspaceShell', () => {
 
     fireEvent.blur(screen.getByDisplayValue('Renamed'))
     expect(onRenameCommit).toHaveBeenCalledWith(tabs[0])
+  })
+
+  it('renders a local draft as an inline rename field', async () => {
+    const user = userEvent.setup()
+    const onDraftNameChange = vi.fn()
+    const onDraftRenameCommit = vi.fn()
+
+    render(
+      <WorkspaceTabRow
+        tabs={[]}
+        activeTab={null}
+        renamingTab={{ path: '', value: '' }}
+        draftTab={{ name: 'Untitled', isCreating: false }}
+        draftRenameLabel="Rename draft tab"
+        canCreate={false}
+        getTabIcon={() => Book}
+        onDraftNameChange={onDraftNameChange}
+        onDraftRenameCommit={onDraftRenameCommit}
+      />
+    )
+
+    const input = screen.getByRole('textbox', { name: 'Rename draft tab' })
+    expect(input.parentElement.classList.contains('editor-tab-pill')).toBe(true)
+    expect(input.parentElement.classList.contains('active')).toBe(true)
+    await user.clear(input)
+    await user.type(input, 'Lore{Enter}')
+
+    expect(onDraftNameChange).toHaveBeenCalled()
+    expect(onDraftRenameCommit).toHaveBeenCalledOnce()
+  })
+
+  it('keeps creation after the last tab while overflowing tabs can be scrolled', async () => {
+    const tabs = Array.from({ length: 12 }, (_, index) => ({
+      uid: `tab-${index + 1}`,
+      path: `/doc/tab-${index + 1}`,
+      name: `Tab ${index + 1}`,
+      contentType: 'wiki'
+    }))
+    const { container } = render(
+      <WorkspaceTabRow
+        tabs={tabs}
+        activeTab={tabs[0]}
+        renamingTab={{ path: '', value: '' }}
+        scrollBackLabel="Scroll tabs back"
+        scrollForwardLabel="Scroll tabs forward"
+        canCreate
+        createLabel="Create tab"
+        getTabIcon={() => Book}
+        onSelect={vi.fn()}
+        onContextMenu={vi.fn()}
+        onRenameChange={vi.fn()}
+        onRenameCommit={vi.fn()}
+        onRenameCancel={vi.fn()}
+        onCreate={vi.fn()}
+      />
+    )
+
+    const row = container.querySelector('.editor-tab-row')
+    Object.defineProperties(row, {
+      clientWidth: { configurable: true, value: 240 },
+      scrollWidth: { configurable: true, value: 960 },
+      scrollLeft: { configurable: true, writable: true, value: 0 }
+    })
+    row.scrollBy = vi.fn()
+    fireEvent(window, new Event('resize'))
+
+    const forward = await screen.findByRole('button', { name: 'Scroll tabs forward' })
+    expect(screen.getByRole('button', { name: 'Scroll tabs back' }).disabled).toBe(true)
+    expect(row.contains(screen.getByRole('button', { name: 'Create tab' }))).toBe(true)
+
+    fireEvent.click(forward)
+    expect(row.scrollBy).toHaveBeenCalledWith({ left: 168, behavior: 'smooth' })
+
+    fireEvent.wheel(row, { deltaY: 90 })
+    await waitFor(() => expect(row.scrollLeft).toBe(90))
   })
 })

@@ -31,8 +31,6 @@
   background: transparent;
 }
 
-.workspace-container .tab-type-card svg,
-.workspace-container .tab-creation-icon,
 .workspace-container .duplicate-modal-icon,
 .workspace-container .icon-option,
 .workspace-container .icon-selector-category-title span,
@@ -40,34 +38,26 @@
   color: var(--arcane-color);
 }
 
-.workspace-container .tab-creation-icon,
 .workspace-container .duplicate-modal-icon,
 .workspace-container .delete-modal-icon {
   border-color: var(--workspace-theme-accent-border);
   background: var(--workspace-theme-accent-soft);
 }
 
-.workspace-container .editor-tab-rename-input,
-.workspace-container .tab-creation-input {
+.workspace-container .editor-tab-rename-input {
   color: var(--text-primary);
   border-color: var(--workspace-theme-accent-border);
   background: color-mix(in srgb, var(--bg-color) 74%, transparent);
 }
 
-.workspace-container .editor-tab-rename-input:focus,
-.workspace-container .tab-creation-input:focus {
+.workspace-container .editor-tab-rename-input:focus {
   border-color: var(--workspace-theme-secondary-border);
   box-shadow: 0 0 0 3px var(--workspace-theme-accent-soft);
-}
-
-.workspace-container .tab-creation-input::placeholder {
-  color: color-mix(in srgb, var(--workspace-editor-muted) 72%, transparent);
 }
 
 .workspace-container .glass-panel,
 .workspace-container .context-menu,
 .workspace-container .editor-world-actions-menu,
-.workspace-container .tab-creation-panel,
 .workspace-container .duplicate-modal,
 .workspace-container .delete-modal,
 .workspace-container .workspace-insert-preview {
@@ -92,7 +82,6 @@
 }
 
 .workspace-container .editor-tab-pill,
-.workspace-container .tab-type-card,
 .workspace-container .workspace-insert-result,
 .workspace-container .icon-option,
 .workspace-container .duplicate-scope-grid button {
@@ -102,8 +91,6 @@
 
 .workspace-container .editor-tab-pill:hover,
 .workspace-container .editor-tab-pill.active,
-.workspace-container .tab-type-card:hover,
-.workspace-container .tab-type-card.active,
 .workspace-container .workspace-insert-result:hover,
 .workspace-container .workspace-insert-result:focus-visible,
 .workspace-container .icon-option:hover,
@@ -126,15 +113,12 @@
   filter: drop-shadow(0 0 8px var(--accent-glow));
 }
 
-.workspace-container .tab-creation-header p,
-.workspace-container .tab-creation-label,
 .workspace-container .duplicate-modal p,
 .workspace-container .delete-modal p,
 .workspace-container .workspace-insert-result small,
 .workspace-container .workspace-insert-empty,
 .workspace-container .workspace-insert-preview span,
 .workspace-container .workspace-insert-preview small,
-.workspace-container .tab-type-card span,
 .workspace-container .asset-preview-header span {
   color: var(--text-secondary);
 }
@@ -176,10 +160,8 @@
   background: var(--workspace-theme-accent-soft);
 }
 
-.workspace-container .tab-creation-header h2,
 .workspace-container .duplicate-modal h3,
 .workspace-container .delete-modal h3,
-.workspace-container .tab-type-card strong,
 .workspace-container .workspace-insert-preview strong,
 .workspace-container .asset-preview-header strong {
   color: var(--text-primary);
@@ -213,7 +195,6 @@
   box-shadow: inset 0 0 0 1px var(--workspace-theme-accent-border), 0 0 18px var(--accent-glow);
 }
 
-.workspace-container .tab-creation-panel,
 .workspace-container .duplicate-modal,
 .workspace-container .icon-selector-dropdown {
   border-color: var(--workspace-theme-accent-border);

@@ -182,35 +182,31 @@
   font-size: .72rem;
 }
 
-.workspace-container .tab-type-card svg,.workspace-container .tab-creation-icon,.workspace-container .duplicate-modal-icon,.workspace-container .icon-option,.workspace-container .icon-selector-category-title span,.workspace-container .workspace-insert-result span {
+.workspace-container .duplicate-modal-icon,.workspace-container .icon-option,.workspace-container .icon-selector-category-title span,.workspace-container .workspace-insert-result span {
   color: var(--arcane-color);
 }
 
-.workspace-container .tab-creation-input::placeholder {
-  color: color-mix(in srgb, var(--workspace-editor-muted) 72%, transparent);
-}
-
-.workspace-container .glass-panel,.workspace-container .context-menu,.workspace-container .editor-world-actions-menu,.workspace-container .tab-creation-panel,.workspace-container .duplicate-modal,.workspace-container .delete-modal,.workspace-container .workspace-insert-preview {
+.workspace-container .glass-panel,.workspace-container .context-menu,.workspace-container .editor-world-actions-menu,.workspace-container .duplicate-modal,.workspace-container .delete-modal,.workspace-container .workspace-insert-preview {
   border-color: var(--workspace-theme-accent-border);
   background: var(--workspace-theme-surface-soft);
 }
 
-.workspace-container .editor-tab-pill,.workspace-container .tab-type-card,.workspace-container .workspace-insert-result,.workspace-container .icon-option,.workspace-container .duplicate-scope-grid button {
+.workspace-container .editor-tab-pill,.workspace-container .workspace-insert-result,.workspace-container .icon-option,.workspace-container .duplicate-scope-grid button {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 
-.workspace-container .editor-tab-pill:hover,.workspace-container .editor-tab-pill.active,.workspace-container .tab-type-card:hover,.workspace-container .tab-type-card.active,.workspace-container .workspace-insert-result:hover,.workspace-container .workspace-insert-result:focus-visible,.workspace-container .icon-option:hover,.workspace-container .icon-option.active,.workspace-container .duplicate-scope-grid button:hover {
+.workspace-container .editor-tab-pill:hover,.workspace-container .editor-tab-pill.active,.workspace-container .workspace-insert-result:hover,.workspace-container .workspace-insert-result:focus-visible,.workspace-container .icon-option:hover,.workspace-container .icon-option.active,.workspace-container .duplicate-scope-grid button:hover {
   color: var(--text-primary);
   border-color: var(--workspace-theme-accent-border);
   background: var(--workspace-theme-accent-soft);
 }
 
-.workspace-container .tab-creation-header p,.workspace-container .tab-creation-label,.workspace-container .duplicate-modal p,.workspace-container .delete-modal p,.workspace-container .workspace-insert-result small,.workspace-container .workspace-insert-empty,.workspace-container .workspace-insert-preview span,.workspace-container .workspace-insert-preview small,.workspace-container .tab-type-card span,.workspace-container .asset-preview-header span {
+.workspace-container .duplicate-modal p,.workspace-container .delete-modal p,.workspace-container .workspace-insert-result small,.workspace-container .workspace-insert-empty,.workspace-container .workspace-insert-preview span,.workspace-container .workspace-insert-preview small,.workspace-container .asset-preview-header span {
   color: var(--text-secondary);
 }
 
-.workspace-container .tab-creation-header h2,.workspace-container .duplicate-modal h3,.workspace-container .delete-modal h3,.workspace-container .tab-type-card strong,.workspace-container .workspace-insert-preview strong,.workspace-container .asset-preview-header strong {
+.workspace-container .duplicate-modal h3,.workspace-container .delete-modal h3,.workspace-container .workspace-insert-preview strong,.workspace-container .asset-preview-header strong {
   color: var(--text-primary);
 }
 

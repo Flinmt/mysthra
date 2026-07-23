@@ -67,9 +67,10 @@ function getCommandGroup(commandId, dictionary, labels) {
 function prepareCommand(item, commandId, dictionary, labels) {
   const Icon = COMMAND_ICONS[commandId]
   return {
-    ...item,
     id: `notion-command-${commandId}`,
     key: commandId,
+    title: item.title,
+    onItemClick: item.onItemClick,
     group: getCommandGroup(commandId, dictionary, labels),
     icon: createElement(Icon, { size: 16, strokeWidth: 1.8 }),
     size: 'small'

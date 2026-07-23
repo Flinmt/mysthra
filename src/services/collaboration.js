@@ -18,7 +18,7 @@ const COLLABORATION_PATH = "/collaboration";
 const BLOCKNOTE_FRAGMENT = "blocknote";
 const NOTION_MIGRATION_VERSION = 1;
 const MAX_MIGRATION_UPDATE_SIZE = 1000 * 1000;
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown", "board"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
 
 let activeCollaborationServer = null;
 const notionMigrationQueues = new Map();

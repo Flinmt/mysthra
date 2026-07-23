@@ -84,6 +84,20 @@
 
 .bn-mantine {
   color-scheme: var(--mantine-color-scheme);
+  --notion-ui-surface: var(--bn-colors-menu-background, #202326);
+  --notion-ui-surface-raised: var(--bn-colors-menu-background, #262a2e);
+  --notion-ui-text: var(--bn-colors-menu-text, #f1f5f9);
+  --notion-ui-text-muted: var(--bn-colors-disabled-text, #94a3b8);
+  --notion-ui-border: var(--bn-colors-border, #ffffff1f);
+  --notion-ui-hover: var(--bn-colors-hovered-background, #ffffff0f);
+  --notion-ui-selected: var(--bn-colors-selected-background, #ffffff18);
+  --notion-ui-focus: var(--bn-colors-border, #ffffff30);
+  --notion-ui-danger: #fca5a5;
+  --notion-ui-danger-hover: #ef444426;
+  --notion-ui-shadow: 0 12px 28px #0000004d;
+  --notion-ui-control-size: 26px;
+  --notion-ui-menu-item-size: 24px;
+  --notion-ui-icon-size: 14px;
 }
 
 .bn-mantine *,.bn-mantine :before,.bn-mantine :after {
@@ -1332,6 +1346,32 @@
   display: none;
 }
 
+.bn-mantine .notion-ui-toolbar {
+  border-color: var(--notion-ui-border);
+  background: var(--notion-ui-surface);
+  box-shadow: var(--notion-ui-shadow);
+}
+
+.bn-mantine .notion-ui-toolbar-button {
+  min-width: var(--notion-ui-control-size);
+  min-height: var(--notion-ui-control-size);
+  height: var(--notion-ui-control-size);
+  color: var(--notion-ui-text);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.bn-mantine .notion-ui-toolbar-button:hover,
+.bn-mantine .notion-ui-toolbar-button:focus-visible {
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-hover);
+}
+
+.bn-mantine .notion-ui-side-menu {
+  color: var(--notion-ui-text-muted);
+}
+
 .bn-mantine .bn-form-popover {
   background-color: var(--bn-colors-menu-background);
   border: var(--bn-border);
@@ -1475,6 +1515,94 @@
 
 .bn-suggestion-menu-item-small .bn-mt-suggestion-menu-item-subtitle {
   display: none;
+}
+
+/* The workspace command menu uses titles only, including during portal updates. */
+.workspace-container .bn-mt-suggestion-menu-item-subtitle {
+  display: none !important;
+}
+
+/* Mysthra command navigation: the menu is intentionally shaped like the
+ * world navigator instead of the card-like BlockNote default. */
+.notion-command-menu {
+  width: 252px;
+  max-height: 220px;
+  padding: 5px;
+  overflow-y: auto;
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-surface);
+  border: 1px solid var(--notion-ui-border);
+  border-radius: 5px;
+  box-shadow: 0 10px 24px var(--notion-ui-shadow);
+  scrollbar-color: var(--bn-colors-side-menu) transparent;
+  scrollbar-width: thin;
+}
+
+.notion-command-menu-header {
+  min-height: 20px;
+  padding: 2px 7px 5px;
+  color: var(--notion-ui-text-muted);
+  font-size: .59rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.notion-command-group + .notion-command-group {
+  margin-top: 3px;
+}
+
+.notion-command-group-label {
+  padding: 5px 7px 3px;
+  color: var(--notion-ui-text-muted);
+  font-size: .55rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: .7;
+}
+
+.notion-command-item {
+  min-height: 27px;
+  gap: 8px;
+  padding: 0 7px 0 5px;
+  color: var(--notion-ui-text-muted);
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.notion-command-item:hover,
+.notion-command-item:focus-visible,
+.notion-command-item.is-selected {
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-hover);
+  outline: none;
+}
+
+.notion-command-item.is-selected {
+  border-left-color: var(--bn-colors-side-menu);
+  background: var(--notion-ui-selected);
+}
+
+.notion-command-item-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: var(--bn-colors-side-menu);
+}
+
+.notion-command-item-title {
+  overflow: hidden;
+  font-size: .67rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bn-mantine .bn-suggestion-menu-label {
@@ -1718,16 +1846,16 @@
 .workspace-container .workspace-content-theme .notion-editor .bn-root[data-color-scheme="dark"] {
   --bn-colors-editor-text: var(--workspace-editor-text);
   --bn-colors-editor-background: transparent;
-  --bn-colors-menu-text: var(--text-primary);
-  --bn-colors-menu-background: var(--theme-custom-surface);
-  --bn-colors-tooltip-text: var(--text-primary);
-  --bn-colors-tooltip-background: var(--theme-custom-surface);
-  --bn-colors-hovered-text: var(--text-primary);
-  --bn-colors-hovered-background: var(--workspace-theme-accent-soft);
-  --bn-colors-selected-text: var(--text-primary);
-  --bn-colors-selected-background: var(--workspace-theme-accent-hover);
-  --bn-colors-disabled-text: color-mix(in srgb, var(--text-secondary) 48%, transparent);
-  --bn-colors-disabled-background: color-mix(in srgb, var(--theme-custom-surface) 68%, transparent);
+  --bn-colors-menu-text: var(--notion-ui-text);
+  --bn-colors-menu-background: var(--notion-ui-surface);
+  --bn-colors-tooltip-text: var(--notion-ui-text);
+  --bn-colors-tooltip-background: var(--notion-ui-surface-raised);
+  --bn-colors-hovered-text: var(--notion-ui-text);
+  --bn-colors-hovered-background: var(--notion-ui-hover);
+  --bn-colors-selected-text: var(--notion-ui-text);
+  --bn-colors-selected-background: var(--notion-ui-selected);
+  --bn-colors-disabled-text: color-mix(in srgb, var(--notion-ui-text-muted) 48%, transparent);
+  --bn-colors-disabled-background: color-mix(in srgb, var(--notion-ui-surface) 68%, transparent);
   --bn-colors-shadow: color-mix(in srgb, var(--bg-color) 72%, black);
   --bn-colors-border: var(--workspace-theme-accent-border);
   --bn-colors-side-menu: var(--arcane-color);
@@ -1848,6 +1976,177 @@
   font-size: .68rem;
 }
 
+.bn-mantine .notion-command-menu {
+  width: min(268px, calc(100vw - 16px));
+  max-height: min(252px, calc(100vh - 24px));
+  overflow-y: auto;
+  padding: 4px;
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-surface);
+  border: 1px solid var(--notion-ui-border);
+  border-radius: 6px;
+  box-shadow: var(--notion-ui-shadow);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--notion-ui-text-muted) 48%, transparent) transparent;
+}
+
+.bn-mantine .notion-command-menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.bn-mantine .notion-command-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bn-mantine .notion-command-menu::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--notion-ui-text-muted) 48%, transparent);
+  border-radius: 3px;
+}
+
+.bn-mantine .notion-command-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 22px;
+  padding: 3px 8px 4px;
+  color: var(--notion-ui-text-muted);
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.bn-mantine .notion-command-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-hover);
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.bn-mantine .notion-command-group + .notion-command-group {
+  margin-top: 4px;
+}
+
+.bn-mantine .notion-command-group-label {
+  padding: 5px 9px 3px;
+  color: var(--notion-ui-text-muted);
+  font-size: .57rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: .8;
+}
+
+.notion-command-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notion-command-list-item {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bn-mantine .notion-command-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  gap: 7px;
+  padding: 0 8px 0 6px;
+  color: var(--notion-ui-text);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bn-mantine .notion-command-item:hover,
+.bn-mantine .notion-command-item:focus-visible,
+.bn-mantine .notion-command-item.is-selected {
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-selected);
+  outline: none;
+}
+
+.bn-mantine .notion-command-item:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--notion-ui-focus), inset 2px 0 0 var(--bn-colors-side-menu, var(--notion-ui-focus));
+}
+
+.bn-mantine .notion-command-item.is-selected {
+  box-shadow: inset 2px 0 0 var(--bn-colors-side-menu, var(--notion-ui-focus));
+}
+
+.bn-mantine .notion-command-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 4px;
+  color: var(--bn-colors-side-menu, var(--notion-ui-focus));
+}
+
+.bn-mantine .notion-command-item-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.bn-mantine .notion-command-item-content {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.bn-mantine .notion-command-item-title {
+  overflow: hidden;
+  font-size: .68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bn-mantine .notion-command-menu-empty,
+.bn-mantine .notion-command-menu-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  color: var(--notion-ui-text-muted);
+  font-size: .66rem;
+}
+
+.bn-mantine .notion-command-menu-loading {
+  gap: 5px;
+}
+
+.bn-mantine .notion-command-menu-loading-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--bn-colors-side-menu, var(--notion-ui-focus));
+  border-radius: 50%;
+  animation: notion-command-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes notion-command-pulse {
+  from { opacity: .35; transform: scale(.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .bn-mantine .bn-formatting-toolbar {
   max-width: min(520px,calc(100vw - 16px));
   min-height: 32px;
@@ -1879,10 +2178,10 @@
 
 .bn-mantine .bn-formatting-toolbar .bn-button,
 .bn-mantine .bn-formatting-toolbar button {
-  min-width: 27px;
-  height: 27px;
-  min-height: 27px;
-  color: var(--bn-colors-menu-text);
+  min-width: var(--notion-ui-control-size);
+  height: var(--notion-ui-control-size);
+  min-height: var(--notion-ui-control-size);
+  color: var(--notion-ui-text);
   background: transparent;
   border: 0;
   border-radius: 4px;
@@ -1923,7 +2222,7 @@
   min-width: 22px;
   height: 22px;
   min-height: 22px;
-  color: var(--bn-colors-disabled-text);
+  color: var(--notion-ui-text-muted);
   background: transparent;
   border: 0;
   border-radius: 4px;
@@ -1970,8 +2269,8 @@
 }
 
 .bn-mantine .bn-drag-handle-menu .bn-menu-item {
-  min-height: 24px;
-  color: var(--bn-colors-menu-text);
+  min-height: var(--notion-ui-menu-item-size);
+  color: var(--notion-ui-text);
   background: transparent;
   border-radius: 4px;
   padding: 0 5px;
@@ -1992,14 +2291,44 @@
   background: var(--bn-colors-selected-background);
 }
 
+.bn-mantine .notion-ui-menu-item {
+  min-height: var(--notion-ui-menu-item-size);
+  color: var(--notion-ui-text);
+}
+
+.bn-mantine .notion-ui-menu-item:focus-visible {
+  outline: 1px solid var(--notion-ui-focus);
+  outline-offset: -1px;
+}
+
+.bn-mantine .notion-ui-menu-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--notion-ui-border);
+}
+
+.bn-mantine .notion-ui-menu-dropdown {
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-surface);
+  border-color: var(--notion-ui-border);
+  box-shadow: var(--notion-ui-shadow);
+}
+
+.bn-mantine .notion-ui-popover-content {
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-surface);
+  border-color: var(--notion-ui-border);
+  box-shadow: var(--notion-ui-shadow);
+}
+
 .bn-mantine .bn-drag-handle-menu .notion-block-menu-item.is-danger {
-  color: #fca5a5;
+  color: var(--notion-ui-danger);
 }
 
 .bn-mantine .bn-drag-handle-menu .notion-block-menu-item.is-danger:hover,
 .bn-mantine .bn-drag-handle-menu .notion-block-menu-item.is-danger:focus-visible {
-  color: #fee2e2;
-  background: #ef444426;
+  color: var(--notion-ui-text);
+  background: var(--notion-ui-danger-hover);
 }
 
 .bn-mantine .bn-drag-handle-menu svg {
@@ -2048,4 +2377,103 @@
   .bn-block-content[data-content-type=pageBreak]>div {
     page-break-after: always;
   }
+}
+
+/* Final Mysthra overrides for the custom slash-menu portal. Keep this layer
+ * last so legacy BlockNote/Mantine rules cannot restyle the command list. */
+.notion-command-menu {
+  width: 252px !important;
+  max-height: 220px !important;
+  padding: 5px !important;
+  overflow-y: auto !important;
+  color: var(--notion-ui-text) !important;
+  background: var(--notion-ui-surface) !important;
+  border: 1px solid var(--notion-ui-border) !important;
+  border-radius: 5px !important;
+  box-shadow: 0 10px 24px var(--notion-ui-shadow) !important;
+}
+
+.notion-command-list,
+.notion-command-list-item {
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+}
+
+.notion-command-list > .notion-command-group-label {
+  margin: 5px 0 0 !important;
+}
+
+.notion-command-list > .notion-command-group-label:first-child {
+  margin-top: 0 !important;
+}
+
+.notion-command-group + .notion-command-group {
+  margin-top: 3px !important;
+}
+
+.notion-command-group-label {
+  padding: 5px 7px 3px !important;
+  color: var(--notion-ui-text-muted) !important;
+  font-size: .55rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+  opacity: .7 !important;
+}
+
+.notion-command-item {
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-height: 27px !important;
+  gap: 8px !important;
+  padding: 0 7px 0 5px !important;
+  color: var(--notion-ui-text-muted) !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-left: 2px solid transparent !important;
+  border-radius: 3px !important;
+  font: inherit !important;
+  cursor: pointer !important;
+  text-align: left !important;
+}
+
+.notion-command-item:hover,
+.notion-command-item:focus-visible,
+.notion-command-item.is-selected {
+  color: var(--notion-ui-text) !important;
+  background: var(--notion-ui-hover) !important;
+  outline: none !important;
+}
+
+.notion-command-item.is-selected {
+  border-left-color: var(--bn-colors-side-menu) !important;
+  background: var(--notion-ui-selected) !important;
+}
+
+.notion-command-item-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  flex: 0 0 20px !important;
+  color: var(--bn-colors-side-menu) !important;
+  background: transparent !important;
+}
+
+.notion-command-item-icon svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.notion-command-item-title {
+  overflow: hidden !important;
+  color: inherit !important;
+  font-size: .67rem !important;
+  font-weight: 600 !important;
+  line-height: 1.1 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }

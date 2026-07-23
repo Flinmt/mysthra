@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, ChevronDown, ChevronRight, Copy, Edit2, Eye, FileImage, MoveRight, Music, PanelLeftClose, PanelLeftOpen, Plus, Settings, Share2, Trash2, Upload, X } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { AlertCircle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Copy, Edit2, Eye, FileImage, MoveRight, Music, PanelLeftClose, PanelLeftOpen, Plus, Settings, Share2, Trash2, Upload, X } from 'lucide-react'
 
 export function WorkspaceBootScreen({ theme, themeStyle, title, label }) {
   return (
@@ -259,26 +259,175 @@ export function DocumentChrome({ title, tabs, controls }) {
   )
 }
 
-export function WorkspaceTabRow({ tabs, activeTab, renamingTab, canCreate, createLabel, getTabIcon, onSelect, onContextMenu, onRenameChange, onRenameCommit, onRenameCancel, onCreate }) {
+export function WorkspaceTabRow({
+  tabs,
+  activeTab,
+  renamingTab,
+  draftTab,
+  draftRenameLabel,
+  scrollBackLabel,
+  scrollForwardLabel,
+  canCreate,
+  createLabel,
+  getTabIcon,
+  onSelect,
+  onContextMenu,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
+  onDraftNameChange,
+  onDraftRenameCommit,
+  onCreate
+}) {
+  const scrollRef = useRef(null)
+  const hasDraft = Boolean(draftTab)
+  const [scrollState, setScrollState] = useState({
+    hasOverflow: false,
+    canScrollBack: false,
+    canScrollForward: false
+  })
+
+  const updateScrollState = useCallback(() => {
+    const element = scrollRef.current
+    if (!element) return
+    const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth)
+    const nextState = {
+      hasOverflow: maxScrollLeft > 1,
+      canScrollBack: element.scrollLeft > 1,
+      canScrollForward: element.scrollLeft < maxScrollLeft - 1
+    }
+    setScrollState(current => (
+      current.hasOverflow === nextState.hasOverflow &&
+      current.canScrollBack === nextState.canScrollBack &&
+      current.canScrollForward === nextState.canScrollForward
+        ? current
+        : nextState
+    ))
+  }, [])
+
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return undefined
+    updateScrollState()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateScrollState)
+    observer?.observe(element)
+    window.addEventListener('resize', updateScrollState)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', updateScrollState)
+    }
+  }, [hasDraft, tabs.length, updateScrollState])
+
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const target = hasDraft
+        ? element.querySelector('[data-tab-draft="true"]')
+        : Array.from(element.querySelectorAll('[data-tab-uid]'))
+          .find(tabElement => tabElement.dataset.tabUid === activeTab?.uid)
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+      updateScrollState()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeTab?.uid, hasDraft, updateScrollState])
+
+  const scrollTabs = direction => {
+    const element = scrollRef.current
+    if (!element) return
+    const left = direction * Math.max(160, element.clientWidth * .7)
+    if (typeof element.scrollBy === 'function') {
+      element.scrollBy({ left, behavior: 'smooth' })
+    } else {
+      element.scrollLeft += left
+      updateScrollState()
+    }
+  }
+
+  const handleTabWheel = event => {
+    const element = scrollRef.current
+    if (!element || !scrollState.hasOverflow) return
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+    if (!delta) return
+    const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth)
+    const nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, element.scrollLeft + delta))
+    if (nextScrollLeft === element.scrollLeft) return
+    event.preventDefault()
+    element.scrollLeft = nextScrollLeft
+    updateScrollState()
+  }
+
   return (
-    <div className="editor-tab-row">
-      {tabs.map(tab => {
-        if (renamingTab.path === tab.path) {
+    <div className="editor-tab-strip">
+      {scrollState.hasOverflow && (
+        <button
+          type="button"
+          className="editor-tab-scroll-button"
+          onClick={() => scrollTabs(-1)}
+          disabled={!scrollState.canScrollBack}
+          title={scrollBackLabel}
+          aria-label={scrollBackLabel}
+        >
+          <ChevronLeft size={14} />
+        </button>
+      )}
+      <div ref={scrollRef} className="editor-tab-row" onScroll={updateScrollState} onWheel={handleTabWheel}>
+        {tabs.map(tab => {
+          if (renamingTab.path === tab.path) {
+            return (
+              <input key={tab.uid} data-tab-uid={tab.uid} className="editor-tab-rename-input" value={renamingTab.value} onChange={event => onRenameChange(event.target.value)} onBlur={() => onRenameCommit(tab)} onKeyDown={event => {
+                if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
+                if (event.key === 'Escape') onRenameCancel()
+              }} autoFocus onFocus={event => event.target.select()} />
+            )
+          }
+          const TabIcon = getTabIcon(tab.contentType)
           return (
-            <input key={tab.uid} className="editor-tab-rename-input" value={renamingTab.value} onChange={event => onRenameChange(event.target.value)} onBlur={() => onRenameCommit(tab)} onKeyDown={event => {
-              if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
-              if (event.key === 'Escape') onRenameCancel()
-            }} autoFocus onFocus={event => event.target.select()} />
+            <button key={tab.uid} data-tab-uid={tab.uid} type="button" className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`} onClick={() => onSelect(tab)} onContextMenu={event => onContextMenu(event, tab)}>
+              <TabIcon size={14} /><span>{tab.name}</span>
+            </button>
           )
-        }
-        const TabIcon = getTabIcon(tab.contentType)
-        return (
-          <button key={tab.uid} type="button" className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`} onClick={() => onSelect(tab)} onContextMenu={event => onContextMenu(event, tab)}>
-            <TabIcon size={14} /><span>{tab.name}</span>
+        })}
+        {draftTab && (
+          <div
+            data-tab-draft="true"
+            className={`editor-tab-pill active is-draft ${draftTab.isCreating ? 'is-creating' : ''}`}
+          >
+            <input
+              className="editor-tab-draft-input"
+              value={draftTab.name}
+              onChange={event => onDraftNameChange(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  onDraftRenameCommit()
+                }
+              }}
+              aria-label={draftRenameLabel}
+              disabled={draftTab.isCreating}
+              autoFocus
+              onFocus={event => event.target.select()}
+            />
+          </div>
+        )}
+        {canCreate && (
+          <button type="button" className="editor-tab-add" onClick={onCreate} title={createLabel} aria-label={createLabel}>
+            <Plus size={16} />
           </button>
-        )
-      })}
-      {canCreate && <button type="button" className="editor-tab-add" onClick={onCreate} title={createLabel}><Plus size={16} /></button>}
+        )}
+      </div>
+      {scrollState.hasOverflow && (
+        <button
+          type="button"
+          className="editor-tab-scroll-button"
+          onClick={() => scrollTabs(1)}
+          disabled={!scrollState.canScrollForward}
+          title={scrollForwardLabel}
+          aria-label={scrollForwardLabel}
+        >
+          <ChevronRight size={14} />
+        </button>
+      )}
     </div>
   )
 }
