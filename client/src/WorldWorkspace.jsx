@@ -10,6 +10,8 @@ import NotionEditor from './features/notion/NotionEditor';
 import TiptapEditor from './features/tiptap/TiptapEditor';
 import TabTypeSelector from './workspace/TabTypeSelector';
 import DeleteItemDialog from './workspace/DeleteItemDialog';
+import WorkspaceToastRegion from './workspace/WorkspaceToasts';
+import { enqueueWorkspaceToast } from './workspace/workspaceToastUtils';
 import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
 import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
@@ -588,6 +590,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [treeLoaded, setTreeLoaded] = useState(false);
   const [cachedWorldTheme, setCachedWorldThemeState] = useState(() => getCachedWorldTheme(worldId));
   const [toasts, setToasts] = useState([]);
+  const nextToastIdRef = useRef(0);
   const [saveStatus, setSaveStatus] = useState('saved');
   const assetFileInputRef = useRef(null);
   const coverFileInputRef = useRef(null);
@@ -650,9 +653,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [isSidebarCollapsed]);
 
   const addToast = useCallback((message, type = 'info') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    const id = ++nextToastIdRef.current;
+    const duration = type === 'error' ? 7000 : 4000;
+    setToasts(previous => enqueueWorkspaceToast(previous, { id, message, type, duration }));
+  }, []);
+  const dismissToast = useCallback(id => {
+    setToasts(previous => previous.filter(toast => toast.id !== id));
   }, []);
 
   const fetchTree = useCallback(async () => {
@@ -3685,14 +3691,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         onClose={closeAssetPreview}
       />
 
-      {/* Toasts */}
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <div key={toast.id} className={`toast toast-${toast.type} glass-panel`}>
-            <span>{toast.message}</span>
-          </div>
-        ))}
-      </div>
+      <WorkspaceToastRegion toasts={toasts} closeLabel={t('common.close')} onDismiss={dismissToast} />
     </div>
   );
 }

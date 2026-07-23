@@ -3,6 +3,7 @@
 .workspace-container .workspace-content-theme,
 .workspace-container .context-menu,
 .workspace-container .editor-world-actions-menu,
+.workspace-container .workspace-toast,
 .workspace-container .duplicate-modal,
 .workspace-container .delete-item-dialog,
 .workspace-container .icon-selector-dropdown {

@@ -118,4 +118,14 @@ describe('workspace style boundaries', () => {
     expect(themes).toContain('color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary))')
     expect(themes).toContain('background: var(--workspace-theme-secondary-soft)')
   })
+
+  it('scopes workspace notifications to the selected world theme', () => {
+    const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
+    const overlays = fs.readFileSync(path.join(import.meta.dirname, 'overlays.css'), 'utf8')
+
+    expect(tokens).toContain('.workspace-container .workspace-toast')
+    expect(overlays).toContain('--toast-tone: var(--accent-color)')
+    expect(overlays).toContain('--toast-tone: var(--arcane-color)')
+    expect(overlays).toContain('var(--theme-custom-surface)')
+  })
 })

@@ -117,32 +117,120 @@
   box-shadow: 0 10px 30px #00000080;
 }
 
-.toast-container {
+.workspace-toast-region {
   z-index: 10000;
   pointer-events: none;
-  flex-direction: column-reverse;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   display: flex;
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 18px;
+  right: 18px;
 }
 
-.toast {
+.workspace-toast {
+  --toast-tone: var(--accent-color);
   pointer-events: auto;
-  color: #fff;
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border: 1px solid #ffffff1a;
-  border-radius: 12px;
+  width: min(320px, calc(100vw - 24px));
+  min-height: 48px;
+  color: var(--text-primary);
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--toast-tone) 11%, transparent), transparent 54%),
+    color-mix(in srgb, var(--theme-custom-surface) 94%, var(--theme-custom-bg));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--toast-tone) 34%, transparent);
+  border-radius: 8px;
+  grid-template-columns: 28px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 12px;
-  min-width: 300px;
-  padding: 16px 20px;
-  font-size: .9rem;
-  animation: .4s cubic-bezier(.16,1,.3,1) forwards toastIn;
-  display: flex;
-  box-shadow: 0 10px 30px #0006;
+  gap: 9px;
+  padding: 9px 8px 10px 9px;
+  animation: .2s cubic-bezier(.16,1,.3,1) both workspaceToastIn;
+  display: grid;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--theme-custom-bg) 68%, #000),inset 0 1px #ffffff09;
+}
+
+.workspace-toast.is-error {
+  --toast-tone: var(--arcane-color);
+}
+
+.workspace-toast-icon {
+  width: 28px;
+  height: 28px;
+  color: color-mix(in srgb, var(--toast-tone) 82%, var(--text-primary));
+  background: color-mix(in srgb, var(--toast-tone) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--toast-tone) 26%, transparent);
+  border-radius: 6px;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
+}
+
+.workspace-toast-message {
+  min-width: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  font-size: .74rem;
+  font-weight: 570;
+  line-height: 1.35;
+}
+
+.workspace-toast-close {
+  width: 24px;
+  height: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  transition: color .14s,background .14s;
+  display: inline-flex;
+}
+
+.workspace-toast-close:hover,.workspace-toast-close:focus-visible {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--toast-tone) 14%, transparent);
+  outline: none;
+}
+
+.workspace-toast-progress {
+  height: 2px;
+  background: var(--toast-tone);
+  opacity: .72;
+  transform-origin: left;
+  animation: var(--toast-duration) linear both workspaceToastProgress;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.workspace-toast.is-paused .workspace-toast-progress {
+  animation-play-state: paused;
+}
+
+.workspace-toast.is-leaving {
+  pointer-events: none;
+  animation: .16s ease-in both workspaceToastOut;
+}
+
+@media (width <= 520px) {
+  .workspace-toast-region {
+    align-items: stretch;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+  }
+
+  .workspace-toast {
+    width: 100%;
+  }
 }
 
 .asset-move-target-list {
@@ -735,7 +823,9 @@
 @media (prefers-reduced-motion: reduce) {
   .delete-item-dialog,
   .delete-item-dialog-overlay,
-  .delete-item-dialog-spinner {
+  .delete-item-dialog-spinner,
+  .workspace-toast,
+  .workspace-toast-progress {
     animation: none;
   }
 }
@@ -1042,15 +1132,32 @@
   }
 }
 
-@keyframes toastIn {
-  0% {
+@keyframes workspaceToastIn {
+  from {
     opacity: 0;
-    transform: translate(30px)scale(.9);
+    transform: translateX(14px) scale(.98);
   }
 
   to {
     opacity: 1;
-    transform: translate(0)scale(1);
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes workspaceToastOut {
+  to {
+    opacity: 0;
+    transform: translateX(10px) scale(.98);
+  }
+}
+
+@keyframes workspaceToastProgress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
   }
 }
 
