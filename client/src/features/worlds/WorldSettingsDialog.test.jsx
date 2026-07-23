@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WorldSettingsDialog from './WorldSettingsDialog'
@@ -132,5 +132,20 @@ describe('WorldSettingsDialog', () => {
 
     expect(dialog.style.getPropertyValue('--accent-color')).toBe('#8f1d2c')
     expect(dialog.style.getPropertyValue('--theme-custom-surface')).toBe('#1a1014')
+  })
+
+  it('restores custom colors using the currently selected theme', async () => {
+    const user = userEvent.setup()
+
+    render(<WorldSettingsDialog world={world} currentUser={{ globalRole: 'root' }} onClose={vi.fn()} />)
+    const dialog = screen.getByRole('dialog')
+    await user.click(screen.getByRole('tab', { name: 'dashboard.world_tab_appearance' }))
+    await user.click(screen.getByRole('button', { name: 'dashboard.theme_vampire_masquerade' }))
+
+    fireEvent.change(screen.getByLabelText('dashboard.theme_color_accent'), { target: { value: '#123456' } })
+    expect(dialog.style.getPropertyValue('--accent-color')).toBe('#123456')
+
+    await user.click(screen.getByRole('button', { name: 'dashboard.theme_restore_preset' }))
+    expect(dialog.style.getPropertyValue('--accent-color')).toBe('#8f1d2c')
   })
 })

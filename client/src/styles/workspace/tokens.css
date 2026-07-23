@@ -1,7 +1,10 @@
 /* The shell owns neutral controls. These scopes explicitly opt into the world's palette. */
 .workspace-container.workspace-boot,
 .workspace-container .workspace-content-theme,
+.workspace-container .context-menu,
+.workspace-container .editor-world-actions-menu,
 .workspace-container .duplicate-modal,
+.workspace-container .delete-item-dialog,
 .workspace-container .icon-selector-dropdown {
   --bg-color: var(--world-theme-background);
   --panel-bg: color-mix(in srgb, var(--world-theme-surface) 74%, transparent);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Copy, Edit2, Eye, FileImage, MoveRight, Music, PanelLeftClose, PanelLeftOpen, Plus, Settings, Share2, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Copy, Edit2, Eye, FileImage, FileText, MoveRight, Music, PanelLeftClose, PanelLeftOpen, Plus, Settings, Share2, Trash2, Upload, X } from 'lucide-react'
 
 export function WorkspaceBootScreen({ theme, themeStyle, title, label }) {
   return (
@@ -374,11 +374,28 @@ export function WorkspaceTabRow({
       <div ref={scrollRef} className="editor-tab-row" onScroll={updateScrollState} onWheel={handleTabWheel}>
         {tabs.map(tab => {
           if (renamingTab.path === tab.path) {
+            const TabIcon = getTabIcon(tab.contentType)
             return (
-              <input key={tab.uid} data-tab-uid={tab.uid} className="editor-tab-rename-input" value={renamingTab.value} onChange={event => onRenameChange(event.target.value)} onBlur={() => onRenameCommit(tab)} onKeyDown={event => {
-                if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
-                if (event.key === 'Escape') onRenameCancel()
-              }} autoFocus onFocus={event => event.target.select()} />
+              <div
+                key={tab.uid}
+                data-tab-uid={tab.uid}
+                className={`editor-tab-pill is-renaming ${activeTab?.uid === tab.uid ? 'active' : ''}`}
+              >
+                <TabIcon size={14} />
+                <input
+                  className="editor-tab-label-input"
+                  value={renamingTab.value}
+                  size={Math.max(1, renamingTab.value.length)}
+                  onChange={event => onRenameChange(event.target.value)}
+                  onBlur={() => onRenameCommit(tab)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
+                    if (event.key === 'Escape') onRenameCancel()
+                  }}
+                  autoFocus
+                  onFocus={event => event.target.select()}
+                />
+              </div>
             )
           }
           const TabIcon = getTabIcon(tab.contentType)
@@ -393,9 +410,11 @@ export function WorkspaceTabRow({
             data-tab-draft="true"
             className={`editor-tab-pill active is-draft ${draftTab.isCreating ? 'is-creating' : ''}`}
           >
+            <FileText size={14} />
             <input
-              className="editor-tab-draft-input"
+              className="editor-tab-label-input"
               value={draftTab.name}
+              size={Math.max(1, draftTab.name.length)}
               onChange={event => onDraftNameChange(event.target.value)}
               onKeyDown={event => {
                 if (event.key === 'Enter') {
@@ -406,7 +425,10 @@ export function WorkspaceTabRow({
               aria-label={draftRenameLabel}
               disabled={draftTab.isCreating}
               autoFocus
-              onFocus={event => event.target.select()}
+              onFocus={event => {
+                const textEnd = event.currentTarget.value.length
+                event.currentTarget.setSelectionRange(textEnd, textEnd)
+              }}
             />
           </div>
         )}

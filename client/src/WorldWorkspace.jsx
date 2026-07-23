@@ -9,6 +9,7 @@ import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import NotionEditor from './features/notion/NotionEditor';
 import TiptapEditor from './features/tiptap/TiptapEditor';
 import TabTypeSelector from './workspace/TabTypeSelector';
+import DeleteItemDialog from './workspace/DeleteItemDialog';
 import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
 import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
@@ -440,9 +441,16 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
         </span>
         <div
           className="tree-node-main"
+          data-document-uid={node.uid}
+          tabIndex={0}
           title={node.name}
           onClick={() => {
             if (isRenaming) return;
+            onFileSelect(node);
+          }}
+          onKeyDown={(event) => {
+            if (isRenaming || (event.key !== 'Enter' && event.key !== ' ')) return;
+            event.preventDefault();
             onFileSelect(node);
           }}
         >
@@ -597,7 +605,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [documentMovePrompt, setDocumentMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
-  const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
+  const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null, isDeleting: false });
   const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
   const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false, top: 0, left: 0 });
   const [renamingPath, setRenamingPath] = useState(null);
@@ -1298,8 +1306,29 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const handleDelete = async (node) => {
     if (isVisitor || !node) return;
-    setDeletePrompt({ isOpen: true, node });
+    setDeletePrompt({ isOpen: true, node, isDeleting: false });
   };
+
+  const closeDeletePrompt = useCallback(() => {
+    if (deletePrompt.isDeleting) return;
+    const deletedNode = deletePrompt.node;
+    setDeletePrompt({ isOpen: false, node: null, isDeleting: false });
+
+    if (deletedNode?.uid) {
+      window.requestAnimationFrame(() => {
+        if (deletedNode.type === 'tab') {
+          const tabElement = Array.from(document.querySelectorAll('[data-tab-uid]'))
+            .find(element => element.dataset.tabUid === deletedNode.uid);
+          if (tabElement?.matches('button')) tabElement.focus();
+          else tabElement?.querySelector('input')?.focus();
+          return;
+        }
+        Array.from(document.querySelectorAll('[data-document-uid]'))
+          .find(element => element.dataset.documentUid === deletedNode.uid)
+          ?.focus();
+      });
+    }
+  }, [deletePrompt.isDeleting, deletePrompt.node]);
 
   const updateHomePage = async (node) => {
     if (isVisitor) return;
@@ -1406,8 +1435,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const confirmDelete = async () => {
     const node = deletePrompt.node;
-    if (isVisitor || !node) return;
+    if (isVisitor || !node || deletePrompt.isDeleting) return;
     const deletedHomePage = worldData?.homePage === node.path;
+    setDeletePrompt(prev => ({ ...prev, isDeleting: true }));
 
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(node.path)}`, {
@@ -1448,13 +1478,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           }
           initialSharedSelectionRef.current = false;
         }
-        setDeletePrompt({ isOpen: false, node: null });
+        setDeletePrompt({ isOpen: false, node: null, isDeleting: false });
         await fetchTree();
         addToast(t('common.deleted'), 'success');
       } else {
+        setDeletePrompt(prev => ({ ...prev, isDeleting: false }));
         addToast(t('common.error'), 'error');
       }
     } catch {
+      setDeletePrompt(prev => ({ ...prev, isDeleting: false }));
       addToast(t('common.error'), 'error');
     }
   };
@@ -3258,35 +3290,36 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         </div>
       )}
 
-      {deletePrompt.isOpen && (
-        <div className="duplicate-modal-overlay" onClick={() => setDeletePrompt({ isOpen: false, node: null })}>
-          <div className="modal-content glass-panel duplicate-modal delete-modal" onClick={e => e.stopPropagation()}>
-            <button
-              type="button"
-              className="duplicate-modal-close"
-              onClick={() => setDeletePrompt({ isOpen: false, node: null })}
-              title={t('common.cancel')}
-            >
-              <X size={16} />
-            </button>
-            <div className="duplicate-modal-header">
-              <div className="duplicate-modal-icon delete-modal-icon">
-                <Trash2 size={20} />
-              </div>
-              <div>
-                <h3>{t('workspace.delete_document')}</h3>
-                <p>{t('workspace.delete_document_hint', { name: deletePrompt.node?.name })}</p>
-              </div>
-            </div>
-
-            <div className="delete-modal-actions">
-              <button type="button" className="delete-confirm-button" onClick={confirmDelete}>
-                <Trash2 size={16} />
-                <span>{t('workspace.delete_document_confirm')}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      {deletePrompt.isOpen && deletePrompt.node && (
+        <DeleteItemDialog
+          item={deletePrompt.node}
+          icon={React.createElement(
+            deletePrompt.node.type === 'tab'
+              ? getTabTypeIcon(deletePrompt.node.contentType)
+              : getDocumentIcon(deletePrompt.node.icon),
+            { size: 14 }
+          )}
+          deleting={deletePrompt.isDeleting}
+          onCancel={closeDeletePrompt}
+          onConfirm={confirmDelete}
+          labels={deletePrompt.node.type === 'tab' ? {
+            title: t('workspace.delete_tab_title'),
+            description: t('workspace.delete_tab_hint'),
+            warning: t('workspace.delete_tab_warning'),
+            close: t('common.close'),
+            cancel: t('common.cancel'),
+            confirm: t('workspace.delete_tab_confirm'),
+            deleting: t('common.deleting')
+          } : {
+            title: t('workspace.delete_document_title'),
+            description: t('workspace.delete_document_compact_hint'),
+            warning: t('workspace.delete_document_warning'),
+            close: t('common.close'),
+            cancel: t('common.cancel'),
+            confirm: t('workspace.delete_document_confirm'),
+            deleting: t('common.deleting')
+          }}
+        />
       )}
 
       {documentMovePrompt.isOpen && (

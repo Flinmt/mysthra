@@ -525,6 +525,221 @@
   box-shadow: 0 12px 28px #7f1d1d57;
 }
 
+.delete-item-dialog-overlay {
+  z-index: 2100;
+  background: color-mix(in srgb, var(--world-theme-background) 72%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  place-items: center;
+  padding: 18px;
+  animation: .14s ease-out fadeIn;
+  display: grid;
+  position: fixed;
+  inset: 0;
+}
+
+.delete-item-dialog {
+  width: min(390px, 100%);
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, var(--workspace-theme-accent-soft), transparent 42%),
+    color-mix(in srgb, var(--theme-custom-surface) 94%, var(--theme-custom-bg));
+  border: 1px solid var(--workspace-theme-accent-border);
+  border-radius: 10px;
+  padding: 18px;
+  animation: .18s cubic-bezier(.16,1,.3,1) duplicateModalIn;
+  position: relative;
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--theme-custom-bg) 76%, #000),inset 0 1px #ffffff0a;
+}
+
+.delete-item-dialog-close {
+  width: 27px;
+  height: 27px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  transition: color .14s,background .14s;
+  display: inline-flex;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.delete-item-dialog-close:hover:not(:disabled),.delete-item-dialog-close:focus-visible {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+  outline: none;
+}
+
+.delete-item-dialog-header {
+  align-items: flex-start;
+  gap: 11px;
+  padding-right: 28px;
+  display: flex;
+}
+
+.delete-item-dialog-mark {
+  width: 32px;
+  height: 32px;
+  color: color-mix(in srgb, var(--arcane-color) 82%, var(--text-primary));
+  background: var(--workspace-theme-secondary-soft);
+  border: 1px solid var(--workspace-theme-secondary-border);
+  border-radius: 7px;
+  flex: 0 0 32px;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
+}
+
+.delete-item-dialog h2 {
+  color: var(--text-primary);
+  letter-spacing: -.01em;
+  margin: 0 0 4px;
+  font-size: .98rem;
+  font-weight: 720;
+}
+
+.delete-item-dialog-header p {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+.delete-item-dialog-preview {
+  min-width: 0;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-color) 7%, transparent);
+  border: 1px solid var(--workspace-theme-accent-border);
+  border-radius: 6px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-top: 15px;
+  padding: 7px 9px;
+  display: flex;
+}
+
+.delete-item-dialog-preview svg {
+  color: color-mix(in srgb, var(--accent-color) 76%, var(--text-primary));
+  flex: 0 0 auto;
+}
+
+.delete-item-dialog-preview > span {
+  flex: 0 0 auto;
+  align-items: center;
+  display: inline-flex;
+}
+
+.delete-item-dialog-preview strong {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: .76rem;
+  font-weight: 650;
+  overflow: hidden;
+}
+
+.delete-item-dialog-warning {
+  color: color-mix(in srgb, var(--arcane-color) 68%, var(--text-secondary));
+  margin: 8px 1px 0;
+  font-size: .67rem;
+}
+
+.delete-item-dialog-actions {
+  border-top: 1px solid var(--workspace-theme-accent-border);
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 16px;
+  padding-top: 12px;
+  display: flex;
+}
+
+.delete-item-dialog-actions button {
+  cursor: pointer;
+  border-radius: 5px;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 31px;
+  padding: 7px 11px;
+  font-size: .72rem;
+  font-weight: 650;
+  transition: color .14s,background .14s,border-color .14s,box-shadow .14s,transform .14s;
+  display: inline-flex;
+}
+
+.delete-item-dialog-cancel {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-color) 64%, transparent);
+  border: 1px solid var(--workspace-theme-accent-border);
+}
+
+.delete-item-dialog-cancel:hover:not(:disabled),.delete-item-dialog-cancel:focus-visible {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+  border-color: var(--workspace-theme-secondary-border);
+  outline: none;
+}
+
+.delete-item-dialog-confirm {
+  color: #fff;
+  background: var(--accent-color);
+  border: 1px solid var(--workspace-theme-accent-border);
+}
+
+.delete-item-dialog-confirm:hover:not(:disabled),.delete-item-dialog-confirm:focus-visible {
+  background: var(--accent-hover);
+  border-color: var(--workspace-theme-secondary-border);
+  box-shadow: 0 7px 18px var(--accent-glow);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.delete-item-dialog-actions button:disabled,.delete-item-dialog-close:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.delete-item-dialog-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffffff4a;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: deleteItemSpinner .7s linear infinite;
+}
+
+@keyframes deleteItemSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (width <= 480px) {
+  .delete-item-dialog {
+    padding: 16px;
+  }
+
+  .delete-item-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delete-item-dialog,
+  .delete-item-dialog-overlay,
+  .delete-item-dialog-spinner {
+    animation: none;
+  }
+}
+
 .context-menu button {
   width: 100%;
   color: var(--text-primary);
@@ -574,11 +789,11 @@
 }
 
 .workspace-container .context-menu button.danger,.workspace-container .editor-world-actions-menu button.danger {
-  color: color-mix(in srgb, var(--error-color) 78%, var(--text-primary));
+  color: color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary));
 }
 
 .workspace-container .context-menu button.danger:hover,.workspace-container .editor-world-actions-menu button.danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error-color) 20%, transparent);
+  background: var(--workspace-theme-secondary-soft);
 }
 
 .workspace-container .delete-modal,.workspace-container .delete-confirm-button {

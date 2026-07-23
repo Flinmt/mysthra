@@ -103,7 +103,7 @@ function ThemeColorPicker({ theme, colors, onEnabledChange, onColorsChange }) {
             </label>
           ))}
         </div>
-        <button type="button" className="btn-secondary world-custom-theme-reset" onClick={resetToPreset}>
+        <button type="button" className="world-custom-theme-reset" onClick={resetToPreset}>
           {t('dashboard.theme_restore_preset')}
         </button>
       </div>

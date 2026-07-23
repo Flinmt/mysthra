@@ -256,7 +256,10 @@ describe('WorkspaceShell', () => {
       />
     )
 
-    fireEvent.blur(screen.getByDisplayValue('Renamed'))
+    const renameInput = screen.getByDisplayValue('Renamed')
+    expect(renameInput.parentElement.classList.contains('editor-tab-pill')).toBe(true)
+    expect(renameInput.parentElement.classList.contains('active')).toBe(true)
+    fireEvent.blur(renameInput)
     expect(onRenameCommit).toHaveBeenCalledWith(tabs[0])
   })
 
@@ -282,6 +285,9 @@ describe('WorkspaceShell', () => {
     const input = screen.getByRole('textbox', { name: 'Rename draft tab' })
     expect(input.parentElement.classList.contains('editor-tab-pill')).toBe(true)
     expect(input.parentElement.classList.contains('active')).toBe(true)
+    expect(input.parentElement.querySelector('svg')).toBeTruthy()
+    expect(input.selectionStart).toBe(input.value.length)
+    expect(input.selectionEnd).toBe(input.value.length)
     await user.clear(input)
     await user.type(input, 'Lore{Enter}')
 

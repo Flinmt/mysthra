@@ -297,7 +297,27 @@
 .world-native-color-control > span { min-width: 0; display: grid; gap: 1px; }
 .world-native-color-control strong { overflow: hidden; color: var(--app-muted); font-size: 0.56rem; text-overflow: ellipsis; white-space: nowrap; }
 .world-native-color-control small { color: var(--app-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.61rem; }
-.world-dialog .world-custom-theme-reset { min-height: 30px; border-color: var(--app-border); border-radius: 6px; color: var(--app-muted); background: var(--app-surface); font-size: 0.68rem; }
+.world-dialog.world-themed-dialog .world-custom-theme-reset {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-copper) 38%, transparent);
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--app-copper) 72%, var(--app-text));
+  background: color-mix(in srgb, var(--app-copper) 10%, var(--app-surface));
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s, box-shadow .15s;
+}
+
+.world-dialog.world-themed-dialog .world-custom-theme-reset:hover,
+.world-dialog.world-themed-dialog .world-custom-theme-reset:focus-visible {
+  color: var(--app-text);
+  border-color: var(--app-copper);
+  background: color-mix(in srgb, var(--app-copper) 18%, var(--app-surface));
+  box-shadow: 0 0 0 3px var(--app-focus);
+  outline: 0;
+}
 
 .world-public-control {
   min-height: 54px;

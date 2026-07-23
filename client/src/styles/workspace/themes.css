@@ -73,12 +73,12 @@
 
 .workspace-container .context-menu button.danger,
 .workspace-container .editor-world-actions-menu button.danger {
-  color: color-mix(in srgb, var(--error-color) 78%, var(--text-primary));
+  color: color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary));
 }
 
 .workspace-container .context-menu button.danger:hover,
 .workspace-container .editor-world-actions-menu button.danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error-color) 20%, transparent);
+  background: var(--workspace-theme-secondary-soft);
 }
 
 .workspace-container .editor-tab-pill,

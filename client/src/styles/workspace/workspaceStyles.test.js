@@ -99,4 +99,23 @@ describe('workspace style boundaries', () => {
     expect(markdownTheme).toContain("color: 'var(--workspace-editor-text)'")
     expect(markdownTheme).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe)/i)
   })
+
+  it('scopes deletion confirmations to the selected world theme', () => {
+    const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
+    const overlays = fs.readFileSync(path.join(import.meta.dirname, 'overlays.css'), 'utf8')
+
+    expect(tokens).toContain('.workspace-container .delete-item-dialog')
+    expect(overlays).toContain('background: var(--accent-color)')
+    expect(overlays).toContain('background: var(--workspace-theme-secondary-soft)')
+  })
+
+  it('scopes contextual menus to the selected world theme', () => {
+    const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
+    const themes = fs.readFileSync(path.join(import.meta.dirname, 'themes.css'), 'utf8')
+
+    expect(tokens).toContain('.workspace-container .context-menu')
+    expect(tokens).toContain('.workspace-container .editor-world-actions-menu')
+    expect(themes).toContain('color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary))')
+    expect(themes).toContain('background: var(--workspace-theme-secondary-soft)')
+  })
 })
