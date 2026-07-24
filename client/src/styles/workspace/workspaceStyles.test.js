@@ -25,7 +25,6 @@ describe('workspace style boundaries', () => {
       'document.css',
       'editors.css',
       'tab-type-selector.css',
-      'notion.css',
       'tiptap.css',
       'map.css',
       'board.css',
@@ -37,22 +36,13 @@ describe('workspace style boundaries', () => {
     ])
   })
 
-  it('keeps BlockNote styling isolated in the Notion domain', () => {
-    const notion = fs.readFileSync(path.join(import.meta.dirname, 'notion.css'), 'utf8')
-    const competingFiles = workspaceFiles.filter(file => file !== 'notion.css' && /(?:\.bn-|\[data-file-block\])/.test(fs.readFileSync(path.join(import.meta.dirname, file), 'utf8')))
-
-    expect(notion).toContain('.notion-editor')
-    expect(notion).not.toContain('.wiki-block-editor')
-    expect(competingFiles).toEqual([])
-  })
-
   it('keeps the Notion writing surface compact and avoids a fixed editor height', () => {
-    const notion = fs.readFileSync(path.join(import.meta.dirname, 'notion.css'), 'utf8')
+    const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
     const document = fs.readFileSync(path.join(import.meta.dirname, 'document.css'), 'utf8')
 
-    expect(notion).not.toContain('min-height: 420px')
-    expect(notion).toContain('font-size: 13px')
-    expect(notion).toContain('padding: 0 28px')
+    expect(tiptap).not.toContain('min-height: 420px')
+    expect(tiptap).toContain('font-size: 13px')
+    expect(tiptap).toContain('padding: 0 28px 80px')
     expect(document).toContain('width: min(780px,100% - 80px)')
     expect(document).toContain('.editor-page.is-wiki-page.is-wide-content .document-content-frame')
     expect(document).toContain('height: 148px')
@@ -140,7 +130,7 @@ describe('workspace style boundaries', () => {
     expect(workspaceStyles).not.toContain('.icon-option')
   })
 
-  it('scopes the experimental slash menu to the selected world theme', () => {
+  it('scopes the slash menu to the selected world theme', () => {
     const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
     const slashMenuStyles = tiptap.slice(tiptap.indexOf('.tiptap-slash-menu-group +'))
 
@@ -151,7 +141,7 @@ describe('workspace style boundaries', () => {
     expect(slashMenuStyles).not.toContain('var(--workspace-shell-raised)')
   })
 
-  it('scopes experimental toggle headings to the selected world theme', () => {
+  it('scopes toggle headings to the selected world theme', () => {
     const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
 
     expect(tiptap).toContain('--tiptap-toggle-accent: var(--accent-color)')

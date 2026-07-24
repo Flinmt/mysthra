@@ -6,7 +6,7 @@ import WorkspaceInsertSearch from './WorkspaceInsertSearch'
 describe('WorkspaceInsertSearch', () => {
   afterEach(cleanup)
 
-  it('identifies experimental Tiptap tabs without falling back to Notion', async () => {
+  it('identifies legacy Tiptap tabs as Notion', async () => {
     const user = userEvent.setup()
     const documentTree = [{
       uid: 'document-1',
@@ -30,15 +30,14 @@ describe('WorkspaceInsertSearch', () => {
         labels={{
           searchTabsAssetsPlaceholder: 'Search',
           resultTypeTab: 'Tab',
-          tabTypeNotion: 'Notion',
-          tabTypeTiptap: 'Tiptap'
+          tabTypeNotion: 'Notion'
         }}
       />
     )
 
-    await user.type(screen.getByPlaceholderText('Search'), 'Tiptap')
+    await user.type(screen.getByPlaceholderText('Search'), 'Notion')
 
-    expect(screen.getByRole('button', { name: /Tab · Notes · Tiptap/ })).toBeTruthy()
-    expect(screen.queryByText(/Tab · Notes · Notion/)).toBeNull()
+    expect(screen.getByRole('button', { name: /Tab · Notes · Notion/ })).toBeTruthy()
+    expect(screen.queryByText(/Tab · Notes · Tiptap/)).toBeNull()
   })
 })

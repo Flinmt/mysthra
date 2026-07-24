@@ -350,7 +350,7 @@ test("document tree supports containers and editable tabs", async () => {
   });
   const tab = await createDocument(worldName, `${container.path}/Overview`, "# First draft", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "markdown"
   });
 
   const tree = await getFileTree(worldName);
@@ -433,7 +433,7 @@ test("document creation stores accented tab names in metadata", async () => {
   });
   const tab = await createDocument(worldName, `${container.path}/${tabName}`, "# Boas-vindas", {
     type: "tab",
-    contentType: "wiki",
+    contentType: "markdown",
     name: tabName
   });
 
@@ -524,7 +524,7 @@ test("moveDocument moves containers with children and updates tab index paths", 
   });
   const tab = await createDocument(worldName, `${child.path}/Overview`, "# Moved", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "markdown"
   });
 
   const moved = await moveDocument(worldName, source.path, target.path);
@@ -638,7 +638,7 @@ test("duplicateDocument can clone a document with or without children", async ()
   });
   const tab = await createDocument(worldName, `${document.path}/Overview`, "# Archive", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "markdown"
   });
 
   const singleCopy = await duplicateDocument(worldName, document.path, {

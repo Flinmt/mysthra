@@ -1,3 +1,10 @@
+.tiptap-editor-shell {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 0 0 max(24px, env(safe-area-inset-bottom));
+  color: var(--workspace-editor-text);
+}
+
 .tiptap-editor {
   position: relative;
   width: 100%;
@@ -34,7 +41,7 @@
 
 .tiptap-editor .ProseMirror {
   min-height: 320px;
-  padding: 0 0 80px;
+  padding: 0 28px 80px;
   outline: none;
   font-size: 13px;
   line-height: 1.6;

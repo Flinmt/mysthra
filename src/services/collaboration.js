@@ -1,6 +1,5 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const crypto = require("node:crypto");
 const { Hocuspocus } = require("@hocuspocus/server");
 const Y = require("yjs");
 const {
@@ -15,13 +14,9 @@ const { isGlobalAdmin } = require("../utils/roles");
 const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
-const BLOCKNOTE_FRAGMENT = "blocknote";
-const NOTION_MIGRATION_VERSION = 1;
-const MAX_MIGRATION_UPDATE_SIZE = 1000 * 1000;
 const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
 
 let activeCollaborationServer = null;
-const notionMigrationQueues = new Map();
 
 function isCollaborationDebugEnabled() {
   return ["1", "true", "yes", "on"].includes(String(process.env.COLLABORATION_DEBUG || "").trim().toLowerCase());
@@ -103,8 +98,7 @@ async function resolveTabRoom(room) {
     ...room,
     path: safePath,
     pagesDir,
-    metadata,
-    indexPath: path.join(pagesDir, safePath, "index.md")
+    metadata
   };
 }
 
@@ -152,120 +146,6 @@ async function storeCollaborationDocument(document, room) {
 
 function encodeStateVector(document) {
   return Buffer.from(Y.encodeStateVector(document)).toString("base64");
-}
-
-function getContentHash(content = "") {
-  return crypto.createHash("sha256").update(String(content), "utf8").digest("hex");
-}
-
-function getFallbackContentHash(content = "") {
-  let hash = 2166136261;
-  for (const byte of Buffer.from(String(content), "utf8")) {
-    hash ^= byte;
-    hash = Math.imul(hash, 16777619);
-  }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
-}
-
-function matchesContentHash(content, hash) {
-  return hash?.startsWith("fnv1a:")
-    ? getFallbackContentHash(content) === hash
-    : getContentHash(content) === hash;
-}
-
-function sendStateless(connection, payload) {
-  connection?.sendStateless(JSON.stringify(payload));
-}
-
-async function executeNotionMigration({ connection, document, documentName, payload }) {
-  let message;
-  try {
-    message = JSON.parse(payload);
-  } catch {
-    return;
-  }
-  if (message?.type !== "notion:migrate") return;
-
-  const result = {
-    type: "notion:migration-result",
-    requestId: message.requestId || "",
-    status: "rejected"
-  };
-
-  try {
-    await updateConnectionLockState(documentName, connection);
-    if (message.version !== NOTION_MIGRATION_VERSION || connection.readOnly) {
-      result.reason = connection.readOnly ? "readonly" : "unsupported-version";
-      sendStateless(connection, result);
-      return;
-    }
-
-    const room = parseCollaborationRoom(documentName);
-    if (room.type !== "tab") {
-      result.reason = "invalid-room";
-      sendStateless(connection, result);
-      return;
-    }
-    const resolvedRoom = await resolveTabRoom(room);
-    if (resolvedRoom.metadata.contentType !== "wiki") {
-      result.reason = "invalid-content-type";
-      sendStateless(connection, result);
-      return;
-    }
-
-    const fragment = document.getXmlFragment(BLOCKNOTE_FRAGMENT);
-    if (fragment.length > 0) {
-      sendStateless(connection, { ...result, status: "already-migrated", reason: undefined });
-      return;
-    }
-
-    const legacyContent = await fs.readFile(resolvedRoom.indexPath, "utf8").catch(error => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
-    if (!legacyContent.trim() || !matchesContentHash(legacyContent, message.sourceHash)) {
-      result.reason = "source-changed";
-      sendStateless(connection, result);
-      return;
-    }
-
-    const update = Buffer.from(String(message.update || ""), "base64");
-    if (!update.length || update.length > MAX_MIGRATION_UPDATE_SIZE) {
-      result.reason = "invalid-update";
-      sendStateless(connection, result);
-      return;
-    }
-
-    const migrationDocument = new Y.Doc();
-    try {
-      Y.applyUpdate(migrationDocument, update);
-      if (migrationDocument.getXmlFragment(BLOCKNOTE_FRAGMENT).length === 0) {
-        result.reason = "invalid-update";
-        sendStateless(connection, result);
-        return;
-      }
-      Y.applyUpdate(document, Y.encodeStateAsUpdate(migrationDocument));
-    } finally {
-      migrationDocument.destroy();
-    }
-    sendStateless(connection, { ...result, status: "accepted", reason: undefined });
-  } catch {
-    sendStateless(connection, { ...result, reason: "migration-failed" });
-  }
-}
-
-async function handleNotionMigration(payload) {
-  const key = payload.documentName;
-  const previous = notionMigrationQueues.get(key) || Promise.resolve();
-  const current = previous
-    .catch(() => undefined)
-    .then(() => executeNotionMigration(payload));
-  notionMigrationQueues.set(key, current);
-  try {
-    await current;
-  } finally {
-    if (notionMigrationQueues.get(key) === current) notionMigrationQueues.delete(key);
-  }
 }
 
 async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
@@ -395,9 +275,6 @@ function createCollaborationServer() {
     async beforeHandleMessage({ documentName, connection }) {
       await updateConnectionLockState(documentName, connection);
     },
-    async onStateless(payload) {
-      await handleNotionMigration(payload);
-    },
     async onStoreDocument({ document, documentName, lastContext }) {
       const room = lastContext?.room || parseCollaborationRoom(documentName);
       if (room.type !== "tab") return;
@@ -463,7 +340,6 @@ async function copyCollaborationState(worldName, sourceMetadata, targetMetadata)
 }
 
 module.exports = {
-  BLOCKNOTE_FRAGMENT,
   COLLABORATION_PATH,
   broadcastWorldTreeUpdate,
   closeCollaborationRoom,

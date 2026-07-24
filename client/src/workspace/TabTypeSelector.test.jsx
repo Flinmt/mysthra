@@ -7,8 +7,6 @@ const labels = {
   title: 'Choose tab type',
   description: 'Select how this tab should work.',
   stableGroup: 'Tab types',
-  experimentalGroup: 'Experimental',
-  experimental: 'Experimental',
   notion: 'Notion',
   notionHint: 'Block editor',
   markdown: 'Markdown/HTML',
@@ -17,15 +15,13 @@ const labels = {
   mapHint: 'Collaborative map',
   board: 'Board',
   boardHint: 'Visual canvas',
-  tiptap: 'Tiptap',
-  tiptapHint: 'Editor under evaluation',
   creating: 'Creating tab...'
 }
 
 describe('TabTypeSelector', () => {
   afterEach(cleanup)
 
-  it('groups stable types and separates the experimental editor', async () => {
+  it('offers Notion as a stable Tiptap-backed type', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
 
@@ -36,13 +32,14 @@ describe('TabTypeSelector', () => {
     for (const button of stableGroup.querySelectorAll('button')) {
       expect(button.className).toBe('tab-type-option')
     }
-    expect(screen.getByRole('button', { name: /Tiptap/ }).className).toContain('is-experimental')
-    expect(screen.getAllByText('Experimental')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /Notion/ }).className).toBe('tab-type-option')
+    expect(screen.queryByText('Experimental')).toBeNull()
+    expect(screen.queryByText('Tiptap')).toBeNull()
     await user.click(screen.getByRole('button', { name: /Markdown\/HTML/ }))
-    await user.click(screen.getByRole('button', { name: /Tiptap/ }))
+    await user.click(screen.getByRole('button', { name: /Notion/ }))
 
     expect(onSelect).toHaveBeenNthCalledWith(1, 'markdown')
-    expect(onSelect).toHaveBeenNthCalledWith(2, 'tiptap')
+    expect(onSelect).toHaveBeenNthCalledWith(2, 'wiki')
   })
 
   it('disables every type and announces creation progress', () => {

@@ -38,24 +38,6 @@
   --workspace-theme-secondary-border: color-mix(in srgb, var(--arcane-color) 36%, transparent);
 }
 
-/* BlockNote visual layer. Keep these tokens independent from Mantine internals. */
-.workspace-container .workspace-content-theme .notion-editor {
-  --notion-ui-surface: var(--theme-custom-surface);
-  --notion-ui-surface-raised: color-mix(in srgb, var(--theme-custom-surface) 92%, white);
-  --notion-ui-text: var(--text-primary);
-  --notion-ui-text-muted: var(--text-secondary);
-  --notion-ui-border: var(--workspace-theme-accent-border);
-  --notion-ui-hover: var(--workspace-theme-accent-soft);
-  --notion-ui-selected: var(--workspace-theme-accent-hover);
-  --notion-ui-focus: var(--workspace-theme-secondary-border);
-  --notion-ui-danger: color-mix(in srgb, var(--error-color) 78%, var(--text-primary));
-  --notion-ui-danger-hover: color-mix(in srgb, var(--error-color) 20%, transparent);
-  --notion-ui-shadow: 0 12px 28px color-mix(in srgb, var(--bg-color) 78%, black);
-  --notion-ui-control-size: 26px;
-  --notion-ui-menu-item-size: 24px;
-  --notion-ui-icon-size: 14px;
-}
-
 .workspace-container .workspace-content-theme {
   --workspace-editor-text: var(--workspace-shell-text);
   --workspace-editor-muted: var(--workspace-shell-muted);
@@ -71,7 +53,7 @@
   background-color: var(--bg-color);
 }
 
-.workspace-container .workspace-content-theme .notion-editor,
+.workspace-container .workspace-content-theme .tiptap-editor-shell,
 .workspace-container .workspace-content-theme .markdown-html-editor {
   color: var(--workspace-editor-text);
   background-color: var(--bg-color);

@@ -34,9 +34,23 @@ const TiptapDocument = Node.create({
   content: 'block+'
 })
 
-export default function TiptapEditor({ content = '', editable, locked, collaborationRoom, currentUser, isVisitor = false, onCollaborationSaveState }) {
+export default function TiptapEditor({
+  content = '',
+  editable,
+  locked,
+  collaborationRoom,
+  currentUser,
+  isVisitor = false,
+  onVisitorCountChange,
+  onCollaborationSaveState
+}) {
   const { t } = useTranslation()
   const collaboration = useTiptapDocument({ roomName: collaborationRoom, currentUser, isVisitor, locked })
+  const {
+    awarenessStates,
+    provider: collaborationProvider,
+    setAwarenessField
+  } = collaboration
   const [slashState, setSlashState] = useState(null)
   const extensions = useMemo(() => [
     TiptapDocument,
@@ -61,7 +75,7 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     }),
     TiptapBlockAwareness.configure({
       rootPlaceholder: t('workspace.tiptap_placeholder'),
-      blockPlaceholder: t('workspace.notion_block_placeholder'),
+      blockPlaceholder: t('workspace.tiptap_block_placeholder'),
       headingPlaceholder: level => t('workspace.tiptap_heading_placeholder', { level }),
       toggleHeadingPlaceholder: level => t('workspace.tiptap_toggle_heading_placeholder', { level })
     }),
@@ -83,6 +97,22 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
   useEffect(() => {
     onCollaborationSaveState?.({ status: collaboration.saveStatus, dirty: collaboration.dirty })
   }, [collaboration.dirty, collaboration.saveStatus, onCollaborationSaveState])
+
+  useEffect(() => {
+    if (!collaborationProvider) {
+      onVisitorCountChange?.(0)
+      return
+    }
+    if (isVisitor) setAwarenessField('visitor', { viewing: true })
+    const visitorCount = awarenessStates.filter(state => state?.visitor?.viewing).length
+    onVisitorCountChange?.(visitorCount)
+  }, [
+    awarenessStates,
+    collaborationProvider,
+    isVisitor,
+    onVisitorCountChange,
+    setAwarenessField
+  ])
 
   const closeSlashMenu = useCallback(() => setSlashState(null), [])
   const updateSlashMenu = useCallback(() => {
@@ -183,9 +213,9 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
   }, [closeSlashMenu, editor, executeSlashCommand, slashState])
 
   return (
-    <div className="notion-editor" onKeyDownCapture={handleEditorKeyDown}>
+    <div className="tiptap-editor-shell" onKeyDownCapture={handleEditorKeyDown}>
       <div className="tiptap-editor">
-        <EditorContent editor={editor} className="bn-editor" />
+        <EditorContent editor={editor} />
         {slashState && editor && (
           <div
             className="tiptap-slash-menu-anchor"

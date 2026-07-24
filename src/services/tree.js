@@ -10,7 +10,7 @@ const {
 } = require("./collaboration");
 const { updateIndex, removeFromIndex } = require("./indexer");
 
-const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["wiki", "markdown"]);
+const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["markdown"]);
 const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
 function getTabContentType(metadata = {}) {
   return metadata.contentType || (metadata.type === "tab" ? "wiki" : null);
@@ -296,7 +296,7 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
   
   await fs.mkdir(fullDirPath, { recursive: true });
   
-  // Se for uma aba do tipo WIKI, salvamos o arquivo de conteúdo Markdown
+  // Only source-based tabs persist editable content in index.md.
   if (isFileBackedTab(metadata)) {
     const indexPath = path.join(fullDirPath, "index.md");
     await fs.writeFile(indexPath, content || "", "utf-8");

@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FlaskConical, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './features/map/MapEditor';
 import BoardEditor from './features/board/BoardEditor';
 import { useCollaborationRoom } from './hooks/useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
-import NotionEditor from './features/notion/NotionEditor';
 import TiptapEditor from './features/tiptap/TiptapEditor';
 import TabTypeSelector from './workspace/TabTypeSelector';
 import DeleteItemDialog from './workspace/DeleteItemDialog';
@@ -191,11 +190,17 @@ function getDocumentIcon(icon) {
 }
 
 function getTabTypeIcon(contentType) {
-  if (contentType === 'tiptap') return FlaskConical;
   if (contentType === 'map') return Map;
   if (contentType === 'board') return Shapes;
   if (contentType === 'markdown') return FilePenLine;
   return FileText;
+}
+
+function skipsFileContentLoad(contentType) {
+  return contentType === 'wiki'
+    || contentType === 'tiptap'
+    || contentType === 'map'
+    || contentType === 'board';
 }
 
 function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
@@ -775,13 +780,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   }, [activeTabPath, selectedContainerPath]);
 
-  const handleWikiContentChange = useCallback((nextContent) => {
-    latestContentRef.current = nextContent;
-    latestTabPathRef.current = activeTab?.path || '';
-    setFileContent(nextContent);
-    setIsDirty(true);
-  }, [activeTab?.path]);
-
   const handleCollaborationSaveState = useCallback(({ status, dirty }) => {
     if (typeof dirty === 'boolean') {
       setIsDirty(dirty);
@@ -900,7 +898,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
-      if (tabNode.contentType === 'map' || tabNode.contentType === 'board') {
+      if (skipsFileContentLoad(tabNode.contentType)) {
         setActiveTab(tabNode);
         setFileContent('');
         setContentLoading(false);
@@ -986,7 +984,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
     setTabDraft({ isOpen: false, name: '', isCreating: false });
 
-    if (tabNode.contentType === 'map' || tabNode.contentType === 'board') {
+    if (skipsFileContentLoad(tabNode.contentType)) {
       setActiveTab(tabNode);
       setFileContent('');
       setContentLoading(false);
@@ -1117,7 +1115,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
 
     const openInitialTab = async () => {
-      if (tabToOpen.contentType === 'map' || tabToOpen.contentType === 'board') {
+      if (skipsFileContentLoad(tabToOpen.contentType)) {
         setActiveTab(tabToOpen);
         setFileContent('');
         setContentLoading(false);
@@ -1213,30 +1211,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
         await fetchTree();
 
-        if (contentType === 'wiki') {
-          const resDoc = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(createdTab.path)}`);
-          if (resDoc.ok) {
-            const data = await resDoc.json();
-            setActiveTab(nextActiveTab);
-            setFileContent(data.content || '');
-            setContentLoading(false);
-            setIsDirty(false);
-            setSaveStatus('saved');
-          } else {
-            setActiveTab(nextActiveTab);
-            setFileContent('');
-            setContentLoading(false);
-            setIsDirty(false);
-            setSaveStatus('saved');
-          }
-        } else {
-          setActiveTab(nextActiveTab);
-          setFileContent('');
-          setContentLoading(false);
-          setIsDirty(false);
-          setSaveStatus('saved');
-          await fetchAssets();
-        }
+        setActiveTab(nextActiveTab);
+        setFileContent('');
+        setContentLoading(false);
+        setIsDirty(false);
+        setSaveStatus('saved');
+        if (contentType === 'map' || contentType === 'board') await fetchAssets();
         setTabDraft({ isOpen: false, name: '', isCreating: false });
         addToast(t('common.created'), 'success');
       } else {
@@ -2857,12 +2837,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         title: t('workspace.tab_type_selector_title'),
                         description: t('workspace.tab_type_selector_hint'),
                         stableGroup: t('workspace.tab_type_stable_group'),
-                        experimentalGroup: t('workspace.tab_type_experimental_group'),
-                        experimental: t('workspace.experimental'),
                         notion: t('workspace.tab_type_notion'),
                         notionHint: t('workspace.tab_type_notion_hint'),
-                        tiptap: t('workspace.tab_type_tiptap'),
-                        tiptapHint: t('workspace.tab_type_tiptap_hint'),
                         markdown: t('workspace.tab_type_markdown'),
                         markdownHint: t('workspace.tab_type_markdown_hint'),
                         map: t('workspace.tab_type_map'),
@@ -3001,17 +2977,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           onlineUsers: t('workspace.online_users')
                         }}
                       />
-                      ) : activeTab.contentType === 'tiptap' ? (
-                      <TiptapEditor
-                        key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
-                        content={fileContent}
-                        editable={isDocumentUnlocked && !isVisitor}
-                        locked={!canWriteActiveTab}
-                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
-                        currentUser={currentUser}
-                        isVisitor={isVisitor}
-                        onCollaborationSaveState={handleCollaborationSaveState}
-                      />
                       ) : activeTab.contentType === 'markdown' ? (
                       <MarkdownHtmlEditor
                         key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
@@ -3052,7 +3017,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           resultTypeAudio: t('workspace.result_type_audio'),
                           previewPath: t('workspace.preview_path'),
                           tabTypeNotion: t('workspace.tab_type_notion'),
-                          tabTypeTiptap: t('workspace.tab_type_tiptap'),
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
                           tabTypeBoard: t('workspace.tab_type_board'),
@@ -3061,61 +3025,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         onCollaborationSaveState={handleCollaborationSaveState}
                       />
                       ) : (
-                      <NotionEditor
+                      <TiptapEditor
                         key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
-                        contentKey={activeTab.path}
                         content={fileContent}
                         editable={isDocumentUnlocked && !isVisitor}
                         locked={!canWriteActiveTab}
-                        worldId={worldId}
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
                         isVisitor={isVisitor}
-                        assetImages={assetImages}
-                        assetTree={assetTree}
-                        getAssetUrl={getAssetUrl}
-                        onRequestAssets={fetchAssets}
-                        documentTree={tree}
-                        onNavigateToPageLink={navigateToPageLink}
-                        labels={{
-                          emptyPlaceholder: t('workspace.notion_empty_placeholder'),
-                          blockPlaceholder: t('workspace.notion_block_placeholder'),
-                          commandGroupText: t('workspace.notion_command_group_text'),
-                          commandGroupLists: t('workspace.notion_command_group_lists'),
-                          commandGroupStructure: t('workspace.notion_command_group_structure'),
-                          commandGroupMedia: t('workspace.notion_command_group_media'),
-                          insertImage: t('workspace.insert_image'),
-                          noAssetImages: t('workspace.no_asset_images'),
-                          pageLink: t('workspace.page_link'),
-                          insertPageLink: t('workspace.insert_page_link'),
-                          pageLinkHint: t('workspace.page_link_hint'),
-                          linkedDocument: t('workspace.linked_document'),
-                          linkedTab: t('workspace.linked_tab'),
-                          defaultDocumentTab: t('workspace.default_document_tab'),
-                          insertLink: t('workspace.insert_link'),
-                          searchTabsAssetsPlaceholder: t('workspace.search_tabs_assets_placeholder'),
-                          noSearchResults: t('workspace.no_search_results'),
-                          resultTypeTab: t('workspace.result_type_tab'),
-                          resultTypeImage: t('workspace.result_type_image'),
-                          resultTypeAudio: t('workspace.result_type_audio'),
-                          previewPath: t('workspace.preview_path'),
-                          tabTypeNotion: t('workspace.tab_type_notion'),
-                          tabTypeTiptap: t('workspace.tab_type_tiptap'),
-                          tabTypeMarkdown: t('workspace.tab_type_markdown'),
-                          tabTypeMap: t('workspace.tab_type_map'),
-                          tabTypeBoard: t('workspace.tab_type_board'),
-                          cancel: t('common.cancel'),
-                          collaboration: {
-                            connecting: t('workspace.collaboration_connecting'),
-                            connected: t('workspace.collaboration_connected'),
-                            readonly: t('workspace.collaboration_readonly'),
-                            disconnected: t('workspace.collaboration_disconnected'),
-                            error: t('workspace.collaboration_error')
-                          }
-                        }}
                         onVisitorCountChange={setActiveTabVisitorCount}
                         onCollaborationSaveState={handleCollaborationSaveState}
-                        onChange={handleWikiContentChange}
                       />
                       )}
                     </>

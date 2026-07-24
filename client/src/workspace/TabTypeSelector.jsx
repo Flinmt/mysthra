@@ -1,5 +1,5 @@
 import { forwardRef, useId } from 'react'
-import { FilePenLine, FileText, FlaskConical, Map, Shapes } from 'lucide-react'
+import { FilePenLine, FileText, Map, Shapes } from 'lucide-react'
 
 const STABLE_TAB_TYPES = [
   { id: 'wiki', icon: FileText, labelKey: 'notion', hintKey: 'notionHint' },
@@ -8,7 +8,7 @@ const STABLE_TAB_TYPES = [
   { id: 'board', icon: Shapes, labelKey: 'board', hintKey: 'boardHint' }
 ]
 
-function TabTypeButton({ type, labels, disabled, onSelect, buttonRef, experimental = false }) {
+function TabTypeButton({ type, labels, disabled, onSelect, buttonRef }) {
   const Icon = type.icon
   const hintId = `${labels.idPrefix}-${type.id}-hint`
 
@@ -16,7 +16,7 @@ function TabTypeButton({ type, labels, disabled, onSelect, buttonRef, experiment
     <button
       ref={buttonRef}
       type="button"
-      className={experimental ? 'tab-type-option is-experimental' : 'tab-type-option'}
+      className="tab-type-option"
       data-tab-type={type.id}
       onClick={() => onSelect(type.id)}
       disabled={disabled}
@@ -26,7 +26,6 @@ function TabTypeButton({ type, labels, disabled, onSelect, buttonRef, experiment
       <span className="tab-type-option-copy">
         <strong>
           {labels[type.labelKey]}
-          {experimental && <span className="tab-type-experimental-badge">{labels.experimental}</span>}
         </strong>
         <small id={hintId}>{labels[type.hintKey]}</small>
       </span>
@@ -39,13 +38,6 @@ const TabTypeSelector = forwardRef(function TabTypeSelector({ labels, creating =
   const descriptionId = useId()
   const idPrefix = useId().replaceAll(':', '')
   const typeLabels = { ...labels, idPrefix }
-  const experimentalType = {
-    id: 'tiptap',
-    icon: FlaskConical,
-    labelKey: 'tiptap',
-    hintKey: 'tiptapHint'
-  }
-
   return (
     <section className="tab-type-selector" aria-labelledby={titleId} aria-describedby={descriptionId} aria-busy={creating}>
       <header className="tab-type-selector-header">
@@ -64,17 +56,6 @@ const TabTypeSelector = forwardRef(function TabTypeSelector({ labels, creating =
             buttonRef={index === 0 ? firstOptionRef : undefined}
           />
         ))}
-      </div>
-
-      <div className="tab-type-experimental">
-        <span className="tab-type-section-label">{labels.experimentalGroup}</span>
-        <TabTypeButton
-          type={experimentalType}
-          labels={typeLabels}
-          disabled={creating}
-          onSelect={onSelect}
-          experimental
-        />
       </div>
 
       {creating && <div className="tab-type-creating" role="status" aria-live="polite"><span aria-hidden="true" />{labels.creating}</div>}

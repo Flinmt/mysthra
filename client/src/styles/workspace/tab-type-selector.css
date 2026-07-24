@@ -159,43 +159,6 @@
   overflow: hidden;
 }
 
-.tab-type-experimental {
-  margin-top: 14px;
-  position: relative;
-}
-
-.tab-type-section-label {
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  margin: 0 0 6px 2px;
-  font-size: .6rem;
-  font-weight: 760;
-  display: block;
-}
-
-.tab-type-option.is-experimental {
-  --tab-type-tone: var(--arcane-color);
-  width: 100%;
-  background:
-    linear-gradient(110deg, color-mix(in srgb, var(--arcane-color) 9%, transparent), transparent 54%),
-    color-mix(in srgb, var(--panel-bg) 58%, transparent);
-  border-style: dashed;
-}
-
-.tab-type-experimental-badge {
-  color: color-mix(in srgb, var(--arcane-color) 84%, var(--text-primary));
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  background: color-mix(in srgb, var(--arcane-color) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--arcane-color) 24%, transparent);
-  border-radius: 999px;
-  padding: 2px 5px;
-  font-size: .52rem;
-  font-weight: 780;
-  box-shadow: inset 0 1px color-mix(in srgb, var(--text-primary) 8%, transparent);
-}
-
 .tab-type-creating {
   color: var(--text-secondary);
   align-items: center;

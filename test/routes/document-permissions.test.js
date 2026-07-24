@@ -80,7 +80,7 @@ test("document content PUT rejects users with read-only document access", async 
   await addWorldMember(worldName, reader.id);
 
   const container = await createDocument(worldName, "Private", "", { type: "container", ownerUserId: owner.id });
-  const tab = await createDocument(worldName, `${container.path}/Notes`, "Original", { type: "tab", contentType: "wiki", ownerUserId: owner.id });
+  const tab = await createDocument(worldName, `${container.path}/Notes`, "Original", { type: "tab", contentType: "markdown", ownerUserId: owner.id });
   await updateDocumentMetadata(worldName, container.path, {
     permissions: {
       inherit: false,
