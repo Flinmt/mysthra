@@ -182,7 +182,7 @@
   font-size: .72rem;
 }
 
-.workspace-container .duplicate-modal-icon,.workspace-container .icon-option,.workspace-container .icon-selector-category-title span,.workspace-container .workspace-insert-result span {
+.workspace-container .duplicate-modal-icon,.workspace-container .workspace-insert-result span {
   color: var(--arcane-color);
 }
 
@@ -191,12 +191,12 @@
   background: var(--workspace-theme-surface-soft);
 }
 
-.workspace-container .editor-tab-pill,.workspace-container .workspace-insert-result,.workspace-container .icon-option,.workspace-container .duplicate-scope-grid button {
+.workspace-container .editor-tab-pill,.workspace-container .workspace-insert-result,.workspace-container .duplicate-scope-grid button {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent-color) 18%, transparent);
 }
 
-.workspace-container .editor-tab-pill:hover,.workspace-container .editor-tab-pill.active,.workspace-container .workspace-insert-result:hover,.workspace-container .workspace-insert-result:focus-visible,.workspace-container .icon-option:hover,.workspace-container .icon-option.active,.workspace-container .duplicate-scope-grid button:hover {
+.workspace-container .editor-tab-pill:hover,.workspace-container .editor-tab-pill.active,.workspace-container .workspace-insert-result:hover,.workspace-container .workspace-insert-result:focus-visible,.workspace-container .duplicate-scope-grid button:hover {
   color: var(--text-primary);
   border-color: var(--workspace-theme-accent-border);
   background: var(--workspace-theme-accent-soft);

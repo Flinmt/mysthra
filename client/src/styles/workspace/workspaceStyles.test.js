@@ -73,9 +73,12 @@ describe('workspace style boundaries', () => {
     const imports = [...workspaceEntry.matchAll(/@import '\.\/(.+\.css)'/g)].map(match => match[1])
     const navigatorSelectors = /(?:tree-node|asset-tree-node|sidebar-search-bar|sidebar-nexus-tab|sidebar-empty|world-navigator)/
     const competingFiles = workspaceFiles.filter(file => file !== 'sidebar.css' && navigatorSelectors.test(fs.readFileSync(path.join(import.meta.dirname, file), 'utf8')))
+    const sidebar = fs.readFileSync(path.join(import.meta.dirname, 'sidebar.css'), 'utf8')
 
     expect(imports.indexOf('sidebar.css')).toBeGreaterThan(imports.indexOf('themes.css'))
-    expect(fs.readFileSync(path.join(import.meta.dirname, 'sidebar.css'), 'utf8')).toContain('--navigator-accent: var(--world-theme-accent)')
+    expect(sidebar).toContain('--navigator-accent: var(--world-theme-accent)')
+    expect(sidebar).toContain('.tree-node:hover .tree-node-actions')
+    expect(sidebar).not.toContain('.tree-node:focus-within .tree-node-actions')
     expect(competingFiles).toEqual([])
   })
 
@@ -118,6 +121,23 @@ describe('workspace style boundaries', () => {
     expect(themes).toContain('color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary))')
     expect(themes).toContain('background: var(--workspace-theme-secondary-soft)')
     expect(themes).toMatch(/\.workspace-container \.editor-world-actions-menu \{\s+background: color-mix\(in srgb, var\(--theme-custom-surface\) 94%, var\(--theme-custom-bg\)\);\s+-webkit-backdrop-filter: none;\s+backdrop-filter: none;/)
+  })
+
+  it('keeps the document icon picker compact and scoped to the world theme', () => {
+    const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
+    const overlays = fs.readFileSync(path.join(import.meta.dirname, 'overlays.css'), 'utf8')
+    const pickerStyles = overlays.slice(
+      overlays.indexOf('.document-icon-picker-backdrop'),
+      overlays.indexOf('.duplicate-modal-overlay')
+    )
+
+    expect(tokens).toContain('.workspace-container .document-icon-picker')
+    expect(pickerStyles).toContain('var(--theme-custom-surface)')
+    expect(pickerStyles).toContain('var(--workspace-theme-accent-border)')
+    expect(pickerStyles).toContain('var(--workspace-theme-secondary-soft)')
+    expect(pickerStyles).not.toContain('backdrop-filter')
+    expect(workspaceStyles).not.toContain('.icon-selector-dropdown')
+    expect(workspaceStyles).not.toContain('.icon-option')
   })
 
   it('scopes the experimental slash menu to the selected world theme', () => {

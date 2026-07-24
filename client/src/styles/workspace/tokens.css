@@ -6,7 +6,7 @@
 .workspace-container .workspace-toast,
 .workspace-container .duplicate-modal,
 .workspace-container .delete-item-dialog,
-.workspace-container .icon-selector-dropdown {
+.workspace-container .document-icon-picker {
   --bg-color: var(--world-theme-background);
   --panel-bg: color-mix(in srgb, var(--world-theme-surface) 74%, transparent);
   --border-color: color-mix(in srgb, var(--world-theme-accent) 16%, transparent);

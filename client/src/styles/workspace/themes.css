@@ -32,8 +32,6 @@
 }
 
 .workspace-container .duplicate-modal-icon,
-.workspace-container .icon-option,
-.workspace-container .icon-selector-category-title span,
 .workspace-container .workspace-insert-result span {
   color: var(--arcane-color);
 }
@@ -89,7 +87,6 @@
 
 .workspace-container .editor-tab-pill,
 .workspace-container .workspace-insert-result,
-.workspace-container .icon-option,
 .workspace-container .duplicate-scope-grid button {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent-color) 18%, transparent);
@@ -99,8 +96,6 @@
 .workspace-container .editor-tab-pill.active,
 .workspace-container .workspace-insert-result:hover,
 .workspace-container .workspace-insert-result:focus-visible,
-.workspace-container .icon-option:hover,
-.workspace-container .icon-option.active,
 .workspace-container .duplicate-scope-grid button:hover {
   color: var(--text-primary);
   border-color: var(--workspace-theme-accent-border);
@@ -111,12 +106,6 @@
 .workspace-container .editor-tab-pill.active::after {
   background: var(--accent-color);
   box-shadow: 0 0 15px var(--accent-glow);
-}
-
-.workspace-container .icon-option:hover,
-.workspace-container .icon-option.active {
-  color: var(--text-primary);
-  filter: drop-shadow(0 0 8px var(--accent-glow));
 }
 
 .workspace-container .duplicate-modal p,
@@ -201,25 +190,17 @@
   box-shadow: inset 0 0 0 1px var(--workspace-theme-accent-border), 0 0 18px var(--accent-glow);
 }
 
-.workspace-container .duplicate-modal,
-.workspace-container .icon-selector-dropdown {
+.workspace-container .duplicate-modal {
   border-color: var(--workspace-theme-accent-border);
   background: linear-gradient(180deg, var(--workspace-theme-accent-soft), transparent 34%),
     var(--theme-custom-surface);
 }
 
-.workspace-container .icon-selector-dropdown::before {
-  border-color: var(--workspace-theme-accent-border);
-  background: var(--theme-custom-surface);
-}
-
-.workspace-container .icon-selector-search,
 .workspace-container .board-asset-search-bar {
   border-color: var(--workspace-theme-accent-border);
   background: color-mix(in srgb, var(--bg-color) 68%, transparent);
 }
 
-.workspace-container .icon-selector-search:focus-within,
 .workspace-container .board-asset-search-bar:focus-within {
   border-color: var(--workspace-theme-secondary-border);
   background: var(--workspace-theme-accent-soft);

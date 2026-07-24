@@ -338,7 +338,6 @@
 }
 
 .workspace-container .tree-node:hover .tree-node-actions,
-.workspace-container .tree-node:focus-within .tree-node-actions,
 .workspace-container .asset-tree-node:hover .tree-node-actions,
 .workspace-container .asset-tree-node:focus-within .tree-node-actions {
   opacity: 1;

@@ -10,6 +10,7 @@ import NotionEditor from './features/notion/NotionEditor';
 import TiptapEditor from './features/tiptap/TiptapEditor';
 import TabTypeSelector from './workspace/TabTypeSelector';
 import DeleteItemDialog from './workspace/DeleteItemDialog';
+import DocumentIconPicker from './workspace/DocumentIconPicker';
 import WorkspaceToastRegion from './workspace/WorkspaceToasts';
 import { enqueueWorkspaceToast } from './workspace/workspaceToastUtils';
 import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
@@ -195,14 +196,6 @@ function getTabTypeIcon(contentType) {
   if (contentType === 'board') return Shapes;
   if (contentType === 'markdown') return FilePenLine;
   return FileText;
-}
-
-function normalizeIconSearch(value = '') {
-  return String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
 }
 
 function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
@@ -426,6 +419,18 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
       <div 
         className={`tree-node ${isSelected ? 'selected' : ''}`}
         draggable={!isRenaming && canWriteNode}
+        data-document-uid={node.uid}
+        tabIndex={0}
+        title={node.name}
+        onClick={() => {
+          if (isRenaming) return;
+          onFileSelect(node);
+        }}
+        onKeyDown={(event) => {
+          if (isRenaming || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          onFileSelect(node);
+        }}
         onContextMenu={(e) => {
           if (!canReadNode) return;
           if (isRenaming) return;
@@ -443,18 +448,6 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
         </span>
         <div
           className="tree-node-main"
-          data-document-uid={node.uid}
-          tabIndex={0}
-          title={node.name}
-          onClick={() => {
-            if (isRenaming) return;
-            onFileSelect(node);
-          }}
-          onKeyDown={(event) => {
-            if (isRenaming || (event.key !== 'Enter' && event.key !== ' ')) return;
-            event.preventDefault();
-            onFileSelect(node);
-          }}
         >
           <span className="tree-icon" aria-hidden="true">
             {React.createElement(getDocumentIcon(node.icon), { size: 14 })}
@@ -490,14 +483,6 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
                 title={t('common.create')}
               >
                 <Plus size={14} />
-              </button>
-              <button
-                type="button"
-                className="node-action-btn"
-                onClick={(e) => { e.stopPropagation(); onRequestRename(node); }}
-                title={t('common.rename')}
-              >
-                <Edit2 size={14} />
               </button>
               {canAdminNode && (
                 <button
@@ -594,6 +579,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [saveStatus, setSaveStatus] = useState('saved');
   const assetFileInputRef = useRef(null);
   const coverFileInputRef = useRef(null);
+  const documentIconButtonRef = useRef(null);
   
   // Modals/UI State
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
@@ -610,7 +596,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null, isDeleting: false });
   const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
-  const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false, top: 0, left: 0 });
+  const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false });
+  const [documentIconSaving, setDocumentIconSaving] = useState(false);
   const [renamingPath, setRenamingPath] = useState(null);
   const [assetRenamingPath, setAssetRenamingPath] = useState(null);
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
@@ -1558,32 +1545,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const closeDocumentIconPicker = useCallback(() => {
-    setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
+    setDocumentIconPicker({ isOpen: false });
     setIconSearchQuery('');
+    window.requestAnimationFrame(() => documentIconButtonRef.current?.focus());
   }, []);
 
-  const openDocumentIconPicker = (event) => {
+  const openDocumentIconPicker = () => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const pickerWidth = 420;
-    const pickerHeight = 520;
-    const viewportPadding = 12;
     setIconSearchQuery('');
-    setDocumentIconPicker({
-      isOpen: true,
-      top: Math.min(
-        Math.max(rect.bottom + 10, viewportPadding),
-        window.innerHeight - pickerHeight - viewportPadding
-      ),
-      left: Math.max(
-        viewportPadding,
-        Math.min(rect.left, window.innerWidth - pickerWidth - viewportPadding)
-      )
-    });
+    setDocumentIconPicker({ isOpen: true });
   };
 
   const handleDocumentIconSelect = async (icon) => {
-    if (!selectedContainer) return;
+    if (!selectedContainer || documentIconSaving) return;
+    setDocumentIconSaving(true);
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
         method: 'PUT',
@@ -1599,6 +1574,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       addToast(t('common.error'), 'error');
+    } finally {
+      setDocumentIconSaving(false);
     }
   };
 
@@ -1638,26 +1615,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     return filterNodes(assetTree);
   }, [assetSearchQuery, assetTree]);
-  const filteredDocumentIconCategories = useMemo(() => {
-    const query = normalizeIconSearch(iconSearchQuery);
-    if (!query) return DOCUMENT_ICON_CATEGORIES;
-
-    return DOCUMENT_ICON_CATEGORIES
-      .map(category => ({
-        ...category,
-        icons: category.icons.filter(icon => {
-          const searchableText = normalizeIconSearch([
-            icon.key,
-            category.id,
-            ...(icon.aliases || [])
-          ].join(' '));
-          return searchableText.includes(query);
-        })
-      }))
-      .filter(category => category.icons.length > 0);
-  }, [iconSearchQuery]);
-  const filteredDocumentIconCount = filteredDocumentIconCategories.reduce((total, category) => total + category.icons.length, 0);
-
   const assetMoveTargets = useMemo(() => {
     const sourceNode = assetMovePrompt.node;
     return [
@@ -2558,6 +2515,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const pageTitleBlock = (
     <div className="editor-page-title-row">
       <button
+        ref={documentIconButtonRef}
         type="button"
           className={`editor-page-icon ${selectedContainer && canWriteSelectedContainer ? 'is-editable' : ''}`}
           onClick={openDocumentIconPicker}
@@ -3192,73 +3150,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
       {/* Modals & Overlays */}
       {documentIconPicker.isOpen && (
-        <>
-          <div className="icon-picker-backdrop" onClick={closeDocumentIconPicker} />
-          <div
-            className="icon-selector-dropdown glass-panel"
-            style={{ top: documentIconPicker.top, left: documentIconPicker.left }}
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="icon-selector-header">
-              <span>{t('workspace.change_icon')}</span>
-              <strong>{selectedContainer?.name}</strong>
-            </div>
-            <div className="icon-selector-search">
-              <Search size={15} />
-              <input
-                value={iconSearchQuery}
-                onChange={event => setIconSearchQuery(event.target.value)}
-                onKeyDown={event => {
-                  if (event.key === 'Escape') {
-                    if (iconSearchQuery) setIconSearchQuery('');
-                    else closeDocumentIconPicker();
-                  }
-                }}
-                placeholder={t('workspace.icon_search_placeholder')}
-                autoFocus
-              />
-              {iconSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setIconSearchQuery('')}
-                  title={t('common.clear')}
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-            <div className="icon-selector-body">
-              {filteredDocumentIconCount === 0 ? (
-                <div className="icon-selector-empty">
-                  <Search size={20} />
-                  <strong>{t('workspace.icon_search_empty')}</strong>
-                  <span>{t('workspace.icon_search_empty_hint')}</span>
-                </div>
-              ) : (
-                filteredDocumentIconCategories.map(category => (
-                  <section key={category.id} className="icon-selector-category">
-                    <div className="icon-selector-category-title">
-                      <span>{t(category.labelKey)}</span>
-                    </div>
-                    <div className="icon-selector-grid">
-                      {category.icons.map(({ key, icon: Icon }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
-                          onClick={() => handleDocumentIconSelect(key)}
-                          title={key}
-                        >
-                          <Icon size={19} />
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                ))
-              )}
-            </div>
-          </div>
-        </>
+        <DocumentIconPicker
+          anchorRef={documentIconButtonRef}
+          categories={DOCUMENT_ICON_CATEGORIES}
+          currentIcon={selectedContainer?.icon}
+          documentName={selectedContainer?.name}
+          query={iconSearchQuery}
+          saving={documentIconSaving}
+          labels={{
+            title: t('workspace.change_icon'),
+            searchPlaceholder: t('workspace.icon_search_placeholder'),
+            empty: t('workspace.icon_search_empty'),
+            emptyHint: t('workspace.icon_search_empty_hint'),
+            saving: t('common.saving'),
+            clear: t('common.clear'),
+            close: t('common.close')
+          }}
+          getCategoryLabel={key => t(key)}
+          onQueryChange={setIconSearchQuery}
+          onSelect={handleDocumentIconSelect}
+          onClose={closeDocumentIconPicker}
+        />
       )}
 
       {duplicatePrompt.isOpen && (

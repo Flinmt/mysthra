@@ -289,25 +289,6 @@
   opacity: 1 !important;
 }
 
-.icon-option {
-  color: var(--text-secondary);
-  cursor: pointer;
-  background: 0 0;
-  border: none;
-  border-radius: 6px;
-  justify-content: center;
-  align-items: center;
-  padding: 8px;
-  transition: all .2s;
-  display: flex;
-}
-
-.icon-option:hover {
-  color: #fff;
-  background: #6366f133;
-  transform: scale(1.1);
-}
-
 .asset-folder-create-button {
   color: #f8fafce6;
   cursor: pointer;
@@ -398,32 +379,6 @@
   color: #fecaca;
   background: #ef444424;
   border-color: #ef444447;
-}
-
-.icon-option {
-  color: color-mix(in srgb, var(--accent-color) 74%, transparent);
-  cursor: pointer;
-  background: 0 0;
-  border: 0;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  min-width: 38px;
-  height: 38px;
-  padding: 0;
-  transition: color .16s,transform .16s,filter .16s;
-  display: flex;
-}
-
-.icon-option:hover {
-  color: #fff;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-color) 22%, transparent));
-  transform: translateY(-1px);
-}
-
-.icon-option.active {
-  color: color-mix(in srgb, var(--accent-color) 46%, var(--text-primary));
-  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent-color) 36%, transparent));
 }
 
 .user-admin-local-loading {
