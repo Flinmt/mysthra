@@ -9,7 +9,11 @@ function getShortcutLabel(key) {
   return key
 }
 
-export default function TiptapSlashMenu({ items, selectedIndex, onSelect, onClose }) {
+function getShortcutTitle(shortcut) {
+  return shortcut.map(getShortcutLabel).join(' + ')
+}
+
+export default function TiptapSlashMenu({ items, selectedIndex, shortcutHints = [], onSelect, onClose }) {
   const menuRef = useRef(null)
   const groups = items.reduce((result, item, index) => {
     const group = result.find(entry => entry.name === item.group)
@@ -35,6 +39,7 @@ export default function TiptapSlashMenu({ items, selectedIndex, onSelect, onClos
               data-index={index}
               aria-selected={index === selectedIndex}
               className={index === selectedIndex ? 'is-selected' : ''}
+              title={item.shortcut ? `${item.label} (${getShortcutTitle(item.shortcut)})` : item.label}
               onMouseDown={event => event.preventDefault()}
               onClick={() => onSelect(item)}
             >
@@ -50,6 +55,18 @@ export default function TiptapSlashMenu({ items, selectedIndex, onSelect, onClos
         </div>
       ))}
       {!items.length && <div className="tiptap-slash-menu-empty">Nenhum comando encontrado</div>}
+      {shortcutHints.length > 0 && (
+        <div className="tiptap-slash-menu-hints" aria-label="Atalhos essenciais">
+          {shortcutHints.map(hint => (
+            <span key={hint.label} title={`${hint.label}: ${getShortcutTitle(hint.shortcut)}`}>
+              <small>{hint.label}</small>
+              <span className="tiptap-slash-menu-shortcut">
+                {hint.shortcut.map(key => <kbd key={key}>{getShortcutLabel(key)}</kbd>)}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
       <button type="button" className="tiptap-slash-menu-close" onClick={onClose}>Esc para fechar</button>
     </div>
   )

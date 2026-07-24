@@ -13,6 +13,7 @@ import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror'
 import TiptapSlashMenu from './TiptapSlashMenu'
 import { TiptapBlockAwareness } from './tiptapBlockAwareness'
 import { TIPTAP_COMMANDS } from './tiptapCommands'
+import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { useTiptapDocument } from './useTiptapDocument'
 import {
@@ -55,6 +56,9 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     Strike,
     Underline,
     HorizontalRule,
+    TiptapEditingShortcuts.configure({
+      collaborative: Boolean(collaboration.fragment)
+    }),
     TiptapBlockAwareness.configure({
       rootPlaceholder: t('workspace.tiptap_placeholder'),
       blockPlaceholder: t('workspace.notion_block_placeholder'),
@@ -196,6 +200,11 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
             <TiptapSlashMenu
               items={slashState.items}
               selectedIndex={slashState.selectedIndex}
+              shortcutHints={[
+                { label: t('workspace.tiptap_shortcut_undo'), shortcut: ['Mod', 'Z'] },
+                { label: t('workspace.tiptap_shortcut_redo'), shortcut: ['Mod', 'Shift', 'Z'] },
+                { label: t('workspace.tiptap_shortcut_clear_formatting'), shortcut: ['Mod', '\\'] }
+              ]}
               onSelect={executeSlashCommand}
               onClose={closeSlashMenu}
             />

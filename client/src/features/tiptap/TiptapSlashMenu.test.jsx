@@ -13,11 +13,18 @@ function getCommandOption(label) {
 describe('TiptapSlashMenu', () => {
   afterEach(cleanup)
 
+  const shortcutHints = [
+    { label: 'Desfazer', shortcut: ['Mod', 'Z'] },
+    { label: 'Refazer', shortcut: ['Mod', 'Shift', 'Z'] },
+    { label: 'Limpar formatação', shortcut: ['Mod', '\\'] }
+  ]
+
   it('shows subtle shortcut hints only for commands that support them', () => {
     render(
       <TiptapSlashMenu
         items={TIPTAP_COMMANDS}
         selectedIndex={0}
+        shortcutHints={shortcutHints}
         onSelect={vi.fn()}
         onClose={vi.fn()}
       />
@@ -32,6 +39,10 @@ describe('TiptapSlashMenu', () => {
     expect(getCommandOption('Citação').querySelector('kbd')).toBeNull()
     expect(screen.queryByText('Código')).toBeNull()
     expect(screen.queryByText('Expandir')).toBeNull()
+    expect(screen.getByText('Desfazer')).toBeTruthy()
+    expect(screen.getByText('Refazer')).toBeTruthy()
+    expect(screen.getByText('Limpar formatação')).toBeTruthy()
+    expect(getCommandOption('Texto').title).toContain('Ctrl')
   })
 
   it('keeps command selection unchanged', () => {

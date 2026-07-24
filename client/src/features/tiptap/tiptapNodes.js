@@ -1,4 +1,4 @@
-import { Node, wrappingInputRule } from '@tiptap/core'
+import { InputRule, Node, wrappingInputRule } from '@tiptap/core'
 import { Fragment } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 
@@ -70,6 +70,18 @@ export const TiptapHeading = Node.create({
         () => this.editor.commands.setHeading({ level })
       ])
     )
+  },
+  addInputRules() {
+    return [1, 2, 3, 4, 5, 6].map(level => new InputRule({
+      find: new RegExp(`^(#{${level}})\\s$`),
+      handler: ({ state, range }) => {
+        const $from = state.doc.resolve(range.from)
+        if ($from.parent.type.name !== 'paragraph') return null
+        state.tr
+          .delete(range.from, range.to)
+          .setBlockType(range.from, range.from, this.type, { level })
+      }
+    }))
   }
 })
 
@@ -525,7 +537,15 @@ export const TiptapBlockquote = Node.create({
   renderHTML: ({ HTMLAttributes }) => ['blockquote', HTMLAttributes, 0],
   addCommands: () => ({
     setBlockquote: () => ({ commands }) => commands.wrapIn('blockquote')
-  })
+  }),
+  addInputRules() {
+    return [
+      wrappingInputRule({
+        find: /^>\s$/,
+        type: this.type
+      })
+    ]
+  }
 })
 
 export const TiptapCodeBlock = Node.create({
