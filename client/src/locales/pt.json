@@ -304,6 +304,8 @@
     "tab_type_tiptap": "Tiptap",
     "tab_type_tiptap_hint": "Alternativa experimental ao Notion, ainda em avaliação.",
     "tiptap_placeholder": "Digite ou use '/' para verificar o menu de comandos",
+    "tiptap_heading_placeholder": "Título {{level}}",
+    "tiptap_toggle_heading_placeholder": "Título expansível {{level}}",
     "notion_empty_placeholder": "Comece a escrever ou use '/' para comandos",
     "notion_block_placeholder": "Digite ou use '/'",
     "notion_command_group_text": "Texto",

@@ -33,7 +33,7 @@ describe('Tiptap slash menu positioning', () => {
     )).toEqual({
       placement: 'above',
       top: 84,
-      left: 74,
+      left: 26,
       maxHeight: 76
     })
   })

@@ -11,6 +11,7 @@ import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror'
 import TiptapSlashMenu from './TiptapSlashMenu'
+import { TiptapBlockAwareness } from './tiptapBlockAwareness'
 import { TIPTAP_COMMANDS } from './tiptapCommands'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { useTiptapDocument } from './useTiptapDocument'
@@ -22,7 +23,8 @@ import {
   TiptapHeading,
   TiptapListItem,
   TiptapOrderedList,
-  TiptapExpand
+  TiptapExpand,
+  TiptapToggleHeading
 } from './tiptapNodes'
 
 const TiptapDocument = Node.create({
@@ -40,6 +42,7 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     Text,
     Paragraph,
     TiptapHeading,
+    TiptapToggleHeading,
     TiptapListItem,
     TiptapBulletList,
     TiptapOrderedList,
@@ -52,40 +55,23 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     Strike,
     Underline,
     HorizontalRule,
+    TiptapBlockAwareness.configure({
+      rootPlaceholder: t('workspace.tiptap_placeholder'),
+      blockPlaceholder: t('workspace.notion_block_placeholder'),
+      headingPlaceholder: level => t('workspace.tiptap_heading_placeholder', { level }),
+      toggleHeadingPlaceholder: level => t('workspace.tiptap_toggle_heading_placeholder', { level })
+    }),
     ...(collaboration.fragment ? [Extension.create({
       name: 'tiptapYjsCollaboration',
       addProseMirrorPlugins: () => [ySyncPlugin(collaboration.fragment), yUndoPlugin()]
     })] : [])
-  ], [collaboration.fragment])
+  ], [collaboration.fragment, t])
   const editor = useEditor({
     extensions,
     content: collaboration.doc ? undefined : content,
     editable: editable && !collaboration.readOnly,
     onUpdate: collaboration.onUpdate
   }, [collaboration.doc])
-  const [placeholderPosition, setPlaceholderPosition] = useState(null)
-
-  useEffect(() => {
-    if (!editor) return undefined
-    const updateEmptyState = () => {
-      const currentBlock = editor.state.selection.$from.parent
-      if (currentBlock.type.name !== 'paragraph' || currentBlock.content.size > 0) {
-        setPlaceholderPosition(null)
-        return
-      }
-      const editorRect = editor.view.dom.closest('.tiptap-editor')?.getBoundingClientRect()
-      const cursorRect = editor.view.coordsAtPos(editor.state.selection.from)
-      if (!editorRect) return
-      setPlaceholderPosition({
-        top: cursorRect.top - editorRect.top,
-        left: cursorRect.left - editorRect.left
-      })
-    }
-    editor.on('transaction', updateEmptyState)
-    updateEmptyState()
-    return () => editor.off('transaction', updateEmptyState)
-  }, [editor])
-
   useEffect(() => {
     editor?.setEditable(editable && !collaboration.readOnly)
   }, [collaboration.readOnly, editable, editor])
@@ -141,19 +127,31 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     if (!editor || !slashState) return
     const chain = editor.chain().focus().deleteRange(slashState.range)
     if (item.id.startsWith('heading-')) chain.setHeading({ level: Number(item.id.split('-')[1]) })
-    if (item.id === 'bulletList') chain.setBulletList()
-    if (item.id === 'orderedList') chain.setOrderedList()
-    if (item.id === 'expand') chain.setExpand()
+    if (item.id.startsWith('toggle-heading-')) {
+      chain.setToggleHeading({ level: Number(item.id.split('-')[2]) })
+    }
+    if (item.id === 'bulletList') chain.toggleBulletList()
+    if (item.id === 'orderedList') chain.toggleOrderedList()
     if (item.id === 'blockquote') chain.setBlockquote()
-    if (item.id === 'codeBlock') chain.setCodeBlock()
     if (item.id === 'horizontalRule') chain.setHorizontalRule()
     chain.run()
     closeSlashMenu()
   }, [closeSlashMenu, editor, slashState])
 
   const handleEditorKeyDown = useCallback((event) => {
-    const currentBlock = editor?.state.selection.$from.parent
-    if (event.key === 'Backspace' && currentBlock?.content.size === 0 && currentBlock.type.name !== 'paragraph') {
+    const selectionFrom = editor?.state.selection.$from
+    const currentBlock = selectionFrom?.parent
+    const isToggleHeadingTitle = (
+      currentBlock?.type.name === 'heading' &&
+      selectionFrom.depth >= 2 &&
+      selectionFrom.node(selectionFrom.depth - 1).type.name === 'toggleHeading'
+    )
+    if (
+      event.key === 'Backspace' &&
+      currentBlock?.content.size === 0 &&
+      currentBlock.type.name !== 'paragraph' &&
+      !isToggleHeadingTitle
+    ) {
       event.preventDefault()
       editor.chain().focus().setParagraph().run()
       return
@@ -184,11 +182,6 @@ export default function TiptapEditor({ content = '', editable, locked, collabora
     <div className="notion-editor" onKeyDownCapture={handleEditorKeyDown}>
       <div className="tiptap-editor">
         <EditorContent editor={editor} className="bn-editor" />
-        {editor && editable && !collaboration.readOnly && placeholderPosition && (
-          <div className="tiptap-placeholder" style={placeholderPosition} aria-hidden="true">
-            {t('workspace.tiptap_placeholder')}
-          </div>
-        )}
         {slashState && editor && (
           <div
             className="tiptap-slash-menu-anchor"

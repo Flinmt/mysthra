@@ -1,5 +1,14 @@
 import { useEffect, useRef } from 'react'
 
+const isApplePlatform = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+
+function getShortcutLabel(key) {
+  if (key === 'Mod') return isApplePlatform ? '⌘' : 'Ctrl'
+  if (key === 'Alt') return isApplePlatform ? '⌥' : 'Alt'
+  if (key === 'Shift') return '⇧'
+  return key
+}
+
 export default function TiptapSlashMenu({ items, selectedIndex, onSelect, onClose }) {
   const menuRef = useRef(null)
   const groups = items.reduce((result, item, index) => {
@@ -30,7 +39,12 @@ export default function TiptapSlashMenu({ items, selectedIndex, onSelect, onClos
               onClick={() => onSelect(item)}
             >
               <span className="tiptap-slash-menu-icon">{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="tiptap-slash-menu-label">{item.label}</span>
+              {item.shortcut && (
+                <span className="tiptap-slash-menu-shortcut" aria-label={`Atalho: ${item.shortcut.join(' + ')}`}>
+                  {item.shortcut.map(key => <kbd key={key}>{getShortcutLabel(key)}</kbd>)}
+                </span>
+              )}
             </button>
           ))}
         </div>

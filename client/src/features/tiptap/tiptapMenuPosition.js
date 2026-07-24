@@ -1,4 +1,4 @@
-const MENU_WIDTH = 238
+const MENU_WIDTH = 286
 const MENU_MAX_HEIGHT = 220
 const VIEWPORT_MARGIN = 8
 const CURSOR_GAP = 6

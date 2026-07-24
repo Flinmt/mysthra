@@ -25,6 +25,11 @@
   --tiptap-menu-accent: var(--accent-color);
   --tiptap-menu-accent-hover: var(--accent-hover);
   --tiptap-menu-shadow: color-mix(in srgb, var(--theme-custom-bg) 72%, transparent);
+  --tiptap-toggle-accent: var(--accent-color);
+  --tiptap-toggle-accent-hover: var(--accent-hover);
+  --tiptap-toggle-hover: var(--workspace-theme-accent-soft);
+  --tiptap-toggle-line: var(--workspace-theme-accent-border);
+  --tiptap-toggle-text: var(--text-primary);
 }
 
 .tiptap-editor .ProseMirror {
@@ -102,6 +107,128 @@
   font-weight: 600;
 }
 .tiptap-expand-content > *:not(:first-child) { padding-left: 8px; }
+
+.tiptap-toggle-heading {
+  --tiptap-toggle-font-size: 26px;
+  --tiptap-toggle-line-height: 32px;
+  --tiptap-toggle-font-weight: 700;
+  position: relative;
+  margin: 0 0 10px;
+  padding-left: 24px;
+  color: var(--tiptap-toggle-text);
+}
+
+.tiptap-toggle-heading[data-level="2"] {
+  --tiptap-toggle-font-size: 21px;
+  --tiptap-toggle-line-height: 28px;
+}
+
+.tiptap-toggle-heading[data-level="3"] {
+  --tiptap-toggle-font-size: 18px;
+  --tiptap-toggle-line-height: 25px;
+  --tiptap-toggle-font-weight: 650;
+}
+
+.tiptap-toggle-heading[data-level="4"] {
+  --tiptap-toggle-font-size: 16px;
+  --tiptap-toggle-line-height: 23px;
+  --tiptap-toggle-font-weight: 650;
+}
+
+.tiptap-toggle-heading[data-level="5"] {
+  --tiptap-toggle-font-size: 14px;
+  --tiptap-toggle-line-height: 22px;
+  --tiptap-toggle-font-weight: 650;
+}
+
+.tiptap-toggle-heading[data-level="6"] {
+  --tiptap-toggle-font-size: 13px;
+  --tiptap-toggle-line-height: 21px;
+  --tiptap-toggle-font-weight: 650;
+}
+
+.tiptap-toggle-heading[data-open="true"]::before {
+  position: absolute;
+  top: calc(var(--tiptap-toggle-line-height) + 5px);
+  bottom: 1px;
+  left: 9px;
+  width: 1px;
+  content: '';
+  background: var(--tiptap-toggle-line);
+}
+
+.tiptap-toggle-heading-trigger {
+  position: absolute;
+  z-index: 1;
+  top: calc((var(--tiptap-toggle-line-height) - 22px) / 2);
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  color: var(--tiptap-toggle-accent);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tiptap-toggle-heading-trigger::before {
+  content: '›';
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: color 120ms ease, transform 140ms ease;
+}
+
+.tiptap-toggle-heading[data-open="true"] .tiptap-toggle-heading-trigger::before {
+  transform: rotate(90deg);
+}
+
+.tiptap-toggle-heading-trigger:hover,
+.tiptap-toggle-heading-trigger:focus-visible {
+  color: var(--tiptap-toggle-accent-hover);
+  background: var(--tiptap-toggle-hover);
+  outline: none;
+}
+
+.tiptap-toggle-heading-trigger:focus-visible {
+  box-shadow: 0 0 0 2px var(--workspace-theme-secondary-border);
+}
+
+.tiptap-toggle-heading-content {
+  min-width: 0;
+}
+
+.tiptap-toggle-heading-content > h1:first-child,
+.tiptap-toggle-heading-content > h2:first-child,
+.tiptap-toggle-heading-content > h3:first-child,
+.tiptap-toggle-heading-content > h4:first-child,
+.tiptap-toggle-heading-content > h5:first-child,
+.tiptap-toggle-heading-content > h6:first-child {
+  min-height: var(--tiptap-toggle-line-height);
+  margin: 0 0 6px;
+  color: var(--tiptap-toggle-text);
+  font-size: var(--tiptap-toggle-font-size);
+  font-weight: var(--tiptap-toggle-font-weight);
+  line-height: var(--tiptap-toggle-line-height);
+}
+
+.tiptap-toggle-heading-content > :first-child:only-child {
+  margin-bottom: 0;
+}
+
+.tiptap-toggle-heading-content > :not(:first-child) {
+  margin-left: 8px;
+}
+
+.tiptap-toggle-heading[data-open="false"] .tiptap-toggle-heading-content > :not(:first-child) {
+  display: none;
+}
+
 .tiptap-editor .ProseMirror pre {
   margin: 0 0 10px;
   padding: 10px 12px;
@@ -117,22 +244,19 @@
 .tiptap-editor .ProseMirror u { text-decoration-color: var(--arcane-color); }
 .tiptap-editor .ProseMirror s { opacity: .72; }
 
-.tiptap-placeholder {
-  position: absolute;
-  z-index: 0;
+.tiptap-editor .ProseMirror .tiptap-active-block.is-empty::before {
+  display: block;
   color: var(--workspace-editor-muted, var(--text-secondary));
-  font-size: 13px;
-  line-height: 1.6;
-  opacity: .88;
-  pointer-events: none;
-}
-
-.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--text-secondary);
   content: attr(data-placeholder);
   float: left;
+  max-width: 100%;
   height: 0;
+  font: inherit;
+  line-height: inherit;
+  opacity: .82;
   pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
 }
 
 .tiptap-editor .ProseMirror strong { color: var(--text-primary); }
@@ -191,7 +315,7 @@
 }
 
 .tiptap-slash-menu {
-  width: 238px;
+  width: min(286px, calc(100vw - 16px));
   max-height: var(--tiptap-slash-menu-max-height, 220px);
   padding: 5px;
   overflow-y: auto;
@@ -214,11 +338,50 @@
   color: var(--tiptap-menu-muted);
 }
 
+.tiptap-slash-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tiptap-slash-menu-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  opacity: .48;
+  white-space: nowrap;
+  transition: opacity 120ms ease;
+}
+
+.tiptap-slash-menu-shortcut kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  color: inherit;
+  background: var(--tiptap-menu-hover);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .tiptap-slash-menu button:hover,
 .tiptap-slash-menu button.is-selected {
   color: var(--tiptap-menu-text);
   background: var(--tiptap-menu-hover);
   opacity: 1;
+}
+
+.tiptap-slash-menu button:hover .tiptap-slash-menu-shortcut,
+.tiptap-slash-menu button.is-selected .tiptap-slash-menu-shortcut {
+  opacity: .78;
 }
 
 .tiptap-slash-menu button.is-selected {
@@ -263,5 +426,4 @@
   .tiptap-editor .ProseMirror,
   .tiptap-toolbar { padding-inline: 18px; }
 
-  .tiptap-placeholder { left: 18px; }
 }

@@ -131,6 +131,19 @@ describe('workspace style boundaries', () => {
     expect(slashMenuStyles).not.toContain('var(--workspace-shell-raised)')
   })
 
+  it('scopes experimental toggle headings to the selected world theme', () => {
+    const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
+
+    expect(tiptap).toContain('--tiptap-toggle-accent: var(--accent-color)')
+    expect(tiptap).toContain('--tiptap-toggle-line: var(--workspace-theme-accent-border)')
+    expect(tiptap).toContain('.tiptap-toggle-heading[data-open="false"]')
+    expect(tiptap).toContain('.tiptap-active-block.is-empty::before')
+    expect(tiptap).toContain('content: attr(data-placeholder)')
+    expect(tiptap).not.toContain('.tiptap-placeholder')
+    const placeholderRule = tiptap.match(/\.tiptap-active-block\.is-empty::before\s*\{([^}]+)\}/)?.[1]
+    expect(placeholderRule).not.toContain('overflow: hidden')
+  })
+
   it('scopes workspace notifications to the selected world theme', () => {
     const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
     const overlays = fs.readFileSync(path.join(import.meta.dirname, 'overlays.css'), 'utf8')
