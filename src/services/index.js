@@ -3,6 +3,7 @@ const indexer = require("./indexer");
 const assets = require("./assets");
 const users = require("./users");
 const collaboration = require("./collaboration");
+const themePresets = require("./themePresets");
 const {
   getFileTree,
   getVisibleFileTree,
@@ -26,6 +27,7 @@ module.exports = {
   ...assets,
   ...users,
   ...collaboration,
+  ...themePresets,
   getFileTree,
   getVisibleFileTree,
   getDocumentAccess,

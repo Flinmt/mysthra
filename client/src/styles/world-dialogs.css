@@ -248,6 +248,21 @@
 .world-appearance-heading { display: grid; gap: 3px; }
 .world-appearance-heading strong { color: var(--app-text); font-size: 0.76rem; }
 .world-appearance-heading small { color: var(--app-muted); font-size: 0.66rem; line-height: 1.35; }
+.world-theme-preset-group-label {
+  color: var(--app-muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.world-theme-preset-state {
+  padding: 10px;
+  border: 1px dashed var(--app-border-subtle);
+  border-radius: 7px;
+  color: var(--app-muted);
+  background: var(--app-bg);
+  font-size: 0.66rem;
+}
 
 .world-theme-preset-grid {
   display: grid;
@@ -283,6 +298,79 @@
 
 .world-theme-preset-swatches { height: 22px; display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; border: 1px solid rgba(255,255,255,.08); border-radius: 5px; }
 .world-theme-preset-swatches i { display: block; }
+
+.world-theme-preset-library {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--app-border-subtle);
+  border-radius: 7px;
+  background: var(--app-bg);
+}
+.world-theme-preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.world-theme-preset-actions button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-muted);
+  background: var(--app-surface);
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.world-theme-preset-actions button:hover:not(:disabled),
+.world-theme-preset-actions button:focus-visible {
+  color: var(--app-text);
+  border-color: var(--app-copper);
+  background: color-mix(in srgb, var(--app-copper) 12%, var(--app-surface));
+  outline: 0;
+}
+.world-theme-preset-actions button:focus-visible { box-shadow: 0 0 0 3px var(--app-focus); }
+.world-theme-preset-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+.world-theme-preset-actions button.danger { color: color-mix(in srgb, #ef6464 76%, var(--app-text)); }
+.world-theme-preset-file { display: none; }
+.world-theme-preset-save-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+}
+.world-dialog .world-theme-preset-save-row input { min-height: 32px; }
+.world-dialog .world-theme-preset-save-row button { min-height: 32px; padding: 5px 10px; font-size: 0.65rem; }
+.world-theme-preset-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, #ef6464 38%, transparent);
+  border-radius: 6px;
+  color: var(--app-text);
+  background: color-mix(in srgb, #ef6464 8%, var(--app-surface));
+  font-size: 0.66rem;
+}
+.world-theme-preset-confirm > div { display: flex; justify-content: flex-end; gap: 6px; }
+.world-dialog .world-theme-preset-confirm button { min-height: 29px; padding: 4px 9px; font-size: 0.64rem; }
+.world-theme-preset-status {
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: var(--app-muted);
+  background: var(--app-surface);
+  font-size: 0.64rem;
+}
+.world-theme-preset-status.success {
+  color: color-mix(in srgb, var(--app-steel) 72%, var(--app-text));
+  border: 1px solid color-mix(in srgb, var(--app-steel) 28%, transparent);
+}
+.world-theme-preset-status.error {
+  color: color-mix(in srgb, #ef6464 74%, var(--app-text));
+  border: 1px solid color-mix(in srgb, #ef6464 28%, transparent);
+}
 
 .world-dialog .world-custom-theme-controls { display: grid; gap: 11px; padding: 11px; border: 1px solid color-mix(in srgb, var(--app-copper) 28%, transparent); border-radius: 7px; background: var(--app-bg); }
 .world-dialog .world-custom-theme-copy strong { color: var(--app-text); font-size: 0.72rem; }
@@ -701,6 +789,8 @@
   .world-dialog .world-dialog-actions .btn-secondary { flex: 1; min-width: 0; }
   .world-theme-preset-grid { grid-template-columns: 1fr; }
   .world-theme-preset-grid button { min-height: 58px; }
+  .world-theme-preset-save-row { grid-template-columns: 1fr 1fr; }
+  .world-dialog .world-theme-preset-save-row input { grid-column: 1 / -1; }
   .world-dialog .world-custom-theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .world-form-tabs { gap: 11px; }
   .world-form-tabs button { gap: 4px; font-size: 0.66rem; }

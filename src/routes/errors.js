@@ -5,11 +5,13 @@ function getErrorStatusCode(error) {
   if (error.code === "INVALID_DOCUMENT_METADATA") return 400;
   if (error.code === "INVALID_HOME_PAGE") return 400;
   if (error.code === "INVALID_USER_INPUT") return 400;
+  if (error.code === "INVALID_THEME_PRESET") return 400;
   if (error.code === "INVALID_WORLD_INPUT" || error.code === "INVALID_THUMBNAIL") return 400;
   if (error.code === "USER_ALREADY_EXISTS") return 409;
   if (error.code === "WORLD_ALREADY_EXISTS") return 409;
   if (error.code === "WORLD_NOT_FOUND") return 404;
   if (error.code === "DOCUMENT_NOT_FOUND") return 404;
+  if (error.code === "THEME_PRESET_NOT_FOUND") return 404;
   if (error.code === "USER_NOT_FOUND") return 404;
   if (error.code === "FORBIDDEN") return 403;
   return 500;

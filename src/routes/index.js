@@ -45,7 +45,11 @@ const {
   updateWorldMemberRole,
   removeWorldMember,
   saveWorldThumbnail,
-  setHomePage
+  setHomePage,
+  listThemePresets,
+  createThemePreset,
+  importThemePresets,
+  deleteThemePreset
 } = require("../services");
 const { isGlobalAdmin } = require("../utils/roles");
 
@@ -252,6 +256,50 @@ async function router(request, response) {
     }
 
     if (await handleUserRoute({ request, response, pathname, currentUser, parseJsonBody })) return;
+
+    if (pathname === "/api/theme-presets") {
+      if (request.method === "GET") {
+        try {
+          return sendJson(response, 200, { items: await listThemePresets() });
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+
+      if (request.method === "POST") {
+        if (!requireAdmin(response, currentUser)) return;
+        try {
+          const preset = await createThemePreset(await parseJsonBody(request));
+          return sendJson(response, 201, preset);
+        } catch (error) {
+          const statusCode = getErrorStatusCode(error);
+          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+        }
+      }
+    }
+
+    if (pathname === "/api/theme-presets/import" && request.method === "POST") {
+      if (!requireAdmin(response, currentUser)) return;
+      try {
+        const items = await importThemePresets(await parseJsonBody(request));
+        return sendJson(response, 201, { items });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
+
+    if (pathname.match(/^\/api\/theme-presets\/[^\/]+$/) && request.method === "DELETE") {
+      if (!requireAdmin(response, currentUser)) return;
+      try {
+        const presetId = decodeURIComponent(pathname.split("/")[3]);
+        return sendJson(response, 200, await deleteThemePreset(presetId));
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
 
     if (request.method === "GET" && pathname === "/api/worlds") {
       try {
