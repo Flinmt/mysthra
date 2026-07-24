@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +41,8 @@ import {
   normalizeCoverArea,
   orderTreeWithHome,
   pathParent,
-  prepareAssetUpload
+  prepareAssetUpload,
+  shouldOpenFirstTabDraft
 } from './workspace/utils';
 
 const DOCUMENT_ICON_CATEGORIES = [
@@ -201,6 +202,15 @@ function skipsFileContentLoad(contentType) {
     || contentType === 'tiptap'
     || contentType === 'map'
     || contentType === 'board';
+}
+
+function getUniqueTabName(tabs, baseName) {
+  const siblingNames = new Set(tabs.map(tab => tab.name));
+  if (!siblingNames.has(baseName)) return baseName;
+
+  let suffix = 2;
+  while (siblingNames.has(`${baseName} ${suffix}`)) suffix += 1;
+  return `${baseName} ${suffix}`;
 }
 
 function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
@@ -608,6 +618,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
   const [pageTitleEdit, setPageTitleEdit] = useState({ isEditing: false, value: '' });
   const [tabDraft, setTabDraft] = useState({ isOpen: false, name: '', isCreating: false });
+  const tabDraftDocumentUidRef = useRef('');
+  const tabDraftOriginRef = useRef('');
   const [coverReposition, setCoverReposition] = useState({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
   const assetUploadTargetPathRef = useRef('');
   const coverRef = useRef(null);
@@ -835,7 +847,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   useEffect(() => {
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
-    setTabDraft({ isOpen: false, name: '', isCreating: false });
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
     setViewMode('edit');
   }, [selectedContainer?.uid, selectedContainer?.name]);
@@ -1145,30 +1156,24 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     openInitialTab();
   }, [addToast, selectedContainer, t, tree, worldData?.homePage, worldDataLoaded, worldId]);
 
-  const getUniqueTabName = () => {
-    const baseName = t('workspace.untitled_tab');
-    const siblingNames = new Set(selectedTabs.map(tab => tab.name));
-    if (!siblingNames.has(baseName)) return baseName;
-
-    let suffix = 2;
-    while (siblingNames.has(`${baseName} ${suffix}`)) {
-      suffix += 1;
-    }
-    return `${baseName} ${suffix}`;
-  };
-
   const openTabDraft = () => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
     if (selectedContainer.metadata?.locked === true) return;
+    tabDraftDocumentUidRef.current = selectedContainer.uid;
+    tabDraftOriginRef.current = 'manual';
     setRenamingTab({ path: '', value: '' });
-    setTabDraft({ isOpen: true, name: getUniqueTabName(), isCreating: false });
+    setTabDraft({
+      isOpen: true,
+      name: getUniqueTabName(selectedTabs, t('workspace.untitled_tab')),
+      isCreating: false
+    });
   };
 
   const handleInitializeTabDraft = async (contentType) => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
     if (selectedContainer.metadata?.locked === true) return;
     if (!tabDraft.isOpen || tabDraft.isCreating) return;
-    const tabName = tabDraft.name.trim() || getUniqueTabName();
+    const tabName = tabDraft.name.trim() || getUniqueTabName(selectedTabs, t('workspace.untitled_tab'));
     setTabDraft(prev => ({ ...prev, name: tabName, isCreating: true }));
     if (isDirty) {
       await new Promise(resolve => window.requestAnimationFrame(resolve));
@@ -2333,6 +2338,60 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     () => getDocumentBreadcrumb(tree, selectedContainer?.path),
     [selectedContainer?.path, tree]
   );
+  const shouldAutomaticallyOpenFirstTab = shouldOpenFirstTabDraft({
+    treeLoaded,
+    hasSelectedDocument: Boolean(selectedContainer),
+    hasActiveTab: Boolean(activeTab),
+    tabCount: selectedTabs.length,
+    isVisitor,
+    canWrite: canWriteSelectedContainer,
+    locked: isDocumentLocked
+  });
+  const canKeepTabDraftOpen = Boolean(
+    treeLoaded
+    && selectedContainer
+    && !isVisitor
+    && canWriteSelectedContainer
+    && !isDocumentLocked
+  );
+  const automaticFirstTabName = getUniqueTabName(selectedTabs, t('workspace.untitled_tab'));
+
+  useLayoutEffect(() => {
+    const selectedDocumentUid = selectedContainer?.uid || '';
+    const draftBelongsToSelectedDocument = tabDraftDocumentUidRef.current === selectedDocumentUid;
+
+    if (shouldAutomaticallyOpenFirstTab) {
+      if (draftBelongsToSelectedDocument && tabDraft.isOpen) return;
+      tabDraftDocumentUidRef.current = selectedDocumentUid;
+      tabDraftOriginRef.current = 'automatic';
+      setRenamingTab({ path: '', value: '' });
+      setTabDraft({
+        isOpen: true,
+        name: automaticFirstTabName,
+        isCreating: false
+      });
+      return;
+    }
+
+    const shouldCloseDraft = (
+      !canKeepTabDraftOpen
+      || !draftBelongsToSelectedDocument
+      || tabDraftOriginRef.current === 'automatic'
+    );
+    tabDraftDocumentUidRef.current = selectedDocumentUid;
+    if (!shouldCloseDraft) {
+      if (!tabDraft.isOpen) tabDraftOriginRef.current = '';
+      return;
+    }
+    tabDraftOriginRef.current = '';
+    if (tabDraft.isOpen) setTabDraft({ isOpen: false, name: '', isCreating: false });
+  }, [
+    automaticFirstTabName,
+    canKeepTabDraftOpen,
+    selectedContainer?.uid,
+    shouldAutomaticallyOpenFirstTab,
+    tabDraft.isOpen
+  ]);
 
   const toggleActiveTabCoverVisibility = async () => {
     if (!activeTab || !documentCoverPath || !canWriteActiveTab) return;
@@ -3042,15 +3101,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <div className="editor-placeholder muted">
                       <Book size={48} />
                       <p>Esta página não possui abas de conteúdo.</p>
-                      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && (
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={openTabDraft}
-                        >
-                          {t('workspace.create_first_tab')}
-                        </button>
-                      )}
                     </div>
                   )}
                 </section>
