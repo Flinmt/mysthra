@@ -18,11 +18,12 @@ const {
   duplicateDocument,
   listAssets,
   listWorldMembers,
+  listUserWorldAccess,
+  getWorldAccessCounts,
   listWorlds,
   getFileTree,
   getDocumentAccess,
   getVisibleFileTree,
-  MAX_TABS_PER_DOCUMENT,
   getWorldRole,
   getPathByUid,
   isWorldPublicReadable,
@@ -67,7 +68,7 @@ test("createWorld stores lean world metadata", async () => {
   assert.equal(world.name, worldName);
   assert.equal(world.displayName, worldName);
   assert.equal(world.description, "A world in migration");
-  assert.equal(world.theme, "default");
+  assert.equal(world.theme, "ember-archive");
   assert.equal(world.publicRead, false);
   assert.equal("thumbnailUrl" in world, false);
 
@@ -235,13 +236,23 @@ test("world members filter common user world access", async () => {
   const authenticated = await authenticateUser(username, "secret-pass");
   assert.equal(authenticated.username, username);
 
-  const visibleWorlds = await listWorlds({ userId: user.id, username, isAdmin: false });
+  const visibleWorlds = await listWorlds({ userId: user.id, username, globalRole: null });
   assert.equal(visibleWorlds.some((world) => world.id === worldA), true);
   assert.equal(visibleWorlds.some((world) => world.id === worldB), false);
 
-  const adminWorlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  const access = await listUserWorldAccess(user.id);
+  assert.equal(access.find((world) => world.id === worldA).role, "member");
+  assert.equal(access.find((world) => world.id === worldB).role, "none");
+  const accessCounts = await getWorldAccessCounts();
+  assert.equal(accessCounts[user.id], 1);
+
+  const adminWorlds = await listWorlds({ userId: "root", username: "admin", globalRole: "root" });
   assert.equal(adminWorlds.some((world) => world.id === worldA), true);
   assert.equal(adminWorlds.some((world) => world.id === worldB), true);
+
+  const serverAdminWorlds = await listWorlds({ userId: "server-admin", username: "operator", globalRole: "server-admin" });
+  assert.equal(serverAdminWorlds.some((world) => world.id === worldA), true);
+  assert.equal(serverAdminWorlds.some((world) => world.id === worldB), true);
 });
 
 test("world members support per-world admin roles", async () => {
@@ -261,7 +272,8 @@ test("world members support per-world admin roles", async () => {
 
   assert.equal(await getWorldRole(worldName, { userId: member.id, username: member.username }), "member");
   assert.equal(await getWorldRole(worldName, { userId: admin.id, username: admin.username }), "world-admin");
-  assert.equal(await getWorldRole(worldName, { userId: "admin", username: "admin", isAdmin: true }), "global-admin");
+  assert.equal(await getWorldRole(worldName, { userId: "root", username: "admin", globalRole: "root" }), "global-admin");
+  assert.equal(await getWorldRole(worldName, { userId: "server-admin", username: "operator", globalRole: "server-admin" }), "global-admin");
 
   members = await updateWorldMemberRole(worldName, member.id, "admin");
   assert.equal(members.find((item) => item.userId === member.id).role, "admin");
@@ -338,7 +350,7 @@ test("document tree supports containers and editable tabs", async () => {
   });
   const tab = await createDocument(worldName, `${container.path}/Overview`, "# First draft", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "markdown"
   });
 
   const tree = await getFileTree(worldName);
@@ -358,8 +370,8 @@ test("document tree supports containers and editable tabs", async () => {
   assert.equal((await readDocument(worldName, tab.path)).content, "# Revised draft");
 });
 
-test("documents allow at most five direct tabs", async () => {
-  const worldName = "core-tree-tab-limit";
+test("documents support dozens of direct tabs and additional duplication", async () => {
+  const worldName = "core-tree-many-tabs";
   await resetWorld(worldName);
   await ensureWorldStructure(worldName);
 
@@ -367,53 +379,22 @@ test("documents allow at most five direct tabs", async () => {
     type: "container"
   });
 
-  for (let index = 1; index <= MAX_TABS_PER_DOCUMENT; index += 1) {
-    await createDocument(worldName, `${container.path}/Tab ${index}`, "", {
+  const tabs = [];
+  for (let index = 1; index <= 40; index += 1) {
+    tabs.push(await createDocument(worldName, `${container.path}/Tab ${index}`, "", {
       type: "tab",
       contentType: "wiki"
-    });
+    }));
   }
 
-  await assert.rejects(
-    () => createDocument(worldName, `${container.path}/Tab ${MAX_TABS_PER_DOCUMENT + 1}`, "", {
-      type: "tab",
-      contentType: "wiki"
-    }),
-    {
-      code: "DOCUMENT_LIMIT_EXCEEDED",
-      message: `Document cannot have more than ${MAX_TABS_PER_DOCUMENT} tabs`
-    }
-  );
-});
-
-test("document tab limit counts only direct tab children", async () => {
-  const worldName = "core-tree-tab-limit-direct";
-  await resetWorld(worldName);
-  await ensureWorldStructure(worldName);
-
-  const container = await createDocument(worldName, "Lore", "", {
-    type: "container"
+  const duplicated = await duplicateDocument(worldName, tabs[0].path, {
+    name: "Tab 1 Copy"
   });
+  const tree = await getFileTree(worldName);
+  const storedContainer = tree.find(node => node.uid === container.uid);
 
-  for (let index = 1; index <= MAX_TABS_PER_DOCUMENT; index += 1) {
-    await createDocument(worldName, `${container.path}/Section ${index}`, "", {
-      type: "container"
-    });
-    await createDocument(worldName, `${container.path}/Tab ${index}`, "", {
-      type: "tab",
-      contentType: "wiki"
-    });
-  }
-
-  const child = await createDocument(worldName, `${container.path}/Child`, "", {
-    type: "container"
-  });
-  const childTab = await createDocument(worldName, `${child.path}/Notes`, "", {
-    type: "tab",
-    contentType: "wiki"
-  });
-
-  assert.equal(childTab.name, "Notes");
+  assert.equal(duplicated.name, "Tab 1 Copy");
+  assert.equal(storedContainer.children.filter(node => node.type === "tab").length, 41);
 });
 
 test("document tree supports collaborative board tabs", async () => {
@@ -433,6 +414,7 @@ test("document tree supports collaborative board tabs", async () => {
   assert.equal(tree[0].children[0].name, "Board");
   assert.equal(tree[0].children[0].type, "tab");
   assert.equal(tree[0].children[0].contentType, "board");
+  assert.equal(tree[0].children[0].metadata.documentCoverHidden, true);
 
   await assert.rejects(
     () => readDocument(worldName, board.path),
@@ -451,7 +433,7 @@ test("document creation stores accented tab names in metadata", async () => {
   });
   const tab = await createDocument(worldName, `${container.path}/${tabName}`, "# Boas-vindas", {
     type: "tab",
-    contentType: "wiki",
+    contentType: "markdown",
     name: tabName
   });
 
@@ -479,11 +461,26 @@ test("document metadata changes do not move physical paths", async () => {
 
   const result = await updateDocumentMetadata(worldName, document.path, {
     icon: "Castle",
-    order: 2
+    order: 2,
+    coverAssetPath: "covers/places.webp",
+    coverPositionY: 38
   });
   assert.equal(result.metadata.name, "Places");
   assert.equal(result.metadata.icon, "Castle");
   assert.equal(result.metadata.order, 2);
+  assert.equal(result.metadata.coverAssetPath, "covers/places.webp");
+  assert.equal(result.metadata.coverPositionY, 38);
+
+  const tab = await createDocument(worldName, `${document.path}/Overview`, "", {
+    type: "tab",
+    contentType: "wiki"
+  });
+  const tabResult = await updateDocumentMetadata(worldName, tab.path, {
+    documentCoverHidden: true,
+    wideContent: true
+  });
+  assert.equal(tabResult.metadata.documentCoverHidden, true);
+  assert.equal(tabResult.metadata.wideContent, true);
 });
 
 test("document metadata updates reject structural fields", async () => {
@@ -527,7 +524,7 @@ test("moveDocument moves containers with children and updates tab index paths", 
   });
   const tab = await createDocument(worldName, `${child.path}/Overview`, "# Moved", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "markdown"
   });
 
   const moved = await moveDocument(worldName, source.path, target.path);
@@ -609,7 +606,7 @@ test("moveDocument clears home page when home leaves the root", async () => {
   const moved = await moveDocument(worldName, home.path, target.path);
   assert.equal(moved.homePage, null);
 
-  const worlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  const worlds = await listWorlds({ userId: "root", username: "admin", globalRole: "root" });
   assert.equal(worlds.find(world => world.id === worldName).homePage, null);
 });
 
@@ -641,7 +638,7 @@ test("duplicateDocument can clone a document with or without children", async ()
   });
   const tab = await createDocument(worldName, `${document.path}/Overview`, "# Archive", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "markdown"
   });
 
   const singleCopy = await duplicateDocument(worldName, document.path, {

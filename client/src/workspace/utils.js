@@ -18,8 +18,28 @@ export function getFirstOrderedTab(node) {
   })[0] || null;
 }
 
+export function shouldOpenFirstTabDraft({
+  treeLoaded = false,
+  hasSelectedDocument = false,
+  hasActiveTab = false,
+  tabCount = 0,
+  isVisitor = false,
+  canWrite = false,
+  locked = false
+} = {}) {
+  return Boolean(
+    treeLoaded
+    && hasSelectedDocument
+    && !hasActiveTab
+    && tabCount === 0
+    && !isVisitor
+    && canWrite
+    && !locked
+  );
+}
+
 export function isCollaborativeContentType(contentType) {
-  return contentType === 'wiki' || contentType === 'map' || contentType === 'markdown' || contentType === 'board';
+  return contentType === 'wiki' || contentType === 'tiptap' || contentType === 'map' || contentType === 'markdown' || contentType === 'board';
 }
 
 export function isRootContainer(node) {

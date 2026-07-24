@@ -15,6 +15,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    test: {
+      environment: 'jsdom',
+      setupFiles: './vitest.setup.js'
+    },
     server: {
       port: clientPort,
       strictPort: true,

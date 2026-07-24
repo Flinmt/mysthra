@@ -10,6 +10,7 @@ const {
 const { indexWorld, removeWorldFromIndex } = require("./indexer");
 const { getFileTree } = require("./tree");
 const { getUserById } = require("./users");
+const { isGlobalAdmin } = require("../utils/roles");
 
 const THUMBNAIL_TYPES = {
   ".gif": "image/gif",
@@ -57,7 +58,7 @@ function normalizePublicRead(value) {
 }
 
 function normalizeWorldTheme(value) {
-  return WORLD_THEMES.has(value) ? value : "default";
+  return WORLD_THEMES.has(value) ? value : "ember-archive";
 }
 
 function normalizeHexColor(value) {
@@ -143,7 +144,7 @@ async function listWorlds(user = null) {
       }
     }
     
-    const visibleWorlds = user && !user.isAdmin
+    const visibleWorlds = user && !isGlobalAdmin(user)
       ? worlds.filter((world) => isWorldMemberConfig(world, user.userId))
       : worlds;
 
@@ -315,7 +316,7 @@ async function isWorldAdmin(worldId, userId) {
 }
 
 async function getWorldRole(worldId, user = null) {
-  if (user?.isAdmin) return "global-admin";
+  if (isGlobalAdmin(user)) return "global-admin";
   if (!user?.userId) return "none";
 
   const worldData = await getWorldConfig(worldId);
@@ -341,9 +342,37 @@ async function listWorldMembers(worldId) {
   return detailedMembers.filter(Boolean);
 }
 
+async function listUserWorldAccess(userId) {
+  const worlds = await listWorlds({ userId: "root", username: "root", globalRole: "root" });
+  return Promise.all(worlds.map(async (world) => {
+    const worldData = await getWorldConfig(world.id);
+    const member = Array.isArray(worldData.members)
+      ? worldData.members.find((item) => item.userId === userId)
+      : null;
+    return {
+      id: world.id,
+      name: world.name,
+      displayName: world.displayName,
+      role: member ? normalizeWorldMemberRole(member.role) : "none"
+    };
+  }));
+}
+
+async function getWorldAccessCounts() {
+  const worlds = await listWorlds({ userId: "root", username: "root", globalRole: "root" });
+  const counts = {};
+  await Promise.all(worlds.map(async (world) => {
+    const worldData = await getWorldConfig(world.id);
+    for (const member of Array.isArray(worldData.members) ? worldData.members : []) {
+      counts[member.userId] = (counts[member.userId] || 0) + 1;
+    }
+  }));
+  return counts;
+}
+
 async function addWorldMember(worldId, userId, role = "member") {
   const user = await getUserById(userId);
-  if (!user || user.disabled) {
+  if (!user) {
     const error = new Error("User not found");
     error.code = "USER_NOT_FOUND";
     throw error;
@@ -388,7 +417,7 @@ async function removeWorldMember(worldId, userId) {
 }
 
 async function removeUserFromAllWorlds(userId) {
-  const worlds = await listWorlds({ userId: "admin", username: "admin", isAdmin: true });
+  const worlds = await listWorlds({ userId: "root", username: "root", globalRole: "root" });
   await Promise.all(
     worlds.map(async (world) => {
       const worldData = await readWorldConfigById(world.id);
@@ -454,8 +483,10 @@ module.exports = {
   isWorldMember,
   isWorldAdmin,
   getWorldRole,
+  getWorldAccessCounts,
   isWorldPublicReadable,
   listWorldMembers,
+  listUserWorldAccess,
   addWorldMember,
   updateWorldMemberRole,
   removeWorldMember,

@@ -1,14 +1,21 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Share2, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import MapEditor from './MapEditor';
-import BoardEditor from './BoardEditor';
-import { useCollaborationRoom } from './useCollaborationRoom';
+import MapEditor from './features/map/MapEditor';
+import BoardEditor from './features/board/BoardEditor';
+import { useCollaborationRoom } from './hooks/useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
-import WikiBlockEditor from './workspace/WikiBlockEditor';
-import DropdownSelect from './DropdownSelect';
-import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeStyle } from './worldThemes';
+import TiptapEditor from './features/tiptap/TiptapEditor';
+import TabTypeSelector from './workspace/TabTypeSelector';
+import DeleteItemDialog from './workspace/DeleteItemDialog';
+import DocumentIconPicker from './workspace/DocumentIconPicker';
+import WorkspaceToastRegion from './workspace/WorkspaceToasts';
+import { enqueueWorkspaceToast } from './workspace/workspaceToastUtils';
+import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
+import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
+import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
+import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeShellStyle, getWorldThemeStyle } from './worldThemes';
 import {
   clampCoverPosition,
   copyTextToClipboard,
@@ -34,7 +41,8 @@ import {
   normalizeCoverArea,
   orderTreeWithHome,
   pathParent,
-  prepareAssetUpload
+  prepareAssetUpload,
+  shouldOpenFirstTabDraft
 } from './workspace/utils';
 
 const DOCUMENT_ICON_CATEGORIES = [
@@ -189,12 +197,20 @@ function getTabTypeIcon(contentType) {
   return FileText;
 }
 
-function normalizeIconSearch(value = '') {
-  return String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+function skipsFileContentLoad(contentType) {
+  return contentType === 'wiki'
+    || contentType === 'tiptap'
+    || contentType === 'map'
+    || contentType === 'board';
+}
+
+function getUniqueTabName(tabs, baseName) {
+  const siblingNames = new Set(tabs.map(tab => tab.name));
+  if (!siblingNames.has(baseName)) return baseName;
+
+  let suffix = 2;
+  while (siblingNames.has(`${baseName} ${suffix}`)) suffix += 1;
+  return `${baseName} ${suffix}`;
 }
 
 function AssetTree({ nodes, selectedAsset, selectedFolderPath, onSelectAsset, onSelectFolder, onCreateFolder, onContextMenu, renamingPath, onRename, onRequestRename, onDelete, isVisitor }) {
@@ -262,7 +278,7 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
           event.dataTransfer.setData('text/plain', node.name);
         }}
         onContextMenu={(event) => {
-          if (isVisitor || isRenaming) return;
+          if (isRenaming || (isVisitor && isFolder)) return;
           event.preventDefault();
           event.stopPropagation();
           onContextMenu(event, node);
@@ -306,63 +322,44 @@ function AssetTreeNode({ node, selectedAsset, selectedFolderPath, onSelectAsset,
         {!isVisitor && !isRenaming && (
           <span className="tree-node-actions asset-node-actions">
             {isFolder && (
-              <span
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 className="node-action-btn"
                 onClick={(event) => {
                   event.stopPropagation();
                   setIsOpen(true);
                   onCreateFolder(node.path);
                 }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    setIsOpen(true);
-                    onCreateFolder(node.path);
-                  }
-                }}
                 title={t('common.create')}
+                aria-label={t('common.create')}
               >
                 <Plus size={14} />
-              </span>
+              </button>
             )}
-            <span
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               className="node-action-btn"
               onClick={(event) => {
                 event.stopPropagation();
                 onRequestRename(node);
               }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onRequestRename(node);
-                }
-              }}
               title={t('common.rename')}
+              aria-label={t('common.rename')}
             >
               <Edit2 size={14} />
-            </span>
-            <span
-              role="button"
-              tabIndex={0}
+            </button>
+            <button
+              type="button"
               className="node-action-btn danger"
               onClick={(event) => {
                 event.stopPropagation();
                 onDelete(node);
               }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onDelete(node);
-                }
-              }}
               title={t('common.delete')}
+              aria-label={t('common.delete')}
             >
               <Trash2 size={14} />
-            </span>
+            </button>
           </span>
         )}
       </div>
@@ -437,6 +434,18 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
       <div 
         className={`tree-node ${isSelected ? 'selected' : ''}`}
         draggable={!isRenaming && canWriteNode}
+        data-document-uid={node.uid}
+        tabIndex={0}
+        title={node.name}
+        onClick={() => {
+          if (isRenaming) return;
+          onFileSelect(node);
+        }}
+        onKeyDown={(event) => {
+          if (isRenaming || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          onFileSelect(node);
+        }}
         onContextMenu={(e) => {
           if (!canReadNode) return;
           if (isRenaming) return;
@@ -454,11 +463,6 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
         </span>
         <div
           className="tree-node-main"
-          title={node.name}
-          onClick={() => {
-            if (isRenaming) return;
-            onFileSelect(node);
-          }}
         >
           <span className="tree-icon" aria-hidden="true">
             {React.createElement(getDocumentIcon(node.icon), { size: 14 })}
@@ -488,21 +492,16 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
           {canWriteNode && (
             <>
               <button
+                type="button"
                 className="node-action-btn"
                 onClick={(e) => { e.stopPropagation(); setIsOpen(true); onCreateChild(node.path); }}
                 title={t('common.create')}
               >
                 <Plus size={14} />
               </button>
-              <button
-                className="node-action-btn"
-                onClick={(e) => { e.stopPropagation(); onRequestRename(node); }}
-                title={t('common.rename')}
-              >
-                <Edit2 size={14} />
-              </button>
               {canAdminNode && (
                 <button
+                  type="button"
                   className="node-action-btn danger"
                   onClick={(e) => { e.stopPropagation(); onDelete(node); }}
                   title={t('common.delete')}
@@ -520,8 +519,9 @@ function FileTreeNode({ node, onFileSelect, selectedFile, onCreateChild, onConte
 }
 
 const DOCUMENT_ACCESS_RANK = { none: 0, read: 1, write: 2, admin: 3 };
-const MAX_TABS_PER_DOCUMENT = 5;
 const WORLD_THEME_CACHE_PREFIX = 'mysthra:world-theme:';
+const SIDEBAR_COLLAPSED_KEY = 'mysthra:workspace-sidebar-collapsed';
+const SIDEBAR_MOBILE_QUERY = '(max-width: 900px)';
 
 function getCachedWorldTheme(worldId) {
   try {
@@ -539,25 +539,22 @@ function setCachedWorldTheme(worldId, themeId) {
   }
 }
 
-function WorkspaceBootScreen({ theme, title, label }) {
-  return (
-    <div className="workspace-container workspace-boot" data-world-theme={theme}>
-      <div className="workspace-boot-card">
-        <div className="workspace-boot-mark" aria-hidden="true" />
-        <div>
-          <strong>{title}</strong>
-          <span>{label}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function hasDocumentAccess(access, required) {
   return (DOCUMENT_ACCESS_RANK[access] || 0) >= (DOCUMENT_ACCESS_RANK[required] || 0);
 }
 
-export default function WorldWorkspace({ params, isVisitor = false, currentUser = null }) {
+function getDocumentBreadcrumb(nodes, targetPath, ancestors = []) {
+  for (const node of nodes || []) {
+    if (node.type !== 'container') continue;
+    const branch = [...ancestors, { name: node.name, path: node.path }];
+    if (node.path === targetPath) return branch;
+    const match = getDocumentBreadcrumb(node.children, targetPath, branch);
+    if (match.length > 0) return match;
+  }
+  return [];
+}
+
+export default function WorldWorkspace({ params, isVisitor = false, currentUser = null, languageSwitcher = null }) {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const worldId = decodeURIComponent(params.id);
@@ -573,27 +570,38 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [iconSearchQuery, setIconSearchQuery] = useState('');
   const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isSidebarMobile, setIsSidebarMobile] = useState(() => window.matchMedia?.(SIDEBAR_MOBILE_QUERY).matches || false);
+  const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [assetTree, setAssetTree] = useState([]);
   const [assetLoading, setAssetLoading] = useState(false);
   const [assetUploading, setAssetUploading] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [previewAsset, setPreviewAsset] = useState(null);
   const [selectedAssetFolderPath, setSelectedAssetFolderPath] = useState('');
   const [worldData, setWorldData] = useState(null);
   const [worldDataLoaded, setWorldDataLoaded] = useState(false);
   const [treeLoaded, setTreeLoaded] = useState(false);
   const [cachedWorldTheme, setCachedWorldThemeState] = useState(() => getCachedWorldTheme(worldId));
   const [toasts, setToasts] = useState([]);
+  const nextToastIdRef = useRef(0);
   const [saveStatus, setSaveStatus] = useState('saved');
   const assetFileInputRef = useRef(null);
   const coverFileInputRef = useRef(null);
+  const documentIconButtonRef = useRef(null);
   
   // Modals/UI State
-  const [prompt, setPrompt] = useState({ isOpen: false, parentPath: '', name: '', type: 'container', contentType: 'wiki' });
   const [contextMenu, setContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [tabContextMenu, setTabContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [assetContextMenu, setAssetContextMenu] = useState({ isOpen: false, x: 0, y: 0, node: null });
   const [worldActionsMenu, setWorldActionsMenu] = useState(false);
-  const [membersPanel, setMembersPanel] = useState({ isOpen: false, loading: false, members: [], users: [], userId: '', username: '', password: '', error: '' });
+  const [worldSettingsOpen, setWorldSettingsOpen] = useState(false);
   const [documentPermissionsPanel, setDocumentPermissionsPanel] = useState({ isOpen: false, loading: false, members: [], visitorAccess: "none", draft: { inherit: true, users: {} }, error: '' });
   const [worldPresenceUsers, setWorldPresenceUsers] = useState([]);
   const [activeTabVisitorCount, setActiveTabVisitorCount] = useState(0);
@@ -601,28 +609,60 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [documentMovePrompt, setDocumentMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
   const [assetDuplicatePrompt, setAssetDuplicatePrompt] = useState({ isOpen: false, node: null });
   const [assetMovePrompt, setAssetMovePrompt] = useState({ isOpen: false, node: null, targetPath: '' });
-  const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null });
+  const [deletePrompt, setDeletePrompt] = useState({ isOpen: false, node: null, isDeleting: false });
   const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
-  const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false, top: 0, left: 0 });
+  const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false });
+  const [documentIconSaving, setDocumentIconSaving] = useState(false);
   const [renamingPath, setRenamingPath] = useState(null);
   const [assetRenamingPath, setAssetRenamingPath] = useState(null);
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
   const [pageTitleEdit, setPageTitleEdit] = useState({ isEditing: false, value: '' });
-  const [tabCreationPanel, setTabCreationPanel] = useState({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
+  const [tabDraft, setTabDraft] = useState({ isOpen: false, name: '', isCreating: false });
+  const tabDraftDocumentUidRef = useRef('');
+  const tabDraftOriginRef = useRef('');
   const [coverReposition, setCoverReposition] = useState({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
   const assetUploadTargetPathRef = useRef('');
   const coverRef = useRef(null);
+  const firstTabTypeRef = useRef(null);
   const latestContentRef = useRef('');
   const latestTabPathRef = useRef('');
   const selectedContainerPathRef = useRef('');
   const skipTitleRenameRef = useRef(false);
   const initialSharedSelectionRef = useRef(false);
   const [coverUploading, setCoverUploading] = useState(false);
+  const closeSidebarDrawer = useCallback(() => setIsSidebarDrawerOpen(false), []);
+  const toggleSidebar = useCallback(() => {
+    if (isSidebarMobile) setIsSidebarDrawerOpen(prev => !prev);
+    else setIsSidebarCollapsed(prev => !prev);
+  }, [isSidebarMobile]);
+  const closeAssetPreview = useCallback(() => setPreviewAsset(null), []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.(SIDEBAR_MOBILE_QUERY);
+    if (!mediaQuery) return undefined;
+    const handleChange = event => {
+      setIsSidebarMobile(event.matches);
+      setIsSidebarDrawerOpen(false);
+    };
+    mediaQuery.addEventListener?.('change', handleChange);
+    return () => mediaQuery.removeEventListener?.('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
+    } catch {
+      // Session storage may be unavailable in restricted browsing contexts.
+    }
+  }, [isSidebarCollapsed]);
 
   const addToast = useCallback((message, type = 'info') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+    const id = ++nextToastIdRef.current;
+    const duration = type === 'error' ? 7000 : 4000;
+    setToasts(previous => enqueueWorkspaceToast(previous, { id, message, type, duration }));
+  }, []);
+  const dismissToast = useCallback(id => {
+    setToasts(previous => previous.filter(toast => toast.id !== id));
   }, []);
 
   const fetchTree = useCallback(async () => {
@@ -673,38 +713,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       setAssetLoading(false);
     }
   }, [addToast, t, worldId]);
-
-  const fetchMembersPanelData = useCallback(async () => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const [membersRes, usersRes] = await Promise.all([
-        fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`),
-        fetch(`/api/worlds/${encodeURIComponent(worldId)}/available-users`)
-      ]);
-      if (!membersRes.ok || !usersRes.ok) {
-        setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error') }));
-        return;
-      }
-      const membersData = await membersRes.json();
-      const usersData = await usersRes.json();
-      setMembersPanel(prev => ({
-        ...prev,
-        loading: false,
-        members: membersData.items || [],
-        users: usersData.items || [],
-        error: ''
-      }));
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  }, [t, worldData?.canManageMembers, worldId]);
-
-  const openMembersPanel = () => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, isOpen: true, error: '' }));
-    fetchMembersPanelData();
-  };
 
   const handleWorldPresenceStateless = useCallback(({ payload }) => {
     try {
@@ -784,13 +792,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   }, [activeTabPath, selectedContainerPath]);
 
-  const handleWikiContentChange = useCallback((nextContent) => {
-    latestContentRef.current = nextContent;
-    latestTabPathRef.current = activeTab?.path || '';
-    setFileContent(nextContent);
-    setIsDirty(true);
-  }, [activeTab?.path]);
-
   const handleCollaborationSaveState = useCallback(({ status, dirty }) => {
     if (typeof dirty === 'boolean') {
       setIsDirty(dirty);
@@ -846,7 +847,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   useEffect(() => {
     setPageTitleEdit({ isEditing: false, value: selectedContainer?.name || '' });
-    setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
     setViewMode('edit');
   }, [selectedContainer?.uid, selectedContainer?.name]);
@@ -863,10 +863,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
 
   useEffect(() => {
-    if (!isVisitor && activeSidebarTab === 'assets') {
+    if (activeSidebarTab === 'assets') {
       fetchAssets();
     }
-  }, [activeSidebarTab, fetchAssets, isVisitor]);
+  }, [activeSidebarTab, fetchAssets]);
 
   useEffect(() => {
     if (activeTab?.contentType === 'map' || activeTab?.contentType === 'board') {
@@ -878,12 +878,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
     setViewMode('edit');
   }, [activeTab?.uid]);
-
-  useEffect(() => {
-    if (isVisitor && activeSidebarTab !== 'wiki') {
-      setActiveSidebarTab('wiki');
-    }
-  }, [activeSidebarTab, isVisitor]);
 
   useEffect(() => {
     if (!worldActionsMenu) return undefined;
@@ -915,7 +909,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
-      if (tabNode.contentType === 'map' || tabNode.contentType === 'board') {
+      if (skipsFileContentLoad(tabNode.contentType)) {
         setActiveTab(tabNode);
         setFileContent('');
         setContentLoading(false);
@@ -982,6 +976,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const selectContainer = async (node) => {
     setSelectedContainer(node);
+    if (isSidebarMobile) setIsSidebarDrawerOpen(false);
     const firstTab = getFirstOrderedTab(node);
     if (firstTab) {
       selectTab(firstTab);
@@ -998,9 +993,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       const saved = await saveDocument(true);
       if (!saved) return;
     }
-    setTabCreationPanel(prev => ({ ...prev, isOpen: false }));
+    setTabDraft({ isOpen: false, name: '', isCreating: false });
 
-    if (tabNode.contentType === 'map' || tabNode.contentType === 'board') {
+    if (skipsFileContentLoad(tabNode.contentType)) {
       setActiveTab(tabNode);
       setFileContent('');
       setContentLoading(false);
@@ -1131,7 +1126,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
 
     const openInitialTab = async () => {
-      if (tabToOpen.contentType === 'map' || tabToOpen.contentType === 'board') {
+      if (skipsFileContentLoad(tabToOpen.contentType)) {
         setActiveTab(tabToOpen);
         setFileContent('');
         setContentLoading(false);
@@ -1161,70 +1156,35 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     openInitialTab();
   }, [addToast, selectedContainer, t, tree, worldData?.homePage, worldDataLoaded, worldId]);
 
-  const getUniqueTabName = () => {
-    const baseName = t('workspace.new_tab_name');
-    const siblingNames = new Set(selectedTabs.map(tab => tab.name));
-    if (!siblingNames.has(baseName)) return baseName;
-
-    let suffix = 2;
-    while (siblingNames.has(`${baseName} ${suffix}`)) {
-      suffix += 1;
-    }
-    return `${baseName} ${suffix}`;
+  const openTabDraft = () => {
+    if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
+    if (selectedContainer.metadata?.locked === true) return;
+    tabDraftDocumentUidRef.current = selectedContainer.uid;
+    tabDraftOriginRef.current = 'manual';
+    setRenamingTab({ path: '', value: '' });
+    setTabDraft({
+      isOpen: true,
+      name: getUniqueTabName(selectedTabs, t('workspace.untitled_tab')),
+      isCreating: false
+    });
   };
 
-  const openTabCreationPanel = () => {
+  const handleInitializeTabDraft = async (contentType) => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
-    if (hasReachedTabLimit) {
-      addToast(t('workspace.tab_limit_reached'), 'error');
-      return;
-    }
-    setTabCreationPanel({ isOpen: true, name: getUniqueTabName(), contentType: 'wiki', mapFile: null });
-  };
-
-  const handleCreateTabInline = async () => {
-    if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
-    if (hasReachedTabLimit) {
-      addToast(t('workspace.tab_limit_reached'), 'error');
-      return;
-    }
-    const tabName = tabCreationPanel.name.trim();
-    if (!tabName) return;
+    if (selectedContainer.metadata?.locked === true) return;
+    if (!tabDraft.isOpen || tabDraft.isCreating) return;
+    const tabName = tabDraft.name.trim() || getUniqueTabName(selectedTabs, t('workspace.untitled_tab'));
+    setTabDraft(prev => ({ ...prev, name: tabName, isCreating: true }));
     if (isDirty) {
       await new Promise(resolve => window.requestAnimationFrame(resolve));
       const saved = await saveDocument(true);
-      if (!saved) return;
+      if (!saved) {
+        setTabDraft(prev => ({ ...prev, isCreating: false }));
+        return;
+      }
     }
 
     try {
-      const contentType = tabCreationPanel.contentType;
-      let mapBackgroundAssetPath = '';
-      if (contentType === 'map') {
-        if (!tabCreationPanel.mapFile) {
-          addToast(t('workspace.map_image_required'), 'error');
-          return;
-        }
-        const prepared = await prepareAssetUpload(tabCreationPanel.mapFile);
-        if (!prepared.contentType.startsWith('image/')) {
-          addToast(t('workspace.asset_unsupported'), 'error');
-          return;
-        }
-        const query = new URLSearchParams({
-          path: '',
-          filename: prepared.filename
-        });
-        const uploadRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
-          method: 'POST',
-          headers: { 'Content-Type': prepared.contentType },
-          body: prepared.blob
-        });
-        if (!uploadRes.ok) {
-          addToast(t('workspace.asset_upload_failed', { name: tabCreationPanel.mapFile.name }), 'error');
-          return;
-        }
-        const uploaded = await uploadRes.json();
-        mapBackgroundAssetPath = uploaded.path;
-      }
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1235,79 +1195,42 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             type: 'tab',
             contentType,
             name: tabName,
-            ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {})
+            ...((contentType === 'map' || contentType === 'board') ? { documentCoverHidden: true } : {})
           }
         })
       });
       if (res.ok) {
         const createdTab = await res.json();
-        setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
         const nextActiveTab = {
           ...createdTab,
           icon: null,
           type: 'tab',
           contentType,
-          metadata: { type: 'tab', contentType, name: tabName, ...(mapBackgroundAssetPath ? { mapBackgroundAssetPath } : {}) }
+          metadata: {
+            type: 'tab',
+            contentType,
+            name: tabName,
+            ...((contentType === 'map' || contentType === 'board') ? { documentCoverHidden: true } : {})
+          }
         };
 
         await fetchTree();
 
-        if (contentType === 'wiki') {
-          const resDoc = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(createdTab.path)}`);
-          if (resDoc.ok) {
-            const data = await resDoc.json();
-            setActiveTab(nextActiveTab);
-            setFileContent(data.content || '');
-            setContentLoading(false);
-            setIsDirty(false);
-            setSaveStatus('saved');
-          } else {
-            setActiveTab(nextActiveTab);
-            setFileContent('');
-            setContentLoading(false);
-            setIsDirty(false);
-            setSaveStatus('saved');
-          }
-        } else {
-          setActiveTab(nextActiveTab);
-          setFileContent('');
-          setContentLoading(false);
-          setIsDirty(false);
-          setSaveStatus('saved');
-          await fetchAssets();
-        }
+        setActiveTab(nextActiveTab);
+        setFileContent('');
+        setContentLoading(false);
+        setIsDirty(false);
+        setSaveStatus('saved');
+        if (contentType === 'map' || contentType === 'board') await fetchAssets();
+        setTabDraft({ isOpen: false, name: '', isCreating: false });
         addToast(t('common.created'), 'success');
       } else {
         const data = await res.json().catch(() => null);
+        setTabDraft(prev => ({ ...prev, isCreating: false }));
         addToast(data?.error || t('common.error'), 'error');
       }
     } catch {
-      addToast(t('common.error'), 'error');
-    }
-  };
-
-  const handleCreateNode = async () => {
-    if (!prompt.name) return;
-    const nodePath = prompt.parentPath ? `${prompt.parentPath}/${prompt.name}` : prompt.name;
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          path: nodePath, 
-          content: '', 
-          metadata: { 
-            type: prompt.type,
-            contentType: prompt.type === 'tab' ? prompt.contentType : null
-          } 
-        })
-      });
-      if (res.ok) {
-        setPrompt({ isOpen: false, parentPath: '', name: '', type: 'container', contentType: 'wiki' });
-        fetchTree();
-        addToast(t('common.created'), 'success');
-      }
-    } catch {
+      setTabDraft(prev => ({ ...prev, isCreating: false }));
       addToast(t('common.error'), 'error');
     }
   };
@@ -1361,8 +1284,29 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const handleDelete = async (node) => {
     if (isVisitor || !node) return;
-    setDeletePrompt({ isOpen: true, node });
+    setDeletePrompt({ isOpen: true, node, isDeleting: false });
   };
+
+  const closeDeletePrompt = useCallback(() => {
+    if (deletePrompt.isDeleting) return;
+    const deletedNode = deletePrompt.node;
+    setDeletePrompt({ isOpen: false, node: null, isDeleting: false });
+
+    if (deletedNode?.uid) {
+      window.requestAnimationFrame(() => {
+        if (deletedNode.type === 'tab') {
+          const tabElement = Array.from(document.querySelectorAll('[data-tab-uid]'))
+            .find(element => element.dataset.tabUid === deletedNode.uid);
+          if (tabElement?.matches('button')) tabElement.focus();
+          else tabElement?.querySelector('input')?.focus();
+          return;
+        }
+        Array.from(document.querySelectorAll('[data-document-uid]'))
+          .find(element => element.dataset.documentUid === deletedNode.uid)
+          ?.focus();
+      });
+    }
+  }, [deletePrompt.isDeleting, deletePrompt.node]);
 
   const updateHomePage = async (node) => {
     if (isVisitor) return;
@@ -1383,98 +1327,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       addToast(t('workspace.home_page_failed'), 'error');
-    }
-  };
-
-  const addExistingMember = async () => {
-    if (!worldData?.canManageMembers || !membersPanel.userId) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: membersPanel.userId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [], userId: '' }));
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  };
-
-  const createAndAddMember = async () => {
-    if (!worldData?.canManageMembers || !membersPanel.username.trim() || !membersPanel.password) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: membersPanel.username.trim(),
-          password: membersPanel.password
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({
-          ...prev,
-          loading: false,
-          members: data.items || [],
-          username: '',
-          password: ''
-        }));
-        await fetchMembersPanelData();
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  };
-
-  const removeMember = async (userId) => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
-    }
-  };
-
-  const updateMemberRole = async (userId, role) => {
-    if (!worldData?.canManageMembers) return;
-    setMembersPanel(prev => ({ ...prev, loading: true, error: '' }));
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/members/${encodeURIComponent(userId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, members: data.items || [] }));
-      } else {
-        const data = await res.json();
-        setMembersPanel(prev => ({ ...prev, loading: false, error: data.error || t('common.error') }));
-      }
-    } catch {
-      setMembersPanel(prev => ({ ...prev, loading: false, error: t('common.error_connection') }));
     }
   };
 
@@ -1561,8 +1413,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const confirmDelete = async () => {
     const node = deletePrompt.node;
-    if (isVisitor || !node) return;
+    if (isVisitor || !node || deletePrompt.isDeleting) return;
     const deletedHomePage = worldData?.homePage === node.path;
+    setDeletePrompt(prev => ({ ...prev, isDeleting: true }));
 
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents?path=${encodeURIComponent(node.path)}`, {
@@ -1603,23 +1456,21 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           }
           initialSharedSelectionRef.current = false;
         }
-        setDeletePrompt({ isOpen: false, node: null });
+        setDeletePrompt({ isOpen: false, node: null, isDeleting: false });
         await fetchTree();
         addToast(t('common.deleted'), 'success');
       } else {
+        setDeletePrompt(prev => ({ ...prev, isDeleting: false }));
         addToast(t('common.error'), 'error');
       }
     } catch {
+      setDeletePrompt(prev => ({ ...prev, isDeleting: false }));
       addToast(t('common.error'), 'error');
     }
   };
 
   const duplicateTab = async (tab) => {
     if (isVisitor || !tab) return;
-    if (hasReachedTabLimit) {
-      addToast(t('workspace.tab_limit_reached'), 'error');
-      return;
-    }
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/duplicate`, {
         method: 'POST',
@@ -1679,32 +1530,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const closeDocumentIconPicker = useCallback(() => {
-    setDocumentIconPicker({ isOpen: false, top: 0, left: 0 });
+    setDocumentIconPicker({ isOpen: false });
     setIconSearchQuery('');
+    window.requestAnimationFrame(() => documentIconButtonRef.current?.focus());
   }, []);
 
-  const openDocumentIconPicker = (event) => {
+  const openDocumentIconPicker = () => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const pickerWidth = 420;
-    const pickerHeight = 520;
-    const viewportPadding = 12;
     setIconSearchQuery('');
-    setDocumentIconPicker({
-      isOpen: true,
-      top: Math.min(
-        Math.max(rect.bottom + 10, viewportPadding),
-        window.innerHeight - pickerHeight - viewportPadding
-      ),
-      left: Math.max(
-        viewportPadding,
-        Math.min(rect.left, window.innerWidth - pickerWidth - viewportPadding)
-      )
-    });
+    setDocumentIconPicker({ isOpen: true });
   };
 
   const handleDocumentIconSelect = async (icon) => {
-    if (!selectedContainer) return;
+    if (!selectedContainer || documentIconSaving) return;
+    setDocumentIconSaving(true);
     try {
       const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
         method: 'PUT',
@@ -1720,6 +1559,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       }
     } catch {
       addToast(t('common.error'), 'error');
+    } finally {
+      setDocumentIconSaving(false);
     }
   };
 
@@ -1759,26 +1600,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     return filterNodes(assetTree);
   }, [assetSearchQuery, assetTree]);
-  const filteredDocumentIconCategories = useMemo(() => {
-    const query = normalizeIconSearch(iconSearchQuery);
-    if (!query) return DOCUMENT_ICON_CATEGORIES;
-
-    return DOCUMENT_ICON_CATEGORIES
-      .map(category => ({
-        ...category,
-        icons: category.icons.filter(icon => {
-          const searchableText = normalizeIconSearch([
-            icon.key,
-            category.id,
-            ...(icon.aliases || [])
-          ].join(' '));
-          return searchableText.includes(query);
-        })
-      }))
-      .filter(category => category.icons.length > 0);
-  }, [iconSearchQuery]);
-  const filteredDocumentIconCount = filteredDocumentIconCategories.reduce((total, category) => total + category.icons.length, 0);
-
   const assetMoveTargets = useMemo(() => {
     const sourceNode = assetMovePrompt.node;
     return [
@@ -2172,7 +1993,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const handleCoverUpload = async (event) => {
     const [file] = Array.from(event.target.files || []);
     event.target.value = '';
-    if (!file || isVisitor || !selectedContainer || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board') return;
+    if (!file || isVisitor || !selectedContainer || !canWriteSelectedContainer || isDocumentLocked) return;
 
     setCoverUploading(true);
     try {
@@ -2202,7 +2023,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          path: activeTab.path,
+          path: selectedContainer.path,
           metadata: {
             coverAssetPath: uploaded.path,
             coverPositionX: 50,
@@ -2219,7 +2040,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
-      updateActiveTabMetadata({
+      updateSelectedContainerMetadata({
         coverAssetPath: uploaded.path,
         coverPositionX: 50,
         coverPositionY: 50,
@@ -2248,6 +2069,30 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: activeTab.path, metadata })
+      });
+      if (!res.ok) {
+        addToast(t('common.error'), 'error');
+        return false;
+      }
+      await fetchTree();
+      return true;
+    } catch {
+      addToast(t('common.error'), 'error');
+      return false;
+    }
+  };
+
+  const updateSelectedContainerMetadata = (metadata) => {
+    setSelectedContainer(prev => prev ? { ...prev, metadata: { ...prev.metadata, ...metadata } } : prev);
+  };
+
+  const saveSelectedContainerMetadata = async (metadata) => {
+    if (!selectedContainer) return false;
+    try {
+      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedContainer.path, metadata })
       });
       if (!res.ok) {
         addToast(t('common.error'), 'error');
@@ -2303,17 +2148,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeCover = async () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
+    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
     const metadata = { coverAssetPath: null, coverPositionX: 50, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null };
-    updateActiveTabMetadata(metadata);
+    updateSelectedContainerMetadata(metadata);
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
-    const saved = await saveActiveTabMetadata(metadata);
+    const saved = await saveSelectedContainerMetadata(metadata);
     if (saved) addToast(t('common.saved'), 'success');
   };
 
   const getCurrentCoverPosition = () => {
-    const explicitX = activeTab?.metadata?.coverPositionX;
-    const explicitY = activeTab?.metadata?.coverPositionY;
+    const explicitX = documentCoverMetadata?.coverPositionX;
+    const explicitY = documentCoverMetadata?.coverPositionY;
     if (explicitX !== undefined || explicitY !== undefined) {
       return {
         x: clampCoverPosition(explicitX ?? 50),
@@ -2321,8 +2166,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       };
     }
 
-    const area = normalizeCoverArea(activeTab?.metadata?.coverCroppedArea);
-    if (!area) return { x: 50, y: clampCoverPosition(activeTab?.metadata?.coverPositionY) };
+    const area = normalizeCoverArea(documentCoverMetadata?.coverCroppedArea);
+    if (!area) return { x: 50, y: clampCoverPosition(documentCoverMetadata?.coverPositionY) };
     const maxX = Math.max(0, 100 - area.width);
     const maxY = Math.max(0, 100 - area.height);
     return {
@@ -2332,7 +2177,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const startCoverReposition = () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
+    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
     const position = getCurrentCoverPosition();
     setCoverReposition({
       isEditing: true,
@@ -2358,7 +2203,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, []);
 
   const saveCoverReposition = async () => {
-    if (isVisitor || !activeTab || activeTab.contentType === 'map' || activeTab.contentType === 'board' || !activeCoverPath) return;
+    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
     const metadata = {
       coverPositionX: coverReposition.x,
       coverPositionY: coverReposition.y,
@@ -2366,8 +2211,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       coverZoom: 1,
       coverCroppedArea: null
     };
-    updateActiveTabMetadata(metadata);
-    const saved = await saveActiveTabMetadata(metadata);
+    updateSelectedContainerMetadata(metadata);
+    const saved = await saveSelectedContainerMetadata(metadata);
     if (saved) {
       setCoverReposition(prev => ({
         isEditing: false,
@@ -2441,23 +2286,31 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const sidebarTabs = [
     { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
     { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
-  ].filter(tab => !isVisitor || tab.id === 'wiki');
+  ];
   const selectedTabs = getTabsForNode(selectedContainer);
-  const hasReachedTabLimit = selectedTabs.length >= MAX_TABS_PER_DOCUMENT;
-  const activeCoverPath = activeTab && activeTab.contentType !== 'map' && activeTab.contentType !== 'board' ? activeTab?.metadata?.coverAssetPath : null;
-  const hasInlineCoverPosition = activeTab?.metadata?.coverPositionX !== undefined || activeTab?.metadata?.coverPositionY !== undefined;
+  const visibleActiveTab = tabDraft.isOpen ? null : activeTab;
+  const isMapTab = visibleActiveTab?.contentType === 'map';
+  const isBoardTab = visibleActiveTab?.contentType === 'board';
+  const isCanvasTab = isMapTab || isBoardTab;
+  const hasDocumentCoverMetadata = Object.prototype.hasOwnProperty.call(selectedContainer?.metadata || {}, 'coverAssetPath');
+  const legacyCoverTab = selectedTabs.find(tab => tab.metadata?.coverAssetPath);
+  const documentCoverMetadata = hasDocumentCoverMetadata
+    ? selectedContainer?.metadata
+    : legacyCoverTab?.metadata || selectedContainer?.metadata;
+  const documentCoverPath = documentCoverMetadata?.coverAssetPath || null;
+  const isCoverHiddenOnActiveTab = visibleActiveTab?.metadata?.documentCoverHidden ?? isCanvasTab;
+  const isWideContentOnActiveTab = visibleActiveTab?.metadata?.wideContent === true;
+  const activeCoverPath = visibleActiveTab && !isCoverHiddenOnActiveTab ? documentCoverPath : null;
+  const hasInlineCoverPosition = documentCoverMetadata?.coverPositionX !== undefined || documentCoverMetadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
     ? coverReposition.x
-    : hasInlineCoverPosition ? clampCoverPosition(activeTab?.metadata?.coverPositionX) : undefined;
+    : hasInlineCoverPosition ? clampCoverPosition(documentCoverMetadata?.coverPositionX) : undefined;
   const coverPositionY = coverReposition.isEditing
     ? coverReposition.y
-    : hasInlineCoverPosition ? clampCoverPosition(activeTab?.metadata?.coverPositionY) : undefined;
-  const coverBackgroundVars = getCoverBackgroundVars(activeTab?.metadata?.coverCroppedArea, coverPositionX, coverPositionY);
-  const coverActionLabel = activeCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
-  const isMapTab = activeTab?.contentType === 'map';
-  const isBoardTab = activeTab?.contentType === 'board';
-  const isCanvasTab = isMapTab || isBoardTab;
-  const isMarkdownTab = activeTab?.contentType === 'markdown';
+    : hasInlineCoverPosition ? clampCoverPosition(documentCoverMetadata?.coverPositionY) : undefined;
+  const coverBackgroundVars = getCoverBackgroundVars(documentCoverMetadata?.coverCroppedArea, coverPositionX, coverPositionY);
+  const coverActionLabel = documentCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
+  const isMarkdownTab = visibleActiveTab?.contentType === 'markdown';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
   const isDocumentOwner = Boolean(currentUser?.userId && selectedContainer?.metadata?.ownerUserId === currentUser?.userId);
@@ -2466,25 +2319,103 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const isDocumentLocked = selectedContainer?.metadata?.locked === true;
   const canWriteActiveTab = hasDocumentAccess(activeTab?.metadata?.currentUserAccess, 'write') && !isDocumentLocked;
   const isDocumentUnlocked = !isVisitor && viewMode === 'edit' && canWriteActiveTab;
-  const memberUserIds = new Set(membersPanel.members.map(member => member.userId));
-  const availableUsers = membersPanel.users.filter(user => !user.disabled && !memberUserIds.has(user.id));
   const workspaceTheme = getWorldTheme(worldData?.theme || cachedWorldTheme).id;
-  const workspaceThemeStyle = worldData?.customTheme
-    ? getWorldThemeStyle(worldData.theme, worldData.customTheme)
-    : {};
+  const workspaceThemeStyle = getWorldThemeStyle(workspaceTheme, worldData?.customTheme);
+  const workspaceShellThemeStyle = getWorldThemeShellStyle(workspaceTheme, worldData?.customTheme);
   const isWorkspaceBooting = !worldDataLoaded || !treeLoaded;
   const saveStatusLabel = saveStatus === 'saving'
     ? t('workspace.save_status_saving')
+    : saveStatus === 'offline'
+      ? t('workspace.save_status_offline')
+      : saveStatus === 'readonly'
+        ? t('workspace.save_status_readonly')
     : saveStatus === 'error'
       ? t('workspace.save_status_error')
       : isDirty
         ? t('workspace.save_status_pending')
         : t('workspace.save_status_saved');
+  const documentBreadcrumbs = useMemo(
+    () => getDocumentBreadcrumb(tree, selectedContainer?.path),
+    [selectedContainer?.path, tree]
+  );
+  const shouldAutomaticallyOpenFirstTab = shouldOpenFirstTabDraft({
+    treeLoaded,
+    hasSelectedDocument: Boolean(selectedContainer),
+    hasActiveTab: Boolean(activeTab),
+    tabCount: selectedTabs.length,
+    isVisitor,
+    canWrite: canWriteSelectedContainer,
+    locked: isDocumentLocked
+  });
+  const canKeepTabDraftOpen = Boolean(
+    treeLoaded
+    && selectedContainer
+    && !isVisitor
+    && canWriteSelectedContainer
+    && !isDocumentLocked
+  );
+  const automaticFirstTabName = getUniqueTabName(selectedTabs, t('workspace.untitled_tab'));
+
+  useLayoutEffect(() => {
+    const selectedDocumentUid = selectedContainer?.uid || '';
+    const draftBelongsToSelectedDocument = tabDraftDocumentUidRef.current === selectedDocumentUid;
+
+    if (shouldAutomaticallyOpenFirstTab) {
+      if (draftBelongsToSelectedDocument && tabDraft.isOpen) return;
+      tabDraftDocumentUidRef.current = selectedDocumentUid;
+      tabDraftOriginRef.current = 'automatic';
+      setRenamingTab({ path: '', value: '' });
+      setTabDraft({
+        isOpen: true,
+        name: automaticFirstTabName,
+        isCreating: false
+      });
+      return;
+    }
+
+    const shouldCloseDraft = (
+      !canKeepTabDraftOpen
+      || !draftBelongsToSelectedDocument
+      || tabDraftOriginRef.current === 'automatic'
+    );
+    tabDraftDocumentUidRef.current = selectedDocumentUid;
+    if (!shouldCloseDraft) {
+      if (!tabDraft.isOpen) tabDraftOriginRef.current = '';
+      return;
+    }
+    tabDraftOriginRef.current = '';
+    if (tabDraft.isOpen) setTabDraft({ isOpen: false, name: '', isCreating: false });
+  }, [
+    automaticFirstTabName,
+    canKeepTabDraftOpen,
+    selectedContainer?.uid,
+    shouldAutomaticallyOpenFirstTab,
+    tabDraft.isOpen
+  ]);
+
+  const toggleActiveTabCoverVisibility = async () => {
+    if (!activeTab || !documentCoverPath || !canWriteActiveTab) return;
+    const wasHidden = isCoverHiddenOnActiveTab;
+    const metadata = { documentCoverHidden: !wasHidden };
+    updateActiveTabMetadata(metadata);
+    const saved = await saveActiveTabMetadata(metadata);
+    if (!saved) updateActiveTabMetadata({ documentCoverHidden: wasHidden });
+  };
+
+  const toggleActiveTabContentWidth = async () => {
+    if (!activeTab || isCanvasTab || !canWriteActiveTab) return;
+    const wasWide = isWideContentOnActiveTab;
+    const metadata = { wideContent: !wasWide };
+    updateActiveTabMetadata(metadata);
+    const saved = await saveActiveTabMetadata(metadata);
+    if (!saved) updateActiveTabMetadata({ wideContent: wasWide });
+  };
 
   if (isWorkspaceBooting) {
     return (
       <WorkspaceBootScreen
         theme={workspaceTheme}
+        themeStyle={workspaceThemeStyle}
         title={worldData?.displayName || worldId}
         label={t('workspace.loading_world')}
       />
@@ -2493,12 +2424,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   const editorControls = !isVisitor ? (
     <div className="editor-cover-controls">
-      {activeTab && (
-        <span className={`editor-save-status ${saveStatus}`}>
-          {saveStatusLabel}
-        </span>
-      )}
-      {activeTab && activeTabVisitorCount > 0 && (
+      {visibleActiveTab && activeTabVisitorCount > 0 && (
         <span className="editor-visitor-count" title={t('workspace.visitors_viewing_file')}>
           <Users size={14} />
           <span>
@@ -2506,24 +2432,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </span>
         </span>
       )}
-      {worldPresenceUsers.length > 0 && (
-        <div className="world-presence" title={t('workspace.online_users')}>
-          {worldPresenceUsers.slice(0, 5).map(user => (
-            <span
-              key={user.id}
-              className="world-presence-avatar"
-              style={{ '--presence-color': user.color }}
-              title={user.name}
-            >
-              {String(user.name || '?').slice(0, 1).toUpperCase()}
-            </span>
-          ))}
-          {worldPresenceUsers.length > 5 && (
-            <span className="world-presence-more">+{worldPresenceUsers.length - 5}</span>
-          )}
-        </div>
-      )}
-      {activeTab && isMarkdownTab && canWriteActiveTab && (
+      {visibleActiveTab && isMarkdownTab && canWriteActiveTab && (
         <button
           type="button"
           className={`editor-preview-toggle ${viewMode === 'edit' ? 'active' : ''}`}
@@ -2533,50 +2442,69 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           {viewMode === 'edit' ? <Eye size={16} /> : <Edit2 size={16} />}
         </button>
       )}
-      {selectedContainer && canLockDocument && (
-        <button
-          type="button"
-          className={`editor-document-lock${selectedContainer.metadata?.locked ? ' locked' : ''}`}
-          onClick={toggleDocumentLock}
-          title={selectedContainer.metadata?.locked ? t('workspace.document_unlock') : t('workspace.document_lock')}
-        >
-          {selectedContainer.metadata?.locked ? <Lock size={16} /> : <LockOpen size={16} />}
-        </button>
-      )}
-      {selectedContainer && canManageDocumentPermissions && (
-        <button
-          type="button"
-          className="editor-permissions-toggle"
-          onClick={openDocumentPermissionsPanel}
-          title={t('workspace.document_permissions')}
-        >
-          <Shield size={16} />
-        </button>
-      )}
       {selectedContainer && (
         <div className="editor-world-actions" onClick={(event) => event.stopPropagation()}>
           <button
             type="button"
             className={`editor-more-toggle ${worldActionsMenu ? 'active' : ''}`}
             onClick={() => setWorldActionsMenu(prev => !prev)}
-            title={t('workspace.world_actions')}
+            title={t('workspace.document_actions')}
+            aria-label={t('workspace.document_actions')}
           >
             <MoreVertical size={16} />
           </button>
           {worldActionsMenu && (
             <div className="editor-world-actions-menu glass-panel">
-              <button type="button" onClick={shareWorld}>
-                <Share2 size={14} />
-                <span>{t('workspace.share_world')}</span>
-              </button>
-              {activeTab && (
+              {canManageDocumentPermissions && (
+                <button type="button" onClick={() => { setWorldActionsMenu(false); openDocumentPermissionsPanel(); }}>
+                  <Shield size={14} />
+                  <span>{t('workspace.document_permissions')}</span>
+                </button>
+              )}
+              {canLockDocument && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorldActionsMenu(false);
+                    toggleDocumentLock();
+                  }}
+                >
+                  {selectedContainer.metadata?.locked ? <LockOpen size={14} /> : <Lock size={14} />}
+                  <span>{selectedContainer.metadata?.locked ? t('workspace.document_unlock') : t('workspace.document_lock')}</span>
+                </button>
+              )}
+              {visibleActiveTab && (
                 <button type="button" onClick={shareCurrentTab}>
                   <Copy size={14} />
                   <span>{t('workspace.share_tab')}</span>
                 </button>
               )}
-              {activeTab && !isCanvasTab && canWriteActiveTab && (
+              {visibleActiveTab && !isCanvasTab && canWriteActiveTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorldActionsMenu(false);
+                    toggleActiveTabContentWidth();
+                  }}
+                >
+                  {isWideContentOnActiveTab ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                  <span>{isWideContentOnActiveTab ? t('workspace.use_compact_content') : t('workspace.use_wide_content')}</span>
+                </button>
+              )}
+              {canWriteSelectedContainer && !isDocumentLocked && (
                 <>
+                  {visibleActiveTab && documentCoverPath && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWorldActionsMenu(false);
+                        toggleActiveTabCoverVisibility();
+                      }}
+                    >
+                      {isCoverHiddenOnActiveTab ? <Eye size={14} /> : <EyeOff size={14} />}
+                      <span>{isCoverHiddenOnActiveTab ? t('workspace.show_cover_on_tab') : t('workspace.hide_cover_on_tab')}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -2588,18 +2516,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <Image size={14} />
                     <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
                   </button>
-                  {activeCoverPath && (
+                  {documentCoverPath && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWorldActionsMenu(false);
-                          startCoverReposition();
-                        }}
-                      >
-                        <MoveVertical size={14} />
-                        <span>{t('workspace.reposition_cover')}</span>
-                      </button>
+                      {activeCoverPath && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorldActionsMenu(false);
+                            startCoverReposition();
+                          }}
+                        >
+                          <MoveVertical size={14} />
+                          <span>{t('workspace.reposition_cover')}</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="danger"
@@ -2624,6 +2554,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const pageTitleBlock = (
     <div className="editor-page-title-row">
       <button
+        ref={documentIconButtonRef}
         type="button"
           className={`editor-page-icon ${selectedContainer && canWriteSelectedContainer ? 'is-editable' : ''}`}
           onClick={openDocumentIconPicker}
@@ -2666,104 +2597,68 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     </div>
   );
   const tabRow = (
-    <div className="editor-tab-row">
-      {selectedTabs.map(tab => (
-        renamingTab.path === tab.path ? (
-          <input
-            key={tab.uid}
-            className="editor-tab-rename-input"
-            value={renamingTab.value}
-            onChange={event => setRenamingTab(prev => ({ ...prev, value: event.target.value }))}
-            onBlur={() => commitTabRename(tab)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-              if (event.key === 'Escape') {
-                setRenamingTab({ path: '', value: '' });
-              }
-            }}
-            autoFocus
-            onFocus={event => event.target.select()}
-          />
-        ) : (
-          <button
-            key={tab.uid}
-            type="button"
-            className={`editor-tab-pill ${activeTab?.uid === tab.uid ? 'active' : ''}`}
-            onClick={() => selectTab(tab)}
-            onContextMenu={event => {
-              if (isVisitor || !hasDocumentAccess(tab.metadata?.currentUserAccess, 'write')) return;
-              event.preventDefault();
-              event.stopPropagation();
-              setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
-            }}
-          >
-            {React.createElement(getTabTypeIcon(tab.contentType), { size: 14 })}
-            <span>{tab.name}</span>
-          </button>
-        )
-      ))}
-      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && !hasReachedTabLimit && (
-        <button
-          type="button"
-          className="editor-tab-add"
-          onClick={openTabCreationPanel}
-          title={t('workspace.create_tab')}
-        >
-          <Plus size={16} />
-        </button>
-      )}
-    </div>
+    <WorkspaceTabRow
+      tabs={selectedTabs}
+      activeTab={tabDraft.isOpen ? null : activeTab}
+      renamingTab={renamingTab}
+      draftTab={tabDraft.isOpen ? tabDraft : null}
+      draftRenameLabel={t('workspace.rename_draft_tab')}
+      scrollBackLabel={t('workspace.scroll_tabs_back')}
+      scrollForwardLabel={t('workspace.scroll_tabs_forward')}
+      canCreate={!tabDraft.isOpen && !isVisitor && canWriteSelectedContainer && !isDocumentLocked}
+      createLabel={t('workspace.create_tab')}
+      getTabIcon={getTabTypeIcon}
+      onSelect={selectTab}
+      onContextMenu={(event, tab) => {
+        if (isVisitor || !hasDocumentAccess(tab.metadata?.currentUserAccess, 'write')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setTabContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: tab });
+      }}
+      onRenameChange={value => setRenamingTab(prev => ({ ...prev, value }))}
+      onRenameCommit={commitTabRename}
+      onRenameCancel={() => setRenamingTab({ path: '', value: '' })}
+      onDraftNameChange={name => setTabDraft(prev => ({ ...prev, name }))}
+      onDraftRenameCommit={() => firstTabTypeRef.current?.focus()}
+      onCreate={openTabDraft}
+    />
   );
 
   return (
-    <div
-      className="workspace-container"
-      data-world-theme={workspaceTheme}
-      data-custom-theme={worldData?.customTheme ? 'true' : undefined}
-      style={{ ...workspaceThemeStyle, flexDirection: 'row' }}
-    >
-      <aside className="workspace-sidebar sidebar-nexus">
-        <div className="sidebar-header sidebar-nexus-header">
-          <div className="sidebar-nexus-glow" aria-hidden="true" />
-          <div className="sidebar-topline">
-            <h1 className="sidebar-world-title">{worldData?.displayName || worldId}</h1>
-            {!isVisitor && (
-              <button className="sidebar-icon-button" onClick={() => setLocation('/')} title={t('common.back')}>
-                <ArrowLeft size={18} />
-              </button>
-            )}
-            {canManageMembers && (
-              <button className="sidebar-icon-button" onClick={openMembersPanel} title={t('workspace.manage_members')}>
-                <Users size={18} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {!isVisitor && (
-          <div className="sidebar-nexus-tabs" role="tablist" aria-label={t('workspace.sidebar_tabs_label')}>
-            {sidebarTabs.map(tab => {
-              const TabIcon = tab.icon;
-              const isActive = activeSidebarTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`sidebar-nexus-tab ${isActive ? 'active' : ''}`}
-                  onClick={() => setActiveSidebarTab(tab.id)}
-                  role="tab"
-                  aria-selected={isActive}
-                >
-                  <TabIcon size={14} />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+    <div className="workspace-container workspace-studio-shell" style={workspaceShellThemeStyle}>
+      <WorkspaceTopbar
+        worldName={worldData?.displayName || worldId}
+        breadcrumbs={documentBreadcrumbs}
+        navigatorOpen={isSidebarMobile ? isSidebarDrawerOpen : !isSidebarCollapsed}
+        canManageWorld={canManageMembers}
+        saveStatus={saveStatus}
+        saveStatusLabel={visibleActiveTab && !isVisitor ? saveStatusLabel : ''}
+        presenceUsers={worldPresenceUsers}
+        navigatorLabel={isSidebarMobile ? t('workspace.expand_sidebar') : isSidebarCollapsed ? t('workspace.expand_sidebar') : t('workspace.collapse_sidebar')}
+        backLabel={t('common.back')}
+        settingsLabel={t('workspace.world_settings')}
+        worldMenuLabel={t('workspace.world_actions')}
+        shareLabel={t('workspace.share_world')}
+        onToggleNavigator={toggleSidebar}
+        onBack={() => setLocation('/')}
+        onSelectBreadcrumb={selectContainer}
+        onOpenSettings={() => setWorldSettingsOpen(true)}
+        onShareWorld={shareWorld}
+        languageSwitcher={languageSwitcher}
+      />
+      <WorkspaceBody>
+      <WorkspaceSidebar
+        isVisitor={isVisitor}
+        tabs={sidebarTabs}
+        activeTab={activeSidebarTab}
+        tabsLabel={t('workspace.sidebar_tabs_label')}
+        onTabChange={setActiveSidebarTab}
+        isCollapsed={isSidebarCollapsed}
+        isDrawerOpen={isSidebarDrawerOpen}
+        isMobile={isSidebarMobile}
+        collapseLabel={t('workspace.collapse_sidebar')}
+        onClose={closeSidebarDrawer}
+      >
 
         {activeSidebarTab === 'wiki' ? (
           <>
@@ -2811,31 +2706,27 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             </nav>
 
             <div className="sidebar-search-dock">
-              {tree.length > 0 && !isVisitor && (
-                <div className="wiki-toolbar">
-                  <button type="button" onClick={() => createDocumentInline()}>
-                    <Plus size={14} />
-                    <span>{t('workspace.create_root_document')}</span>
-                  </button>
+              <div className="sidebar-context-bar">
+                <div className="sidebar-search-bar">
+                  <Search size={14} />
+                  <input
+                    aria-label={t('workspace.search_tree')}
+                    placeholder={t('workspace.search_tree')}
+                    value={searchQuery}
+                    onChange={event => setSearchQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape') setSearchQuery('');
+                    }}
+                  />
+                  {searchQuery && (
+                    <button type="button" onClick={() => setSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
-              )}
-              <div className="sidebar-search-bar">
-                <Search size={15} />
-                <input
-                  placeholder={t('workspace.search_tree')}
-                  value={searchQuery}
-                  onChange={event => setSearchQuery(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Escape') setSearchQuery('');
-                  }}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    title={t('common.cancel')}
-                  >
-                    <X size={14} />
+                {!isVisitor && (
+                  <button type="button" className="sidebar-context-action" onClick={() => createDocumentInline()} title={t('workspace.create_root_document')} aria-label={t('workspace.create_root_document')}>
+                    <Plus size={15} />
                   </button>
                 )}
               </div>
@@ -2897,60 +2788,35 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               )}
             </div>
 
-            {selectedAsset && (
-              <div className="asset-preview-panel">
-                <div className="asset-preview-header">
-                  <strong>{selectedAsset.name}</strong>
-                  <span>{formatAssetSize(selectedAsset.size)}</span>
-                </div>
-                {selectedAsset.mediaType === 'audio' ? (
-                  <audio controls src={getAssetUrl(selectedAsset.path)} />
-                ) : (
-                  <img src={getAssetUrl(selectedAsset.path)} alt={selectedAsset.name} />
-                )}
-              </div>
-            )}
-
             <div className="assets-bottom-dock">
-              {!isVisitor && (
-                <div className="assets-toolbar">
+              <input ref={assetFileInputRef} type="file" multiple accept="image/*,.gif,audio/*" onChange={handleAssetUpload} hidden />
+              <div className="sidebar-context-bar">
+                <div className="sidebar-search-bar">
+                  <Search size={14} />
                   <input
-                    ref={assetFileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.gif,audio/*"
-                    onChange={handleAssetUpload}
-                    hidden
+                    aria-label={t('workspace.assets_search')}
+                    placeholder={t('workspace.assets_search')}
+                    value={assetSearchQuery}
+                    onChange={event => setAssetSearchQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Escape') setAssetSearchQuery('');
+                    }}
                   />
-                  <button type="button" onClick={() => openAssetUpload()} disabled={assetUploading}>
-                    <Upload size={14} />
-                    <span>{assetUploading ? t('common.uploading') : t('workspace.assets_upload')}</span>
-                  </button>
-                  <button type="button" onClick={() => createAssetFolderInline()}>
-                    <FolderPlus size={14} />
-                    <span>{t('workspace.assets_new_folder')}</span>
-                  </button>
+                  {assetSearchQuery && (
+                    <button type="button" onClick={() => setAssetSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
-              )}
-
-              <div className="sidebar-search-bar">
-                <Search size={15} />
-                <input
-                  placeholder={t('workspace.assets_search')}
-                  value={assetSearchQuery}
-                  onChange={event => setAssetSearchQuery(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Escape') setAssetSearchQuery('');
-                  }}
-                />
-                {assetSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setAssetSearchQuery('')}
-                    title={t('common.cancel')}
-                  >
-                    <X size={14} />
-                  </button>
+                {!isVisitor && (
+                  <>
+                    <button type="button" className="sidebar-context-action" onClick={() => openAssetUpload()} disabled={assetUploading} title={assetUploading ? t('common.uploading') : t('workspace.assets_upload')} aria-label={assetUploading ? t('common.uploading') : t('workspace.assets_upload')}>
+                      <Upload size={15} />
+                    </button>
+                    <button type="button" className="sidebar-context-action" onClick={() => createAssetFolderInline()} title={t('workspace.assets_new_folder')} aria-label={t('workspace.assets_new_folder')}>
+                      <FolderPlus size={15} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -2966,15 +2832,18 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             </div>
           </div>
         )}
-      </aside>
+      </WorkspaceSidebar>
 
       {/* Área Principal */}
-      <main className="workspace-main workspace-editor-main">
+      <main
+        className="workspace-main workspace-editor-main workspace-content-theme"
+        data-world-theme={workspaceTheme}
+      >
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${!isCanvasTab && activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && activeTab && !isCanvasTab && canWriteActiveTab && (
+              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${isWideContentOnActiveTab ? 'is-wide-content' : ''} ${activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
+                {!isVisitor && selectedContainer && canWriteSelectedContainer && !isDocumentLocked && (
                   <input
                     ref={coverFileInputRef}
                     type="file"
@@ -2983,7 +2852,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     hidden
                   />
                 )}
-                {!isCanvasTab && activeCoverPath && (
+                {activeCoverPath && (
                   <div
                     ref={coverRef}
                     className={`editor-page-cover has-image ${coverReposition.isEditing ? 'is-repositioning' : ''} ${coverReposition.isDragging ? 'is-dragging' : ''}`}
@@ -3015,127 +2884,29 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     )}
                   </div>
                 )}
-                <div className="document-chrome">
-                  <header className="document-chrome-title">
-                    {pageTitleBlock}
-                    {tabRow}
-                  </header>
-                  <div className="document-chrome-controls">
-                    {editorControls}
-                  </div>
-                </div>
+                <DocumentChrome title={pageTitleBlock} tabs={tabRow} controls={editorControls} />
 
                 <section className="editor-page-body document-content-frame">
-                  {tabCreationPanel.isOpen ? (
-                    <div className="tab-creation-panel">
-                      <div className="tab-creation-header">
-                        <div className="tab-creation-icon">
-                          <Plus size={20} />
-                        </div>
-                        <div>
-                          <h2>{t('workspace.create_tab')}</h2>
-                          <p>{t('workspace.create_tab_inline_hint')}</p>
-                        </div>
-                      </div>
-
-                      <label className="tab-creation-label" htmlFor="tab-name-input">
-                        {t('common.name')}
-                      </label>
-                      <input
-                        id="tab-name-input"
-                        className="tab-creation-input"
-                        value={tabCreationPanel.name}
-                        onChange={event => setTabCreationPanel(prev => ({ ...prev, name: event.target.value }))}
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') handleCreateTabInline();
-                          if (event.key === 'Escape') setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null });
-                        }}
-                        placeholder={t('workspace.new_tab_name')}
-                        autoFocus
-                        onFocus={event => event.target.select()}
-                      />
-
-                      <div className="tab-type-grid">
-                        <button
-                          type="button"
-                          className={`tab-type-card ${tabCreationPanel.contentType === 'wiki' ? 'active' : ''}`}
-                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'wiki' }))}
-                        >
-                          <FileText size={22} />
-                          <strong>{t('workspace.tab_type_notion_like')}</strong>
-                          <span>{t('workspace.tab_type_wiki_hint')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`tab-type-card ${tabCreationPanel.contentType === 'markdown' ? 'active' : ''}`}
-                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'markdown' }))}
-                        >
-                          <FilePenLine size={22} />
-                          <strong>{t('workspace.tab_type_markdown')}</strong>
-                          <span>{t('workspace.tab_type_markdown_hint')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`tab-type-card ${tabCreationPanel.contentType === 'map' ? 'active' : ''}`}
-                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'map' }))}
-                        >
-                          <Map size={22} />
-                          <strong>{t('workspace.tab_type_map')}</strong>
-                          <span>{t('workspace.tab_type_map_hint')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`tab-type-card ${tabCreationPanel.contentType === 'board' ? 'active' : ''}`}
-                          onClick={() => setTabCreationPanel(prev => ({ ...prev, contentType: 'board' }))}
-                        >
-                          <Shapes size={22} />
-                          <strong>{t('workspace.tab_type_board')}</strong>
-                          <span>{t('workspace.tab_type_board_hint')}</span>
-                        </button>
-                      </div>
-
-                      {tabCreationPanel.contentType === 'map' && (
-                        <label className={`map-creation-file ${tabCreationPanel.mapFile ? 'has-file' : ''}`}>
-                          <input
-                            type="file"
-                            accept="image/*,.gif"
-                            onChange={event => {
-                              const [file] = Array.from(event.target.files || []);
-                              setTabCreationPanel(prev => ({ ...prev, mapFile: file || null }));
-                            }}
-                          />
-                          <span className="map-creation-file-icon">
-                            <Upload size={18} />
-                          </span>
-                          <span className="map-creation-file-copy">
-                            <strong>
-                              {tabCreationPanel.mapFile
-                                ? tabCreationPanel.mapFile.name
-                                : t('workspace.map_choose_base_image')}
-                            </strong>
-                            <small>{t('workspace.map_choose_base_image_hint')}</small>
-                          </span>
-                        </label>
-                      )}
-
-                      <div className="tab-creation-actions">
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={() => setTabCreationPanel({ isOpen: false, name: '', contentType: 'wiki', mapFile: null })}
-                        >
-                          {t('common.cancel')}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          onClick={handleCreateTabInline}
-                          disabled={!tabCreationPanel.name.trim() || (tabCreationPanel.contentType === 'map' && !tabCreationPanel.mapFile)}
-                        >
-                          {t('common.create')}
-                        </button>
-                      </div>
-                    </div>
+                  {tabDraft.isOpen ? (
+                    <TabTypeSelector
+                      ref={firstTabTypeRef}
+                      creating={tabDraft.isCreating}
+                      onSelect={handleInitializeTabDraft}
+                      labels={{
+                        title: t('workspace.tab_type_selector_title'),
+                        description: t('workspace.tab_type_selector_hint'),
+                        stableGroup: t('workspace.tab_type_stable_group'),
+                        notion: t('workspace.tab_type_notion'),
+                        notionHint: t('workspace.tab_type_notion_hint'),
+                        markdown: t('workspace.tab_type_markdown'),
+                        markdownHint: t('workspace.tab_type_markdown_hint'),
+                        map: t('workspace.tab_type_map'),
+                        mapHint: t('workspace.tab_type_map_hint'),
+                        board: t('workspace.tab_type_board'),
+                        boardHint: t('workspace.tab_type_board_hint'),
+                        creating: t('workspace.creating_tab')
+                      }}
+                    />
                   ) : contentLoading ? (
                     <div className="editor-local-loading">
                       <div className="editor-local-loading-mark" aria-hidden="true" />
@@ -3153,6 +2924,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         isVisitor={isVisitor}
                         locked={!canWriteActiveTab}
                         initialMapAssetPath={activeTab.metadata?.mapBackgroundAssetPath}
+                        themeBackground={workspaceThemeStyle['--bg-color']}
+                        themeAccent={workspaceThemeStyle['--accent-color']}
                         documentTree={tree}
                         assetImages={assetImages}
                         getAssetUrl={getAssetUrl}
@@ -3211,6 +2984,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         currentUser={currentUser}
                         isVisitor={isVisitor}
                         locked={!canWriteActiveTab}
+                        themeBackground={workspaceThemeStyle['--bg-color']}
+                        themeAccent={workspaceThemeStyle['--accent-color']}
+                        themeGlow={workspaceThemeStyle['--accent-glow']}
                         assetImages={assetImages}
                         assetTree={assetTree}
                         getAssetUrl={getAssetUrl}
@@ -3299,7 +3075,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           resultTypeImage: t('workspace.result_type_image'),
                           resultTypeAudio: t('workspace.result_type_audio'),
                           previewPath: t('workspace.preview_path'),
-                          tabTypeWiki: t('workspace.tab_type_notion_like'),
+                          tabTypeNotion: t('workspace.tab_type_notion'),
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
                           tabTypeBoard: t('workspace.tab_type_board'),
@@ -3308,54 +3084,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         onCollaborationSaveState={handleCollaborationSaveState}
                       />
                       ) : (
-                      <WikiBlockEditor
+                      <TiptapEditor
                         key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
-                        contentKey={activeTab.path}
                         content={fileContent}
                         editable={isDocumentUnlocked && !isVisitor}
                         locked={!canWriteActiveTab}
-                        worldId={worldId}
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
                         isVisitor={isVisitor}
-                        assetImages={assetImages}
-                        assetTree={assetTree}
-                        getAssetUrl={getAssetUrl}
-                        onRequestAssets={fetchAssets}
-                        documentTree={tree}
-                        onNavigateToPageLink={navigateToPageLink}
-                        labels={{
-                          insertImage: t('workspace.insert_image'),
-                          noAssetImages: t('workspace.no_asset_images'),
-                          pageLink: t('workspace.page_link'),
-                          insertPageLink: t('workspace.insert_page_link'),
-                          pageLinkHint: t('workspace.page_link_hint'),
-                          linkedDocument: t('workspace.linked_document'),
-                          linkedTab: t('workspace.linked_tab'),
-                          defaultDocumentTab: t('workspace.default_document_tab'),
-                          insertLink: t('workspace.insert_link'),
-                          searchTabsAssetsPlaceholder: t('workspace.search_tabs_assets_placeholder'),
-                          noSearchResults: t('workspace.no_search_results'),
-                          resultTypeTab: t('workspace.result_type_tab'),
-                          resultTypeImage: t('workspace.result_type_image'),
-                          resultTypeAudio: t('workspace.result_type_audio'),
-                          previewPath: t('workspace.preview_path'),
-                          tabTypeWiki: t('workspace.tab_type_notion_like'),
-                          tabTypeMarkdown: t('workspace.tab_type_markdown'),
-                          tabTypeMap: t('workspace.tab_type_map'),
-                          tabTypeBoard: t('workspace.tab_type_board'),
-                          cancel: t('common.cancel'),
-                          collaboration: {
-                            connecting: t('workspace.collaboration_connecting'),
-                            connected: t('workspace.collaboration_connected'),
-                            readonly: t('workspace.collaboration_readonly'),
-                            disconnected: t('workspace.collaboration_disconnected'),
-                            error: t('workspace.collaboration_error')
-                          }
-                        }}
                         onVisitorCountChange={setActiveTabVisitorCount}
                         onCollaborationSaveState={handleCollaborationSaveState}
-                        onChange={handleWikiContentChange}
                       />
                       )}
                     </>
@@ -3363,15 +3101,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <div className="editor-placeholder muted">
                       <Book size={48} />
                       <p>Esta página não possui abas de conteúdo.</p>
-                      {!isVisitor && canWriteSelectedContainer && !isDocumentLocked && !hasReachedTabLimit && (
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={openTabCreationPanel}
-                        >
-                          {t('workspace.create_first_tab')}
-                        </button>
-                      )}
                     </div>
                   )}
                 </section>
@@ -3386,189 +3115,31 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           </div>
         )}
       </main>
+      </WorkspaceBody>
 
       {/* Modals & Overlays */}
       {documentIconPicker.isOpen && (
-        <>
-          <div className="icon-picker-backdrop" onClick={closeDocumentIconPicker} />
-          <div
-            className="icon-selector-dropdown glass-panel"
-            style={{ top: documentIconPicker.top, left: documentIconPicker.left }}
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="icon-selector-header">
-              <span>{t('workspace.change_icon')}</span>
-              <strong>{selectedContainer?.name}</strong>
-            </div>
-            <div className="icon-selector-search">
-              <Search size={15} />
-              <input
-                value={iconSearchQuery}
-                onChange={event => setIconSearchQuery(event.target.value)}
-                onKeyDown={event => {
-                  if (event.key === 'Escape') {
-                    if (iconSearchQuery) setIconSearchQuery('');
-                    else closeDocumentIconPicker();
-                  }
-                }}
-                placeholder={t('workspace.icon_search_placeholder')}
-                autoFocus
-              />
-              {iconSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setIconSearchQuery('')}
-                  title={t('common.clear')}
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-            <div className="icon-selector-body">
-              {filteredDocumentIconCount === 0 ? (
-                <div className="icon-selector-empty">
-                  <Search size={20} />
-                  <strong>{t('workspace.icon_search_empty')}</strong>
-                  <span>{t('workspace.icon_search_empty_hint')}</span>
-                </div>
-              ) : (
-                filteredDocumentIconCategories.map(category => (
-                  <section key={category.id} className="icon-selector-category">
-                    <div className="icon-selector-category-title">
-                      <span>{t(category.labelKey)}</span>
-                    </div>
-                    <div className="icon-selector-grid">
-                      {category.icons.map(({ key, icon: Icon }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`icon-option ${selectedContainer?.icon === key ? 'active' : ''}`}
-                          onClick={() => handleDocumentIconSelect(key)}
-                          title={key}
-                        >
-                          <Icon size={19} />
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {prompt.isOpen && (
-        <div className="modal-overlay" onClick={() => setPrompt({ ...prompt, isOpen: false })}>
-          <div className="modal-content glass-panel" onClick={e => e.stopPropagation()}>
-            <h3>{prompt.type === 'tab' ? t('workspace.create_tab') : t('workspace.create_document')}</h3>
-            
-            <div className="input-group" style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: 8, display: 'block' }}>{t('common.name')}</label>
-              <input 
-                autoFocus 
-                placeholder={t('common.name_placeholder')}
-                value={prompt.name}
-                onChange={e => setPrompt({ ...prompt, name: e.target.value })}
-                onKeyDown={e => e.key === 'Enter' && handleCreateNode()}
-                style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: 6, color: 'white' }}
-              />
-            </div>
-
-            {prompt.type === 'tab' && (
-              <div className="input-group" style={{ marginBottom: 24 }}>
-                <label style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: 8, display: 'block' }}>Tipo de Conteúdo</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button 
-                    onClick={() => setPrompt({ ...prompt, contentType: 'wiki' })}
-                    style={{ 
-                      flex: 1, 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      padding: '12px', 
-                      background: prompt.contentType === 'wiki' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
-                      border: 'none', 
-                      borderRadius: 8, 
-                      color: 'white', 
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <FileText size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_notion_like')}</span>
-                  </button>
-                  <button 
-                    onClick={() => setPrompt({ ...prompt, contentType: 'map' })}
-                    style={{ 
-                      flex: 1, 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      padding: '12px', 
-                      background: prompt.contentType === 'map' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
-                      border: 'none', 
-                      borderRadius: 8, 
-                      color: 'white', 
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <Map size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>Mapa</span>
-                  </button>
-                  <button 
-                    onClick={() => setPrompt({ ...prompt, contentType: 'board' })}
-                    style={{ 
-                      flex: 1, 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      padding: '12px', 
-                      background: prompt.contentType === 'board' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
-                      border: 'none', 
-                      borderRadius: 8, 
-                      color: 'white', 
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <Shapes size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_board')}</span>
-                  </button>
-                  <button 
-                    onClick={() => setPrompt({ ...prompt, contentType: 'markdown' })}
-                    style={{ 
-                      flex: 1, 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      padding: '12px', 
-                      background: prompt.contentType === 'markdown' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
-                      border: 'none', 
-                      borderRadius: 8, 
-                      color: 'white', 
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <FilePenLine size={20} />
-                    <span style={{ fontSize: '0.75rem' }}>{t('workspace.tab_type_markdown')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setPrompt({ ...prompt, isOpen: false })}>{t('common.cancel')}</button>
-              <button className="btn-primary" onClick={handleCreateNode}>{t('common.create')}</button>
-            </div>
-          </div>
-        </div>
+        <DocumentIconPicker
+          anchorRef={documentIconButtonRef}
+          categories={DOCUMENT_ICON_CATEGORIES}
+          currentIcon={selectedContainer?.icon}
+          documentName={selectedContainer?.name}
+          query={iconSearchQuery}
+          saving={documentIconSaving}
+          labels={{
+            title: t('workspace.change_icon'),
+            searchPlaceholder: t('workspace.icon_search_placeholder'),
+            empty: t('workspace.icon_search_empty'),
+            emptyHint: t('workspace.icon_search_empty_hint'),
+            saving: t('common.saving'),
+            clear: t('common.clear'),
+            close: t('common.close')
+          }}
+          getCategoryLabel={key => t(key)}
+          onQueryChange={setIconSearchQuery}
+          onSelect={handleDocumentIconSelect}
+          onClose={closeDocumentIconPicker}
+        />
       )}
 
       {duplicatePrompt.isOpen && (
@@ -3606,35 +3177,36 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         </div>
       )}
 
-      {deletePrompt.isOpen && (
-        <div className="duplicate-modal-overlay" onClick={() => setDeletePrompt({ isOpen: false, node: null })}>
-          <div className="modal-content glass-panel duplicate-modal delete-modal" onClick={e => e.stopPropagation()}>
-            <button
-              type="button"
-              className="duplicate-modal-close"
-              onClick={() => setDeletePrompt({ isOpen: false, node: null })}
-              title={t('common.cancel')}
-            >
-              <X size={16} />
-            </button>
-            <div className="duplicate-modal-header">
-              <div className="duplicate-modal-icon delete-modal-icon">
-                <Trash2 size={20} />
-              </div>
-              <div>
-                <h3>{t('workspace.delete_document')}</h3>
-                <p>{t('workspace.delete_document_hint', { name: deletePrompt.node?.name })}</p>
-              </div>
-            </div>
-
-            <div className="delete-modal-actions">
-              <button type="button" className="delete-confirm-button" onClick={confirmDelete}>
-                <Trash2 size={16} />
-                <span>{t('workspace.delete_document_confirm')}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      {deletePrompt.isOpen && deletePrompt.node && (
+        <DeleteItemDialog
+          item={deletePrompt.node}
+          icon={React.createElement(
+            deletePrompt.node.type === 'tab'
+              ? getTabTypeIcon(deletePrompt.node.contentType)
+              : getDocumentIcon(deletePrompt.node.icon),
+            { size: 14 }
+          )}
+          deleting={deletePrompt.isDeleting}
+          onCancel={closeDeletePrompt}
+          onConfirm={confirmDelete}
+          labels={deletePrompt.node.type === 'tab' ? {
+            title: t('workspace.delete_tab_title'),
+            description: t('workspace.delete_tab_hint'),
+            warning: t('workspace.delete_tab_warning'),
+            close: t('common.close'),
+            cancel: t('common.cancel'),
+            confirm: t('workspace.delete_tab_confirm'),
+            deleting: t('common.deleting')
+          } : {
+            title: t('workspace.delete_document_title'),
+            description: t('workspace.delete_document_compact_hint'),
+            warning: t('workspace.delete_document_warning'),
+            close: t('common.close'),
+            cancel: t('common.cancel'),
+            confirm: t('workspace.delete_document_confirm'),
+            deleting: t('common.deleting')
+          }}
+        />
       )}
 
       {documentMovePrompt.isOpen && (
@@ -3816,205 +3388,34 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         </div>
       )}
 
-      {membersPanel.isOpen && (
-        <div className="modal-backdrop" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))}>
-          <div className="user-admin-modal members-admin-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true">
-            <div className="user-admin-modal-header">
-              <div>
-                <h2>{t('workspace.world_members')}</h2>
-                <p>{t('workspace.world_members_hint')}</p>
-              </div>
-              <button type="button" className="user-admin-close" onClick={() => setMembersPanel(prev => ({ ...prev, isOpen: false }))} disabled={membersPanel.loading} aria-label={t('common.cancel')}>
-                ×
-              </button>
-            </div>
-
-            <div className="user-admin-modal-body members-admin-grid">
-              <div className="user-admin-directory">
-                <div className="user-admin-section-title">{t('workspace.current_members')}</div>
-                {membersPanel.loading && membersPanel.members.length === 0 ? (
-                  <div className="user-admin-local-loading">
-                    <div className="sidebar-local-loading-lines" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    <strong>{t('workspace.loading_members')}</strong>
-                  </div>
-                ) : membersPanel.members.length === 0 ? (
-                  <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
-                ) : (
-                  <div className="user-admin-list members-list">
-                    {membersPanel.members.map(member => (
-                      <div key={member.userId} className="member-row">
-                        <div className="member-row-main">
-                          <strong>{member.user?.username || member.userId}</strong>
-                        </div>
-                        <div className="member-row-actions">
-                          <div className="user-admin-role-segments" aria-label={t('workspace.member_role')}>
-                            {[
-                              ['member', t('workspace.member_role_member')],
-                              ['admin', t('workspace.member_role_admin')]
-                            ].map(([nextRole, label]) => (
-                              <button key={nextRole} type="button" className={member.role === nextRole ? 'active' : ''} disabled={membersPanel.loading} onClick={() => {
-                                if (nextRole !== member.role) updateMemberRole(member.userId, nextRole)
-                              }}>
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                          <button type="button" className="user-admin-text-danger" onClick={() => removeMember(member.userId)} disabled={membersPanel.loading}>
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="members-add-card">
-                <div className="user-admin-section-title">{t('workspace.add_existing_member')}</div>
-                <div className="member-form-row">
-                  <DropdownSelect
-                    value={membersPanel.userId}
-                    onChange={userId => setMembersPanel(prev => ({ ...prev, userId }))}
-                    options={availableUsers.map(user => ({ value: user.id, label: user.username }))}
-                    placeholder={t('workspace.select_user')}
-                    disabled={membersPanel.loading || availableUsers.length === 0}
-                  />
-                  <button type="button" className="user-admin-secondary" onClick={addExistingMember} disabled={membersPanel.loading || !membersPanel.userId}>
-                    {t('common.add')}
-                  </button>
-                </div>
-
-                <div className="members-create-divider" />
-
-                <div className="user-admin-section-title">{t('workspace.create_member_user')}</div>
-                <div className="user-admin-form-stack">
-                  <input
-                    type="text"
-                    value={membersPanel.username}
-                    onChange={event => setMembersPanel(prev => ({ ...prev, username: event.target.value }))}
-                    placeholder={t('login.username_placeholder')}
-                    disabled={membersPanel.loading}
-                  />
-                  <input
-                    type="password"
-                    value={membersPanel.password}
-                    onChange={event => setMembersPanel(prev => ({ ...prev, password: event.target.value }))}
-                    placeholder={t('login.password_placeholder')}
-                    disabled={membersPanel.loading}
-                  />
-                  <button type="button" className="user-admin-primary" onClick={createAndAddMember} disabled={membersPanel.loading || !membersPanel.username.trim() || !membersPanel.password}>
-                    {t('workspace.create_and_add_member')}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {membersPanel.error && <div className="user-admin-error">{membersPanel.error}</div>}
-          </div>
-        </div>
+      {worldSettingsOpen && worldData && (
+        <WorldSettingsDialog
+          mode="edit"
+          world={{ ...worldData, id: worldId }}
+          currentUser={currentUser}
+          onClose={() => setWorldSettingsOpen(false)}
+          onSaved={updatedWorld => {
+            const nextTheme = getWorldTheme(updatedWorld.theme).id;
+            setWorldData(previous => ({
+              ...previous,
+              ...updatedWorld,
+              canManageMembers: previous?.canManageMembers,
+              currentUserRole: previous?.currentUserRole
+            }));
+            setCachedWorldThemeState(nextTheme);
+            setCachedWorldTheme(worldId, nextTheme);
+            setWorldSettingsOpen(false);
+          }}
+        />
       )}
-
-      {documentPermissionsPanel.isOpen && selectedContainer && (
-        <div className="modal-backdrop" onClick={() => setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false }))}>
-          <div className="user-admin-modal document-permissions-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true">
-            <div className="user-admin-modal-header">
-              <div>
-                <h2>{t('workspace.document_permissions')}</h2>
-                <p>{selectedContainer.name}</p>
-              </div>
-              <button type="button" className="user-admin-close" onClick={() => setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false }))} disabled={documentPermissionsPanel.loading} aria-label={t('common.cancel')}>
-                ×
-              </button>
-            </div>
-
-            <div className="user-admin-modal-body document-permissions-body">
-              <label className="document-permissions-inherit">
-                <input
-                  type="checkbox"
-                  checked={documentPermissionsPanel.draft.inherit}
-                  onChange={event => setDocumentPermissionsPanel(prev => ({ ...prev, draft: { ...prev.draft, inherit: event.target.checked } }))}
-                  disabled={documentPermissionsPanel.loading}
-                />
-                <span>{t('workspace.document_permissions_inherit')}</span>
-              </label>
-
-              <div className="user-admin-section-title">{t('workspace.document_permissions_users')}</div>
-              <div className="document-permissions-list">
-                {documentPermissionsPanel.loading ? (
-                  <div className="user-admin-local-loading compact">
-                    <div className="sidebar-local-loading-lines" aria-hidden="true">
-                      <span />
-                      <span />
-                    </div>
-                    <strong>{t('workspace.loading_permissions')}</strong>
-                  </div>
-                ) : documentPermissionsPanel.members.length === 0 ? (
-                  <div className="user-admin-empty compact">{t('workspace.no_members')}</div>
-                ) : (
-                  documentPermissionsPanel.members.map(member => {
-                    const userId = member.userId;
-                    const hasExplicitAccess = Object.prototype.hasOwnProperty.call(documentPermissionsPanel.draft.users || {}, userId);
-                    const access = hasExplicitAccess ? documentPermissionsPanel.draft.users[userId] : (member.documentAccess || 'none');
-                    return (
-                      <div key={userId} className="document-permissions-row">
-                        <strong>{member.user?.username || userId}</strong>
-                  <div className="user-admin-role-segments" aria-label={t('workspace.document_permissions')}>
-                          {[
-                            ['none', t('dashboard.no_access')],
-                            ['read', t('workspace.document_access_read')],
-                            ['write', t('workspace.document_access_write')],
-                            ['admin', t('workspace.document_access_admin')]
-                          ].map(([nextAccess, label]) => (
-                            <button key={nextAccess} type="button" className={access === nextAccess ? 'active' : ''} disabled={documentPermissionsPanel.loading} onClick={() => setDocumentPermissionUserAccess(userId, nextAccess)}>
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <div className="user-admin-section-title">{t('workspace.document_permissions_visitors')}</div>
-                  <div className="document-permissions-list">
-                <div className="document-permissions-row">
-                  <strong>{t('workspace.document_permissions_visitors')}</strong>
-                  <div className="user-admin-role-segments segments-visitor" aria-label={t('workspace.document_permissions')}>
-                    {[
-                      ['none', t('dashboard.no_access')],
-                      ['read', t('workspace.document_access_read')]
-                    ].map(([nextAccess, label]) => {
-                      const hasExplicitAccess = Object.prototype.hasOwnProperty.call(documentPermissionsPanel.draft.users || {}, 'visitor');
-                      const access = hasExplicitAccess ? documentPermissionsPanel.draft.users.visitor : documentPermissionsPanel.visitorAccess;
-                      return (
-                        <button key={nextAccess} type="button" className={access === nextAccess ? 'active' : ''} disabled={documentPermissionsPanel.loading} onClick={() => setDocumentPermissionUserAccess('visitor', nextAccess)}>
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {documentPermissionsPanel.error && <div className="user-admin-error">{documentPermissionsPanel.error}</div>}
-
-              <div className="document-permissions-actions">
-                <button type="button" className="user-admin-secondary" onClick={() => setDocumentPermissionsPanel(prev => ({ ...prev, isOpen: false }))} disabled={documentPermissionsPanel.loading}>
-                  {t('common.cancel')}
-                </button>
-                <button type="button" className="user-admin-primary" onClick={saveDocumentPermissions} disabled={documentPermissionsPanel.loading}>
-                  {documentPermissionsPanel.loading ? t('common.saving') : t('common.save')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <DocumentPermissionsDialog
+        t={t}
+        panel={documentPermissionsPanel}
+        setPanel={setDocumentPermissionsPanel}
+        document={selectedContainer}
+        savePermissions={saveDocumentPermissions}
+        setUserAccess={setDocumentPermissionUserAccess}
+      />
 
       {contextMenu.isOpen && (
         <div className="context-menu-overlay" onClick={() => setContextMenu(prev => ({ ...prev, isOpen: false }))}>
@@ -4094,16 +3495,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 >
                   <Edit2 size={14} /> {t('common.rename')}
                 </button>
-                {!hasReachedTabLimit && (
-                  <button
-                    onClick={() => {
-                      duplicateTab(tabContextMenu.node);
-                      setTabContextMenu(prev => ({ ...prev, isOpen: false }));
-                    }}
-                  >
-                    <Copy size={14} /> {t('workspace.duplicate_tab')}
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    duplicateTab(tabContextMenu.node);
+                    setTabContextMenu(prev => ({ ...prev, isOpen: false }));
+                  }}
+                >
+                  <Copy size={14} /> {t('workspace.duplicate_tab')}
+                </button>
               </>
             )}
             {hasDocumentAccess(tabContextMenu.node.metadata?.currentUserAccess, 'admin') && (
@@ -4128,64 +3527,52 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             style={{ top: assetContextMenu.y, left: assetContextMenu.x }}
             onClick={(event) => event.stopPropagation()}
           >
-            {assetContextMenu.node ? (
-              <>
-                {assetContextMenu.node.type === 'folder' && (
-                  <>
-                    <button onClick={() => { openAssetUpload(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                      <Upload size={14} /> {t('workspace.assets_upload_here')}
-                    </button>
-                    <button onClick={() => { createAssetFolderInline(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                      <Plus size={14} /> {t('workspace.assets_new_folder')}
-                    </button>
-                  </>
-                )}
-                <button onClick={() => { setAssetDuplicatePrompt({ isOpen: true, node: assetContextMenu.node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Copy size={14} /> {t('workspace.duplicate_asset')}
-                </button>
-                {assetContextMenu.node.type !== 'folder' && (
-                  <button
-                    onClick={async () => {
-                      await copyTextToClipboard(`{{asset:${assetContextMenu.node.path}}}`);
-                      addToast(t('workspace.asset_reference_copied'), 'success');
-                      setAssetContextMenu(prev => ({ ...prev, isOpen: false }));
-                    }}
-                  >
-                    <Copy size={14} /> {t('workspace.copy_asset_reference')}
-                  </button>
-                )}
-                <button onClick={() => { openAssetMovePrompt(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <MoveRight size={14} /> {t('workspace.move_asset')}
-                </button>
-                <button onClick={() => { setAssetRenamingPath(assetContextMenu.node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Edit2 size={14} /> {t('common.rename')}
-                </button>
-                <button className="danger" onClick={() => { handleAssetDelete(assetContextMenu.node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}>
-                  <Trash2 size={14} /> {t('common.delete')}
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => { setAssetContextMenu(prev => ({ ...prev, isOpen: false })); openAssetUpload(''); }}>
-                  <Upload size={14} /> {t('workspace.assets_upload_here')}
-                </button>
-                <button onClick={() => { setAssetContextMenu(prev => ({ ...prev, isOpen: false })); createAssetFolderInline(''); }}>
-                  <Plus size={14} /> {t('workspace.assets_new_folder')}
-                </button>
-              </>
-            )}
+            <AssetContextMenu
+              node={assetContextMenu.node}
+              isVisitor={isVisitor}
+              labels={{
+                preview: t('workspace.preview_asset'),
+                copyReference: t('workspace.copy_asset_reference'),
+                uploadHere: t('workspace.assets_upload_here'),
+                newFolder: t('workspace.assets_new_folder'),
+                duplicate: t('workspace.duplicate_asset'),
+                move: t('workspace.move_asset'),
+                rename: t('common.rename'),
+                delete: t('common.delete')
+              }}
+              onPreview={node => { setPreviewAsset(node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onCopyReference={async node => {
+                await copyTextToClipboard(`{{asset:${node.path}}}`);
+                addToast(t('workspace.asset_reference_copied'), 'success');
+                setAssetContextMenu(prev => ({ ...prev, isOpen: false }));
+              }}
+              onUpload={path => { openAssetUpload(path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onCreateFolder={path => { createAssetFolderInline(path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onDuplicate={node => { setAssetDuplicatePrompt({ isOpen: true, node }); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onMove={node => { openAssetMovePrompt(node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onRename={node => { setAssetRenamingPath(node.path); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+              onDelete={node => { handleAssetDelete(node); setAssetContextMenu(prev => ({ ...prev, isOpen: false })); }}
+            />
           </div>
         </div>
       )}
 
-      {/* Toasts */}
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <div key={toast.id} className={`toast toast-${toast.type} glass-panel`}>
-            <span>{toast.message}</span>
-          </div>
-        ))}
-      </div>
+      <AssetPreviewDialog
+        asset={previewAsset}
+        source={previewAsset ? getAssetUrl(previewAsset.path) : ''}
+        sizeLabel={previewAsset ? formatAssetSize(previewAsset.size) : ''}
+        typeLabel={previewAsset?.mediaType === 'audio' ? t('workspace.asset_preview_audio') : t('workspace.asset_preview_image')}
+        labels={{
+          close: t('workspace.close_asset_preview'),
+          path: t('workspace.asset_preview_path'),
+          size: t('workspace.asset_preview_size'),
+          loading: t('workspace.asset_preview_loading'),
+          error: t('workspace.asset_preview_error')
+        }}
+        onClose={closeAssetPreview}
+      />
+
+      <WorkspaceToastRegion toasts={toasts} closeLabel={t('common.close')} onDismiss={dismissToast} />
     </div>
   );
 }

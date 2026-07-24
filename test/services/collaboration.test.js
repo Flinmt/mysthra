@@ -54,6 +54,10 @@ test("resolveTabRoom accepts collaborative tab content types only", async () => 
     type: "tab",
     contentType: "wiki"
   });
+  const tiptapTab = await createDocument(worldName, "Legacy Tiptap Tab", "", {
+    type: "tab",
+    contentType: "tiptap"
+  });
   const mapTab = await createDocument(worldName, "Map Tab", "", {
     type: "tab",
     contentType: "map"
@@ -72,6 +76,7 @@ test("resolveTabRoom accepts collaborative tab content types only", async () => 
   });
 
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: wikiTab.uid })).tabUid, wikiTab.uid);
+  assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: tiptapTab.uid })).tabUid, tiptapTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: mapTab.uid })).tabUid, mapTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: markdownTab.uid })).tabUid, markdownTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: boardTab.uid })).tabUid, boardTab.uid);
@@ -185,7 +190,7 @@ test("hocuspocus providers sync and persist tab state", async () => {
     contentType: "wiki"
   });
 
-  const token = generateSessionToken({ userId: "admin", username: "admin", isAdmin: true });
+  const token = generateSessionToken({ userId: "root", username: "admin", globalRole: "root" });
   const server = createCollaborationServer();
   const WebSocketPolyfill = createLocalWebSocketPolyfill(server, `mysthra_session=${token}`);
   const roomName = `world:${worldName}:tab:${tab.uid}`;

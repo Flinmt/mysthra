@@ -1,0 +1,472 @@
+/* Document access dialog: neutral controls with restrained world-theme states. */
+.workspace-container .document-permissions-modal {
+  --permissions-bg: color-mix(in srgb, var(--world-theme-background) 22%, var(--workspace-shell-raised));
+  --permissions-surface: color-mix(in srgb, var(--world-theme-surface) 18%, var(--workspace-shell-surface));
+  --permissions-control: color-mix(in srgb, var(--world-theme-background) 14%, var(--workspace-shell-bg));
+  --permissions-hover: color-mix(in srgb, var(--workspace-shell-text) 7%, var(--permissions-control));
+  --permissions-border: color-mix(in srgb, var(--world-theme-accent) 15%, var(--workspace-shell-border));
+  --permissions-border-soft: color-mix(in srgb, var(--world-theme-accent) 9%, var(--workspace-shell-border-soft));
+  --permissions-text: var(--workspace-shell-text);
+  --permissions-muted: var(--workspace-shell-muted);
+  --permissions-accent: var(--world-theme-accent);
+  --permissions-accent-soft: color-mix(in srgb, var(--world-theme-accent) 14%, transparent);
+  --permissions-accent-hover: color-mix(in srgb, var(--world-theme-accent) 20%, var(--permissions-control));
+  width: min(720px, calc(100vw - 28px));
+  max-height: min(720px, calc(100vh - 28px));
+  color: var(--permissions-text);
+  background: var(--permissions-bg);
+  border: 1px solid var(--permissions-border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 24px 70px #0000008a;
+}
+
+.workspace-container .document-permissions-modal .user-admin-modal-header {
+  min-height: 54px;
+  padding: 8px 10px 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: color-mix(in srgb, var(--permissions-surface) 74%, var(--permissions-bg));
+  border-bottom: 1px solid var(--permissions-border-soft);
+}
+
+.workspace-container .document-permissions-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.workspace-container .document-permissions-heading-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--permissions-text);
+  background: var(--permissions-control);
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 4px;
+}
+
+.workspace-container .document-permissions-heading > div {
+  min-width: 0;
+}
+
+.workspace-container .document-permissions-modal .user-admin-modal-header h2 {
+  margin: 0;
+  color: var(--permissions-text);
+  font-size: .88rem;
+  font-weight: 680;
+  letter-spacing: 0;
+}
+
+.workspace-container .document-permissions-modal .user-admin-modal-header p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--permissions-muted);
+  font-size: .68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-container .document-permissions-modal .user-admin-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--permissions-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color .14s ease, background .14s ease;
+}
+
+.workspace-container .document-permissions-modal .user-admin-close:hover:not(:disabled) {
+  color: var(--permissions-text);
+  background: var(--permissions-hover);
+}
+
+.workspace-container .document-permissions-modal .user-admin-close:focus-visible {
+  color: var(--permissions-text);
+  background: var(--permissions-hover);
+  outline: 2px solid color-mix(in srgb, var(--permissions-accent) 36%, transparent);
+  outline-offset: 1px;
+}
+
+.workspace-container .document-permissions-modal .user-admin-modal-body {
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--permissions-bg);
+  overflow: auto;
+}
+
+.workspace-container .document-permissions-inherit {
+  min-height: 40px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--permissions-text);
+  background: var(--permissions-control);
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .73rem;
+  font-weight: 580;
+  transition: background .14s ease, border-color .14s ease;
+}
+
+.workspace-container .document-permissions-inherit:hover {
+  background: var(--permissions-hover);
+  border-color: var(--permissions-border);
+}
+
+.workspace-container .document-permissions-inherit:has(input:focus-visible) {
+  border-color: color-mix(in srgb, var(--permissions-accent) 48%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--permissions-accent) 10%, transparent);
+}
+
+.workspace-container .document-permissions-inherit input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.workspace-container .document-permissions-inherit-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--permissions-muted);
+}
+
+.workspace-container .document-permissions-inherit-label {
+  min-width: 0;
+  flex: 1;
+}
+
+.workspace-container .document-permissions-switch {
+  width: 30px;
+  height: 17px;
+  padding: 2px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--permissions-muted) 24%, transparent);
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 999px;
+  transition: background .14s ease, border-color .14s ease;
+}
+
+.workspace-container .document-permissions-switch span {
+  width: 11px;
+  height: 11px;
+  background: var(--permissions-muted);
+  border-radius: 50%;
+  transform: translateX(0);
+  transition: transform .14s ease, background .14s ease;
+}
+
+.workspace-container .document-permissions-inherit input:focus-visible ~ .document-permissions-switch {
+  outline: 2px solid color-mix(in srgb, var(--permissions-accent) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.workspace-container .document-permissions-inherit input:checked ~ .document-permissions-switch {
+  background: var(--permissions-accent-soft);
+  border-color: color-mix(in srgb, var(--permissions-accent) 48%, transparent);
+}
+
+.workspace-container .document-permissions-inherit input:checked ~ .document-permissions-switch span {
+  background: var(--permissions-text);
+  transform: translateX(13px);
+}
+
+.workspace-container .document-permissions-section-title {
+  min-height: 22px;
+  margin: 2px 0 0;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--permissions-muted);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.workspace-container .document-permissions-section-title svg {
+  color: var(--permissions-muted);
+}
+
+.workspace-container .document-permissions-list {
+  max-height: min(40vh, 330px);
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  overflow-y: auto;
+  scrollbar-color: color-mix(in srgb, var(--permissions-accent) 30%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.workspace-container .document-permissions-row {
+  min-height: 43px;
+  padding: 5px 6px;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(320px, 1.25fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--permissions-text);
+  background: var(--permissions-control);
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 4px;
+  box-shadow: none;
+  transition: background .14s ease, border-color .14s ease;
+}
+
+.workspace-container .document-permissions-row:hover {
+  background: var(--permissions-hover);
+  border-color: var(--permissions-border);
+  box-shadow: none;
+}
+
+.workspace-container .document-permissions-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.workspace-container .document-permissions-avatar {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--permissions-text);
+  background: var(--permissions-surface);
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 50%;
+  font-size: .65rem;
+  font-weight: 700;
+}
+
+.workspace-container .document-permissions-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--permissions-text);
+  font-size: .73rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments {
+  min-width: 0;
+  height: 34px;
+  padding: 3px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  background: color-mix(in srgb, var(--permissions-bg) 72%, var(--workspace-shell-bg));
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 4px;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments.segments-visitor button {
+  grid-column: span 2;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button {
+  min-width: 0;
+  height: 26px;
+  padding: 0 7px;
+  position: relative;
+  color: var(--permissions-muted);
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--permissions-border-soft);
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  font-size: .66rem;
+  font-weight: 640;
+  white-space: nowrap;
+  transition: color .12s ease, background .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button:last-child {
+  border-right-color: transparent;
+  border-radius: 0 3px 3px 0;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button:hover:not(:disabled) {
+  color: var(--permissions-text);
+  background: var(--permissions-hover);
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button:focus-visible {
+  color: var(--permissions-text);
+  background: var(--permissions-hover);
+  outline: 2px solid color-mix(in srgb, var(--permissions-accent) 34%, transparent);
+  outline-offset: -1px;
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button.active {
+  color: var(--permissions-text);
+  z-index: 1;
+  background: color-mix(in srgb, var(--permissions-accent) 16%, var(--permissions-control));
+  border-right-color: color-mix(in srgb, var(--permissions-accent) 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--permissions-accent) 34%, transparent), inset 0 -2px 0 var(--permissions-accent);
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button.active:hover:not(:disabled) {
+  background: var(--permissions-accent-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--permissions-accent) 46%, transparent), inset 0 -2px 0 var(--permissions-accent);
+}
+
+.workspace-container .document-permissions-modal .user-admin-role-segments button:disabled,
+.workspace-container .document-permissions-modal .user-admin-close:disabled {
+  cursor: not-allowed;
+  opacity: .46;
+}
+
+.workspace-container .document-permissions-loading-lines {
+  width: 124px;
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-container .document-permissions-loading-lines span {
+  height: 5px;
+  background: var(--permissions-accent-soft);
+  border-radius: 2px;
+  animation: permissions-loading 1.1s ease-in-out infinite alternate;
+}
+
+.workspace-container .document-permissions-loading-lines span:nth-child(2) {
+  width: 68%;
+  animation-delay: .14s;
+}
+
+.workspace-container .document-permissions-modal .user-admin-local-loading strong {
+  color: var(--permissions-muted);
+  font-size: .7rem;
+  font-weight: 600;
+}
+
+@keyframes permissions-loading {
+  from { opacity: .32; }
+  to { opacity: 1; }
+}
+
+.workspace-container .document-permissions-modal .user-admin-empty {
+  min-height: 54px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--permissions-muted);
+  background: var(--permissions-control);
+  border: 1px solid var(--permissions-border-soft);
+  border-radius: 4px;
+  font-size: .7rem;
+}
+
+.workspace-container .document-permissions-actions {
+  margin-top: 2px;
+  padding-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  border-top: 1px solid var(--permissions-border-soft);
+}
+
+.workspace-container .document-permissions-actions button {
+  min-width: 84px;
+  min-height: 31px;
+  padding: 0 10px;
+  border-radius: 4px;
+  box-shadow: none;
+  font-size: .68rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color .14s ease, background .14s ease, border-color .14s ease;
+}
+
+.workspace-container .document-permissions-actions .user-admin-secondary {
+  color: var(--permissions-muted);
+  background: transparent;
+  border: 1px solid var(--permissions-border-soft);
+}
+
+.workspace-container .document-permissions-actions .user-admin-secondary:hover:not(:disabled) {
+  color: var(--permissions-text);
+  background: var(--permissions-hover);
+  border-color: var(--permissions-border);
+}
+
+.workspace-container .document-permissions-actions .user-admin-primary {
+  color: var(--permissions-text);
+  background: var(--permissions-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--permissions-accent) 42%, transparent);
+}
+
+.workspace-container .document-permissions-actions .user-admin-primary:hover:not(:disabled) {
+  color: var(--permissions-text);
+  background: color-mix(in srgb, var(--permissions-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--permissions-accent) 58%, transparent);
+  box-shadow: none;
+}
+
+.workspace-container .document-permissions-actions button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--permissions-accent) 38%, transparent);
+  outline-offset: 2px;
+}
+
+.workspace-container .document-permissions-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .46;
+}
+
+@media (max-width: 680px) {
+  .workspace-container .document-permissions-modal {
+    width: min(100vw - 12px, 720px);
+    max-height: calc(100vh - 12px);
+  }
+
+  .workspace-container .document-permissions-row {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-container .document-permissions-modal .user-admin-role-segments {
+    width: 100%;
+  }
+}

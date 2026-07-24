@@ -10,11 +10,11 @@ const {
   validateWorldName
 } = require("../data/filesystem");
 const { getAuthenticatedUser } = require("../utils/auth");
+const { isGlobalAdmin } = require("../utils/roles");
 const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
-const BLOCKNOTE_FRAGMENT = "blocknote";
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown", "board"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
 
 let activeCollaborationServer = null;
 
@@ -98,8 +98,7 @@ async function resolveTabRoom(room) {
     ...room,
     path: safePath,
     pagesDir,
-    metadata,
-    indexPath: path.join(pagesDir, safePath, "index.md")
+    metadata
   };
 }
 
@@ -145,6 +144,10 @@ async function storeCollaborationDocument(document, room) {
   });
 }
 
+function encodeStateVector(document) {
+  return Buffer.from(Y.encodeStateVector(document)).toString("base64");
+}
+
 async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   const room = parseCollaborationRoom(documentName);
   const user = getAuthenticatedUser(getCookieRequest(requestHeaders));
@@ -183,7 +186,7 @@ async function authorizeRoom(documentName, requestHeaders, connectionConfig) {
   }
 
   const { isWorldMember } = require("./worlds");
-  if (!user.isAdmin && !(await isWorldMember(room.worldId, user.userId))) {
+  if (!isGlobalAdmin(user) && !(await isWorldMember(room.worldId, user.userId))) {
     debugCollaboration("auth-reject", { documentName, userId: user.userId, reason: "forbidden" });
     const error = new Error("Forbidden");
     error.reason = "forbidden";
@@ -277,7 +280,20 @@ function createCollaborationServer() {
       if (room.type !== "tab") return;
       const resolvedRoom = await resolveStorableTabRoom(room);
       if (!resolvedRoom) return;
-      await storeCollaborationDocument(document, resolvedRoom);
+      try {
+        await storeCollaborationDocument(document, resolvedRoom);
+        document.broadcastStateless(JSON.stringify({
+          type: "document-persisted",
+          tabUid: resolvedRoom.tabUid,
+          stateVector: encodeStateVector(document)
+        }));
+      } catch (error) {
+        document.broadcastStateless(JSON.stringify({
+          type: "document-persistence-error",
+          tabUid: resolvedRoom.tabUid
+        }));
+        throw error;
+      }
     }
   });
   return activeCollaborationServer;
@@ -324,7 +340,6 @@ async function copyCollaborationState(worldName, sourceMetadata, targetMetadata)
 }
 
 module.exports = {
-  BLOCKNOTE_FRAGMENT,
   COLLABORATION_PATH,
   broadcastWorldTreeUpdate,
   closeCollaborationRoom,

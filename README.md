@@ -1,4 +1,4 @@
-# <p align="center"><img src="client/public/favicon.png" width="80" height="80" alt="Mysthra Logo" /><br/>Mysthra</p>
+# <p align="center"><img src="client/public/android-chrome-512x512.png" width="96" height="96" alt="Mysthra Logo" /><br/>Mysthra</p>
 
 <p align="center">
   <strong>Self-hosted worldbuilding workspace</strong><br/>
@@ -212,6 +212,7 @@ Frontend:
 
 ```bash
 npm run dev:client
+npm --prefix client test
 npm --prefix client run lint
 npm --prefix client run build
 npm --prefix client run preview
@@ -227,6 +228,7 @@ Recommended checks before committing:
 
 ```bash
 npm test
+npm --prefix client test
 npm --prefix client run lint
 npm run build
 ```
@@ -236,9 +238,9 @@ npm run build
 ## Architecture
 
 - **Backend**: CommonJS Node.js HTTP server, without Express or a routing framework.
-- **Routing**: single hand-written API router in `src/routes/index.js`.
+- **Routing**: hand-written API router with domain handlers in `src/routes/`.
 - **Domain services**: filesystem-backed world, tree, asset, user, and collaboration services in `src/services/`.
-- **Frontend**: React + Vite app in `client/`.
+- **Frontend**: React + Vite app organized by features in `client/src/features/`, with shared UI and hooks in dedicated directories.
 - **Editors**: BlockNote for wiki tabs, CodeMirror for Markdown/HTML, Konva for map and board canvases.
 - **Collaboration**: Hocuspocus/Yjs over WebSocket.
 - **Storage**: JSON and files under `data/`.

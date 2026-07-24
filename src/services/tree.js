@@ -10,10 +10,8 @@ const {
 } = require("./collaboration");
 const { updateIndex, removeFromIndex } = require("./indexer");
 
-const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["wiki", "markdown"]);
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "map", "markdown", "board"]);
-const MAX_TABS_PER_DOCUMENT = 5;
-
+const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["markdown"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
 function getTabContentType(metadata = {}) {
   return metadata.contentType || (metadata.type === "tab" ? "wiki" : null);
 }
@@ -36,7 +34,9 @@ const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "coverPositionY",
   "coverCrop",
   "coverZoom",
-  "coverCroppedArea"
+  "coverCroppedArea",
+  "documentCoverHidden",
+  "wideContent"
 ]);
 
 const DOCUMENT_ACCESS_LEVELS = ["none", "read", "write", "admin"];
@@ -264,12 +264,6 @@ function createInvalidDocumentPathError(message, value) {
   return error;
 }
 
-function createDocumentLimitError(message) {
-  const error = new Error(message);
-  error.code = "DOCUMENT_LIMIT_EXCEEDED";
-  return error;
-}
-
 function parseDocumentCreationPath(docPath) {
   if (typeof docPath !== "string" || docPath.trim() === "") {
     throw createInvalidDocumentPathError("Document path must be a non-empty string", docPath);
@@ -289,38 +283,12 @@ function parseDocumentCreationPath(docPath) {
   return { parentPath, displayName };
 }
 
-async function countDirectTabs(pagesDir, parentPath) {
-  const parentDir = parentPath ? path.join(pagesDir, parentPath) : pagesDir;
-  let count = 0;
-
-  try {
-    const entries = await fs.readdir(parentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const childPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-      const metadata = await readDocumentMetadata(pagesDir, childPath);
-      if (metadata.type === "tab") count += 1;
-    }
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-
-  return count;
-}
-
 async function createDocument(worldName, docPath, content, metadata = {}) {
   const safeName = validateWorldName(worldName);
   const { parentPath, displayName } = parseDocumentCreationPath(docPath);
   await ensureWorldStructure(safeName);
   const { pages: pagesDir } = getWorldPaths(safeName);
 
-  if (metadata.type === "tab") {
-    const tabCount = await countDirectTabs(pagesDir, parentPath);
-    if (tabCount >= MAX_TABS_PER_DOCUMENT) {
-      throw createDocumentLimitError(`Document cannot have more than ${MAX_TABS_PER_DOCUMENT} tabs`);
-    }
-  }
-  
   const uid = metadata.uid || crypto.randomUUID();
   
   const safePath = (parentPath ? `${parentPath}/${uid}` : uid).replace(/\\/g, "/");
@@ -328,7 +296,7 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
   
   await fs.mkdir(fullDirPath, { recursive: true });
   
-  // Se for uma aba do tipo WIKI, salvamos o arquivo de conteúdo Markdown
+  // Only source-based tabs persist editable content in index.md.
   if (isFileBackedTab(metadata)) {
     const indexPath = path.join(fullDirPath, "index.md");
     await fs.writeFile(indexPath, content || "", "utf-8");
@@ -348,6 +316,7 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
     }
   }
 
+  const contentType = metadata.contentType || currentMeta.contentType || (metadata.type === "tab" ? "wiki" : null);
   const nextMeta = {
     ...currentMeta,
     ...metadata,
@@ -355,7 +324,10 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
     uid,
     order: order ?? 0,
     type: metadata.type || currentMeta.type || "container",
-    contentType: metadata.contentType || currentMeta.contentType || (metadata.type === "tab" ? "wiki" : null)
+    contentType,
+    ...(metadata.type === "tab" && (contentType === "map" || contentType === "board") && metadata.documentCoverHidden === undefined
+      ? { documentCoverHidden: true }
+      : {})
   };
   await writeDocumentMetadata(pagesDir, safePath, nextMeta);
   
@@ -712,12 +684,6 @@ async function duplicateDocument(worldName, docPath, options = {}) {
 
   const parentPath = path.dirname(safePath) === "." ? "" : path.dirname(safePath).replace(/\\/g, "/");
   const sourceMetadata = await readDocumentMetadata(pagesDir, safePath);
-  if (sourceMetadata.type === "tab") {
-    const tabCount = await countDirectTabs(pagesDir, parentPath);
-    if (tabCount >= MAX_TABS_PER_DOCUMENT) {
-      throw createDocumentLimitError(`Document cannot have more than ${MAX_TABS_PER_DOCUMENT} tabs`);
-    }
-  }
   const sourceName = sourceMetadata.name || path.basename(safePath);
   const copyName = await getUniqueSiblingName(pagesDir, parentPath, options.name || `${sourceName} Copy`);
   const targetUid = crypto.randomUUID();
@@ -747,6 +713,5 @@ module.exports = {
   deleteDocument,
   renameDocument,
   moveDocument,
-  duplicateDocument,
-  MAX_TABS_PER_DOCUMENT
+  duplicateDocument
 };

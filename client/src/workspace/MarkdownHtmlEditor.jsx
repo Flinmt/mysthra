@@ -5,14 +5,14 @@ import { html } from '@codemirror/lang-html'
 import { javascript } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
 import { markdown as markdownLanguage } from '@codemirror/lang-markdown'
-import { LanguageDescription, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
-import { tags } from '@lezer/highlight'
+import { LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { EditorView } from '@codemirror/view'
 import MarkdownIt from 'markdown-it'
-import { useCollaborationRoom } from '../useCollaborationRoom'
+import { useCollaborationRoom } from '../hooks/useCollaborationRoom'
 import WorkspaceInsertSearch from './WorkspaceInsertSearch'
 import { prepareAssetUpload } from './utils'
 import { isInternalPageLink } from './utils'
+import { codeMirrorTheme, MARKDOWN_PREVIEW_STYLES, markdownHighlightStyle } from './markdownTheme'
 
 const MARKDOWN_TEXT_NAME = 'markdown'
 const ASSET_REFERENCE_PATTERN = /\{\{asset:([^}]+)\}\}/g
@@ -30,71 +30,6 @@ const markdownExtensions = [
     codeLanguages
   })
 ]
-
-const markdownHighlightStyle = HighlightStyle.define([
-  { tag: tags.heading, color: '#f8fafc', fontWeight: '760' },
-  { tag: tags.strong, color: '#f8fafc', fontWeight: '760' },
-  { tag: tags.emphasis, color: '#ddd6fe', fontStyle: 'italic' },
-  { tag: tags.keyword, color: '#c4b5fd' },
-  { tag: tags.atom, color: '#93c5fd' },
-  { tag: tags.bool, color: '#93c5fd' },
-  { tag: tags.number, color: '#fbbf24' },
-  { tag: tags.string, color: '#86efac' },
-  { tag: tags.regexp, color: '#f0abfc' },
-  { tag: tags.variableName, color: '#e2e8f0' },
-  { tag: tags.definition(tags.variableName), color: '#bae6fd' },
-  { tag: tags.function(tags.variableName), color: '#bae6fd' },
-  { tag: tags.propertyName, color: '#f9a8d4' },
-  { tag: tags.typeName, color: '#fde68a' },
-  { tag: tags.className, color: '#fde68a' },
-  { tag: tags.comment, color: 'rgba(148, 163, 184, 0.72)', fontStyle: 'italic' },
-  { tag: tags.meta, color: '#a78bfa' },
-  { tag: tags.link, color: '#93c5fd', textDecoration: 'underline' },
-  { tag: tags.quote, color: '#cbd5e1', fontStyle: 'italic' },
-  { tag: tags.invalid, color: '#fca5a5' }
-])
-
-const codeMirrorTheme = EditorView.theme({
-  '&': {
-    color: 'rgba(248, 250, 252, 0.94)',
-    backgroundColor: 'transparent',
-    fontSize: '0.95rem'
-  },
-  '.cm-scroller': {
-    fontFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
-    lineHeight: '1.65',
-    overflow: 'visible'
-  },
-  '.cm-content': {
-    padding: '0',
-    caretColor: '#c4b5fd',
-    minHeight: '420px'
-  },
-  '.cm-line': {
-    padding: '0'
-  },
-  '.cm-focused': {
-    outline: 'none'
-  },
-  '&.cm-focused': {
-    outline: 'none'
-  },
-  '.cm-cursor': {
-    borderLeftColor: '#c4b5fd'
-  },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(139, 92, 246, 0.26)'
-  },
-  '.cm-activeLine': {
-    backgroundColor: 'transparent'
-  },
-  '.cm-gutters': {
-    display: 'none'
-  },
-  '.cm-placeholder': {
-    color: 'rgba(148, 163, 184, 0.54)'
-  }
-}, { dark: true })
 
 const editorExtensions = [
   ...markdownExtensions,
@@ -133,32 +68,7 @@ function resolveAssetReferences(source = '', getAssetUrl) {
 
 function getPreviewMarkup(body = '') {
   return `<style>
-    :host { display: block; background: transparent; }
-    * { box-sizing: border-box; }
-    .markdown-html-preview-body {
-      margin: 0;
-      padding: 0;
-      color: rgba(248, 250, 252, 0.94);
-      background: transparent;
-      font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    h1, h2, h3, h4, h5, h6 { color: white; line-height: 1.15; margin: 1.35em 0 0.55em; }
-    h1:first-child, h2:first-child, h3:first-child { margin-top: 0; }
-    h1 { font-size: 2.2rem; }
-    h2 { font-size: 1.65rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 0.35em; }
-    h3 { font-size: 1.28rem; }
-    p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
-    a { color: #c4b5fd; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    code { padding: 0.15em 0.35em; border-radius: 6px; background: rgba(15, 23, 42, 0.72); color: #ddd6fe; }
-    pre { overflow: auto; padding: 14px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 12px; background: rgba(2, 6, 23, 0.76); }
-    pre code { padding: 0; background: transparent; }
-    blockquote { padding-left: 1em; border-left: 3px solid rgba(167, 139, 250, 0.58); color: rgba(203, 213, 225, 0.9); }
-    img { max-width: 100%; height: auto; border-radius: 12px; }
-    audio { width: min(100%, 520px); display: block; margin: 0 0 1em; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px 10px; border: 1px solid rgba(148, 163, 184, 0.18); }
-    th { background: rgba(148, 163, 184, 0.08); text-align: left; }
+    ${MARKDOWN_PREVIEW_STYLES}
   </style>
   <div class="markdown-html-preview-body">${sanitizePreviewHtml(body)}</div>`
 }

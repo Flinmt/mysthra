@@ -97,7 +97,7 @@ test("upload request bodies over the configured limit return 413", async () => {
   createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
   await createWorld({ name: worldName });
-  const token = generateSessionToken({ userId: "admin", username: "admin", isAdmin: true });
+  const token = generateSessionToken({ userId: "root", username: "admin", globalRole: "root" });
 
   try {
     const response = await invokeRouter({

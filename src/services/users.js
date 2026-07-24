@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { getDataRoot } = require("../data");
 const { getAdminUsername } = require("../utils/auth");
+const { normalizeGlobalRole } = require("../utils/roles");
 
 const USERS_FILE = process.env.USERS_FILE || path.join(getDataRoot(), "users.json");
 const USERNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,38}[A-Za-z0-9]$|^[A-Za-z0-9]{2}$/;
@@ -47,7 +48,7 @@ function sanitizeUser(user) {
     id: user.id,
     username: user.username,
     createdAt: user.createdAt,
-    disabled: Boolean(user.disabled)
+    globalRole: normalizeGlobalRole(user.globalRole)
   };
 }
 
@@ -89,10 +90,12 @@ async function listUsers() {
 async function listLoginUsers() {
   const store = await loadUserStore();
   return [
-    { id: "admin", username: getAdminUsername(), isAdmin: true },
-    ...store.users
-      .filter((user) => !user.disabled)
-      .map((user) => ({ id: user.id, username: user.username, isAdmin: false }))
+    { id: "root", username: getAdminUsername(), globalRole: "root" },
+    ...store.users.map((user) => ({
+        id: user.id,
+        username: user.username,
+        globalRole: normalizeGlobalRole(user.globalRole)
+      }))
   ];
 }
 
@@ -122,7 +125,7 @@ async function createUser(data) {
     username,
     passwordHash: await hashPassword(password),
     createdAt: Date.now(),
-    disabled: false
+    globalRole: null
   };
   store.users.push(user);
   await saveUserStore(store);
@@ -164,11 +167,31 @@ async function deleteUser(userId) {
   return sanitizeUser(user);
 }
 
+async function setUserGlobalRole(userId, globalRole) {
+  if (globalRole !== null && globalRole !== "server-admin") {
+    const error = new Error("Invalid global role");
+    error.code = "INVALID_USER_INPUT";
+    throw error;
+  }
+
+  const store = await loadUserStore();
+  const user = store.users.find((item) => item.id === userId);
+  if (!user) {
+    const error = new Error("User not found");
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  user.globalRole = globalRole;
+  await saveUserStore(store);
+  return sanitizeUser(user);
+}
+
 async function authenticateUser(username, password) {
   const normalized = normalizeUsername(username);
   const store = await loadUserStore();
   const user = store.users.find((item) => normalizeUsername(item.username) === normalized);
-  if (!user || user.disabled) return null;
+  if (!user) return null;
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return null;
   return sanitizeUser(user);
@@ -182,5 +205,6 @@ module.exports = {
   getUserById,
   listLoginUsers,
   listUsers,
-  normalizeUsername
+  normalizeUsername,
+  setUserGlobalRole
 };

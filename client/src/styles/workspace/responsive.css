@@ -1,0 +1,418 @@
+@media (width<=780px) {
+  .modal-backdrop {
+    align-items: stretch;
+    padding: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .board-asset-popover {
+    width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    top: 12px;
+    right: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .board-asset-picker-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width<=760px) {
+  .board-asset-action-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width<=720px) {
+  .map-editor-shell {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (width<=720px) {
+  .map-floating-dock {
+    justify-content: flex-start;
+    bottom: 14px;
+  }
+}
+
+@media (width<=680px) {
+  .workspace-insert-results-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width<=680px) {
+  .workspace-insert-preview {
+    display: none;
+  }
+}
+
+@media (width<=760px) {
+  .editor-page-cover {
+    height: 96px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-cover-reposition-hint {
+    justify-content: center;
+    max-width: none;
+    bottom: 52px;
+    left: 12px;
+    right: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-cover-reposition-actions {
+    bottom: 10px;
+    right: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-cover-controls {
+    top: 14px;
+    right: 14px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-page-body {
+    width: calc(100% - 32px);
+  }
+}
+
+@media (width<=760px) {
+  .editor-page-title-row {
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-page-icon {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-title-copy h1,.editor-title-input {
+    font-size: 1.55rem;
+  }
+}
+
+@media (width<=760px) {
+  .editor-tab-row {
+    padding-left: 50px;
+  }
+}
+
+@media (width<=760px) {
+  .document-chrome {
+    flex-direction: column;
+    gap: 10px;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .document-chrome-title {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (width<=760px) {
+  .document-chrome-controls {
+    align-self: flex-end;
+  }
+}
+
+@media (width<=760px) {
+  .document-chrome-controls .editor-cover-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100vw - 24px);
+  }
+}
+
+@media (width<=760px) {
+  .editor-page.is-wiki-page .document-content-frame {
+    padding-top: 144px;
+  }
+}
+
+@media (width<=760px) {
+  .editor-page.is-map-page .map-status-strip {
+    top: 144px;
+    right: 12px;
+  }
+}
+
+@media (height<=620px) {
+  .board-item-popover.is-link-mode {
+    max-height: calc(100% - 24px);
+  }
+}
+
+@media (height<=620px) {
+  .board-link-panel {
+    gap: 8px;
+  }
+}
+
+@media (height<=620px) {
+  .board-link-icon {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+@media (height<=620px) {
+  .board-link-summary {
+    display: none;
+  }
+}
+
+@media (width<=760px) {
+  .board-asset-popover {
+    width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    top: 12px;
+    right: 12px;
+  }
+}
+
+@media (width<=760px) {
+  .board-asset-action-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width<=760px) {
+  .board-asset-explorer-grid {
+    grid-template-columns: repeat(auto-fill,minmax(104px,1fr));
+  }
+}
+
+@media (width<=900px) {
+  .workspace-studio-body {
+    display: block;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-topbar {
+    gap: 5px;
+    padding-inline: 5px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-topbar-world {
+    max-width: 124px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-breadcrumbs>span:not(:last-child) {
+    display: none;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-breadcrumbs .current {
+    max-width: 140px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-topbar-save {
+    color: #0000;
+    background: var(--workspace-shell-steel);
+    border: 0;
+    border-radius: 50%;
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+@media (width<=520px) {
+  .workspace-topbar-world {
+    max-width: 92px;
+  }
+}
+
+@media (width<=520px) {
+  .workspace-breadcrumbs,.workspace-topbar-presence>span:nth-child(n+3):not(.more) {
+    display: none;
+  }
+}
+
+@media (height<=680px) {
+  .workspace-container .editor-page-cover {
+    height: 132px;
+  }
+}
+
+@media (height<=680px) {
+  .workspace-container .editor-page.is-map-page.has-cover .editor-page-cover {
+    flex-basis: 132px;
+  }
+}
+
+@media (height<=680px) {
+  .workspace-container .editor-page.has-cover .document-chrome {
+    height: 132px;
+    min-height: 132px;
+    top: 0;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page-cover {
+    height: 112px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.is-map-page.has-cover .editor-page-cover {
+    flex-basis: 112px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-cover-reposition-hint {
+    justify-content: center;
+    max-width: none;
+    bottom: 43px;
+    left: 8px;
+    right: 8px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-cover-reposition-actions {
+    bottom: 7px;
+    right: 8px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .document-chrome {
+    min-height: 74px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .document-chrome .editor-page-title-row {
+    min-height: 39px;
+    padding: 8px 118px 2px 14px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .document-chrome .editor-title-copy h1,.workspace-container .document-chrome .editor-title-input {
+    font-size: .92rem;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .document-chrome .editor-tab-strip {
+    height: 35px;
+    padding: 2px 10px 0 12px;
+  }
+
+  .workspace-container .document-chrome .editor-tab-row {
+    height: 100%;
+    padding: 0;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .document-chrome .editor-tab-pill {
+    max-width: 132px;
+    min-height: 29px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.has-cover .document-chrome {
+    height: 112px;
+    min-height: 112px;
+    top: 0;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.has-cover .document-chrome-controls {
+    top: 10px;
+    right: 8px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.has-cover .document-chrome .editor-page-title-row {
+    min-height: 39px;
+    padding: 5px 108px 1px 14px;
+    bottom: 35px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.has-cover .document-chrome .editor-title-copy h1,.workspace-container .editor-page.has-cover .document-chrome .editor-title-input {
+    font-size: 1rem;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.has-cover .document-chrome .editor-tab-strip {
+    height: 35px;
+    padding: 2px 10px 0 14px;
+  }
+
+  .workspace-container .editor-page.has-cover .document-chrome .editor-tab-row {
+    height: 100%;
+    padding: 0;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.is-wiki-page .document-content-frame,.workspace-container .editor-page.is-wiki-page.has-cover .document-content-frame {
+    width: calc(100% - 32px);
+    margin-left: 16px;
+    padding-top: 16px;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.is-wiki-page.is-wide-content .document-content-frame {
+    width: calc(100% - 24px);
+    margin-inline: auto;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-visitor-count span {
+    display: none;
+  }
+}
+
+@media (width<=760px) {
+  .workspace-container .editor-page.is-map-page:not(.has-cover) .document-chrome {
+    top: 0;
+    left: 0;
+    right: 0;
+  }
+}

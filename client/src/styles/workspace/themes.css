@@ -1,0 +1,278 @@
+/* Theme-aware component states. Token scope definitions live in tokens.css. */
+
+.workspace-container .editor-preview-toggle,
+.workspace-container .editor-more-toggle,
+.workspace-container .editor-tab-add,
+.workspace-container .asset-folder-create-button,
+.workspace-container .editor-world-actions-menu button,
+.workspace-container .user-admin-close {
+  color: var(--text-secondary);
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--workspace-theme-surface-soft);
+}
+
+.workspace-container .editor-preview-toggle:hover,
+.workspace-container .editor-preview-toggle.active,
+.workspace-container .editor-more-toggle:hover,
+.workspace-container .editor-more-toggle.active,
+.workspace-container .editor-tab-add:hover,
+.workspace-container .asset-folder-create-button:hover:not(:disabled),
+.workspace-container .editor-world-actions-menu button:hover:not(:disabled),
+.workspace-container .user-admin-close:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-secondary-border);
+  background: var(--workspace-theme-accent-hover);
+  box-shadow: 0 0 22px var(--accent-glow);
+}
+
+.workspace-container .editor-tab-row,
+.workspace-container .document-chrome .editor-tab-row {
+  border-color: var(--workspace-theme-accent-border);
+  background: transparent;
+}
+
+.workspace-container .duplicate-modal-icon,
+.workspace-container .workspace-insert-result span {
+  color: var(--arcane-color);
+}
+
+.workspace-container .duplicate-modal-icon,
+.workspace-container .delete-modal-icon {
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .editor-tab-rename-input {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: color-mix(in srgb, var(--bg-color) 74%, transparent);
+}
+
+.workspace-container .editor-tab-rename-input:focus {
+  border-color: var(--workspace-theme-secondary-border);
+  box-shadow: 0 0 0 3px var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .glass-panel,
+.workspace-container .context-menu,
+.workspace-container .editor-world-actions-menu,
+.workspace-container .duplicate-modal,
+.workspace-container .delete-modal,
+.workspace-container .workspace-insert-preview {
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--workspace-theme-surface-soft);
+}
+
+.workspace-container .editor-world-actions-menu {
+  background: color-mix(in srgb, var(--theme-custom-surface) 94%, var(--theme-custom-bg));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.workspace-container .context-menu button:hover,
+.workspace-container .editor-world-actions-menu button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .context-menu button.danger,
+.workspace-container .editor-world-actions-menu button.danger {
+  color: color-mix(in srgb, var(--arcane-color) 78%, var(--text-primary));
+}
+
+.workspace-container .context-menu button.danger:hover,
+.workspace-container .editor-world-actions-menu button.danger:hover:not(:disabled) {
+  background: var(--workspace-theme-secondary-soft);
+}
+
+.workspace-container .editor-tab-pill,
+.workspace-container .workspace-insert-result,
+.workspace-container .duplicate-scope-grid button {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.workspace-container .editor-tab-pill:hover,
+.workspace-container .editor-tab-pill.active,
+.workspace-container .workspace-insert-result:hover,
+.workspace-container .workspace-insert-result:focus-visible,
+.workspace-container .duplicate-scope-grid button:hover {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .editor-tab-pill::after,
+.workspace-container .editor-tab-pill.active::after {
+  background: var(--accent-color);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.workspace-container .duplicate-modal p,
+.workspace-container .delete-modal p,
+.workspace-container .workspace-insert-result small,
+.workspace-container .workspace-insert-empty,
+.workspace-container .workspace-insert-preview span,
+.workspace-container .workspace-insert-preview small,
+.workspace-container .asset-preview-header span {
+  color: var(--text-secondary);
+}
+
+.workspace-container .editor-visitor-count {
+  color: var(--arcane-color);
+  border-color: var(--workspace-theme-secondary-border);
+  background: var(--workspace-theme-secondary-soft);
+}
+
+.workspace-container .btn-primary,
+.workspace-container .user-admin-primary,
+.workspace-container .user-admin-role-segments button.active {
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--accent-color);
+  color: white;
+}
+
+.workspace-container .btn-primary:hover:not(:disabled),
+.workspace-container .user-admin-primary:hover:not(:disabled),
+.workspace-container .user-admin-role-segments button.active:hover:not(:disabled) {
+  border-color: var(--workspace-theme-secondary-border);
+  background: var(--accent-hover);
+  box-shadow: 0 0 22px var(--accent-glow);
+}
+
+.workspace-container .btn-secondary,
+.workspace-container .user-admin-secondary,
+.workspace-container .user-admin-role-segments button {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: color-mix(in srgb, var(--bg-color) 64%, transparent);
+}
+
+.workspace-container .btn-secondary:hover:not(:disabled),
+.workspace-container .user-admin-secondary:hover:not(:disabled),
+.workspace-container .user-admin-role-segments button:hover:not(:disabled) {
+  border-color: var(--workspace-theme-secondary-border);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .duplicate-modal h3,
+.workspace-container .delete-modal h3,
+.workspace-container .workspace-insert-preview strong,
+.workspace-container .asset-preview-header strong {
+  color: var(--text-primary);
+}
+
+.workspace-container .delete-modal,
+.workspace-container .delete-confirm-button {
+  border-color: color-mix(in srgb, var(--error-color) 34%, transparent);
+}
+
+.workspace-container .delete-confirm-button {
+  color: white;
+  background: var(--error-color);
+}
+
+.workspace-container .delete-confirm-button:hover {
+  background: color-mix(in srgb, var(--error-color) 84%, var(--text-primary));
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--error-color) 28%, transparent);
+}
+
+.workspace-container .map-floating-dock button:hover:not(:disabled),
+.workspace-container .board-floating-dock button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .map-floating-dock button.active,
+.workspace-container .board-floating-dock button.active {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-hover);
+  box-shadow: inset 0 0 0 1px var(--workspace-theme-accent-border), 0 0 18px var(--accent-glow);
+}
+
+.workspace-container .duplicate-modal {
+  border-color: var(--workspace-theme-accent-border);
+  background: linear-gradient(180deg, var(--workspace-theme-accent-soft), transparent 34%),
+    var(--theme-custom-surface);
+}
+
+.workspace-container .board-asset-search-bar {
+  border-color: var(--workspace-theme-accent-border);
+  background: color-mix(in srgb, var(--bg-color) 68%, transparent);
+}
+
+.workspace-container .board-asset-search-bar:focus-within {
+  border-color: var(--workspace-theme-secondary-border);
+  background: var(--workspace-theme-accent-soft);
+  box-shadow: 0 0 0 2px var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .workspace-content-theme .map-marker-icon-grid button:hover,
+.workspace-container .workspace-content-theme .map-marker-icon-grid button.active,
+.workspace-container .workspace-content-theme .board-text-align-row button:hover,
+.workspace-container .workspace-content-theme .board-text-align-row button.active,
+.workspace-container .workspace-content-theme .board-asset-back-button:hover:not(:disabled),
+.workspace-container .workspace-content-theme .board-asset-card:hover {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .workspace-content-theme .board-asset-folder-thumb {
+  color: color-mix(in srgb, var(--arcane-color) 72%, var(--text-primary));
+  background: linear-gradient(180deg, var(--workspace-theme-secondary-soft), var(--workspace-theme-accent-soft));
+}
+
+.workspace-container .workspace-content-theme .map-editor-shell,
+.workspace-container .workspace-content-theme .board-editor-shell {
+  background-color: var(--bg-color);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--text-secondary) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text-secondary) 8%, transparent) 1px, transparent 1px);
+}
+
+.workspace-container .workspace-content-theme .map-floating-dock,
+.workspace-container .workspace-content-theme .board-floating-dock,
+.workspace-container .workspace-content-theme .map-presence-count,
+.workspace-container .workspace-content-theme .board-status-strip {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: color-mix(in srgb, var(--theme-custom-surface) 84%, transparent);
+}
+
+.workspace-container .workspace-content-theme .map-marker-popover,
+.workspace-container .workspace-content-theme .map-asset-popover,
+.workspace-container .workspace-content-theme .board-item-popover,
+.workspace-container .workspace-content-theme .board-asset-popover {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: linear-gradient(180deg, var(--workspace-theme-accent-soft), transparent 34%),
+    var(--theme-custom-surface);
+}
+
+.workspace-container .workspace-content-theme .markdown-html-editor,
+.workspace-container .workspace-content-theme .markdown-html-source {
+  color: var(--workspace-editor-text);
+}
+
+.workspace-container .workspace-content-theme .markdown-html-source .cm-placeholder {
+  color: color-mix(in srgb, var(--workspace-editor-muted) 72%, transparent);
+}
+
+.workspace-container .workspace-content-theme .dropdown-select-trigger,
+.workspace-container .workspace-content-theme .dropdown-select-menu {
+  color: var(--text-primary);
+  border-color: var(--workspace-theme-accent-border);
+  background: var(--theme-custom-surface);
+}
+
+.workspace-container .workspace-content-theme .dropdown-select-trigger:focus-visible {
+  border-color: var(--workspace-theme-secondary-border);
+  box-shadow: 0 0 0 3px var(--workspace-theme-accent-soft);
+}
+
+.workspace-container .workspace-content-theme .dropdown-select-option:hover,
+.workspace-container .workspace-content-theme .dropdown-select-option.active {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+}

@@ -3,6 +3,7 @@ const indexer = require("./indexer");
 const assets = require("./assets");
 const users = require("./users");
 const collaboration = require("./collaboration");
+const themePresets = require("./themePresets");
 const {
   getFileTree,
   getVisibleFileTree,
@@ -17,8 +18,7 @@ const {
   deleteDocument,
   renameDocument,
   moveDocument,
-  duplicateDocument,
-  MAX_TABS_PER_DOCUMENT
+  duplicateDocument
 } = require("./tree");
 
 module.exports = {
@@ -27,6 +27,7 @@ module.exports = {
   ...assets,
   ...users,
   ...collaboration,
+  ...themePresets,
   getFileTree,
   getVisibleFileTree,
   getDocumentAccess,
@@ -40,6 +41,5 @@ module.exports = {
   deleteDocument,
   renameDocument,
   moveDocument,
-  duplicateDocument,
-  MAX_TABS_PER_DOCUMENT
+  duplicateDocument
 };

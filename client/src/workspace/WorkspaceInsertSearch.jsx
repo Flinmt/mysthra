@@ -13,10 +13,11 @@ function getDocumentPathLabel(node, pathByUid) {
 }
 
 function getTabTypeLabel(contentType, labels = {}) {
+  if (contentType === 'wiki' || contentType === 'tiptap') return labels.tabTypeNotion || 'Notion'
   if (contentType === 'markdown') return labels.tabTypeMarkdown || 'Markdown/HTML'
   if (contentType === 'map') return labels.tabTypeMap || 'Map'
   if (contentType === 'board') return labels.tabTypeBoard || 'Board'
-  return labels.tabTypeWiki || 'Notion-like'
+  return labels.tabTypeNotion || 'Notion'
 }
 
 function buildTabResults(documentTree = [], labels = {}) {

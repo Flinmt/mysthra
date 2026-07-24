@@ -1,4 +1,5 @@
 /data/
+/src/data/sessions.json
 .env
 /node_modules
 .codex
@@ -6,3 +7,5 @@
 .opencode/
 AGENTS.md
 client/dist-old/
+session.txt
+NOTION_WORKSPACE_REDESIGN.md

@@ -1,0 +1,80 @@
+.workspace-container.workspace-studio-shell {
+  --workspace-shell-bg: #101314;
+  --workspace-shell-surface: #181c1d;
+  --workspace-shell-raised: #202526;
+  --workspace-shell-border: #303536;
+  --workspace-shell-border-soft: #252a2b;
+  --workspace-shell-text: #ebe9e4;
+  --workspace-shell-muted: #989d9d;
+  --workspace-shell-copper: #b96f3d;
+  --workspace-shell-copper-hover: #ce8250;
+  --workspace-shell-steel: #58727a;
+  --workspace-shell-danger: #c86652;
+  --world-theme-accent: var(--workspace-shell-copper);
+  --world-theme-background: var(--workspace-shell-bg);
+  --world-theme-surface: var(--workspace-shell-surface);
+  --world-theme-text: var(--workspace-shell-text);
+  --world-theme-muted: var(--workspace-shell-muted);
+  --world-theme-accent-hover: var(--workspace-shell-copper-hover);
+  --world-theme-accent-soft: rgba(185, 111, 61, 0.14);
+  --world-theme-accent-border: rgba(185, 111, 61, 0.34);
+  --world-theme-accent-glow: rgba(185, 111, 61, 0.2);
+  --world-theme-secondary: var(--workspace-shell-steel);
+  --world-theme-secondary-hover: #6c8790;
+  --world-theme-secondary-soft: rgba(88, 114, 122, 0.2);
+  --bg-color: var(--workspace-shell-bg);
+  --panel-bg: rgba(24, 28, 29, 0.96);
+  --border-color: var(--workspace-shell-border);
+  --text-primary: var(--workspace-shell-text);
+  --text-secondary: var(--workspace-shell-muted);
+  --accent-color: var(--workspace-shell-copper);
+  --accent-hover: var(--workspace-shell-copper-hover);
+  --accent-glow: rgba(185, 111, 61, 0.2);
+  --arcane-color: var(--workspace-shell-steel);
+  --error-color: var(--workspace-shell-danger);
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--workspace-shell-text);
+  background: var(--workspace-shell-bg);
+}
+
+.workspace-studio-body {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.workspace-studio-body[data-has-inspector="true"] {
+  grid-template-columns: auto minmax(0, 1fr) minmax(240px, var(--workspace-inspector-width, 288px));
+}
+
+.workspace-inspector {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--workspace-shell-border);
+  background: var(--workspace-shell-surface);
+}
+
+.workspace-container .workspace-content-theme {
+  min-width: 0;
+  min-height: 0;
+  color: var(--text-primary);
+  background: var(--bg-color);
+}
+
+.workspace-container .workspace-content-theme.workspace-editor-main {
+  background: color-mix(in srgb, var(--bg-color) 94%, #101314);
+}
+
+@media (max-width: 900px) {
+  .workspace-studio-body {
+    display: block;
+  }
+}
