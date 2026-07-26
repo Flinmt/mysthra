@@ -1,6 +1,7 @@
 /* The shell owns neutral controls. These scopes explicitly opt into the world's palette. */
 .workspace-container.workspace-boot,
 .workspace-container .workspace-content-theme,
+.workspace-container .asset-explorer,
 .workspace-container .context-menu,
 .workspace-container .editor-world-actions-menu,
 .workspace-container .workspace-toast,

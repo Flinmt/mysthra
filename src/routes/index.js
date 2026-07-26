@@ -3,6 +3,7 @@ const { serveStaticFile } = require("../utils/static");
 const fs = require("node:fs");
 const { getAuthenticatedUser } = require("../utils/auth");
 const path = require("node:path");
+const { handleAssetRoute } = require("./assets");
 const { handleAuthRoute } = require("./auth");
 const { getErrorMessage, getErrorStatusCode } = require("./errors");
 const { handleUserRoute } = require("./users");
@@ -26,14 +27,6 @@ const {
   renameDocument,
   moveDocument,
   duplicateDocument,
-  createAssetFolder,
-  deleteAsset,
-  duplicateAsset,
-  getAssetFile,
-  listAssets,
-  moveAsset,
-  renameAsset,
-  saveAssetFile,
   getWorldConfig,
   getWorldThumbnail,
   getWorldRole,
@@ -74,7 +67,7 @@ function getWorldIdFromPath(requestUrl) {
 }
 
 function isPublicReadRequest(method, pathname) {
-  return method === "GET" && /^\/api\/worlds\/[^\/]+(\/.*)?$/.test(pathname);
+  return ["GET", "HEAD"].includes(method) && /^\/api\/worlds\/[^\/]+(\/.*)?$/.test(pathname);
 }
 
 async function isPublicWorldReadRequest(method, pathname, worldId) {
@@ -461,115 +454,17 @@ async function router(request, response) {
       }
     }
 
-    if (pathname.match(/^\/api\/worlds\/[^\/]+\/assets(\/.*)?$/)) {
-      const worldId = getWorldIdFromPath(request.url);
-      if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
-      if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
-
-      if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets$/)) {
-        try {
-          const queryParams = getQueryParams(request.url);
-          const result = await listAssets(worldId, queryParams.get("path") || "");
-          return sendJson(response, 200, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets\/file$/)) {
-        try {
-          const queryParams = getQueryParams(request.url);
-          const assetPath = queryParams.get("path");
-          if (!assetPath) return sendJson(response, 400, { error: "Missing asset path" });
-          const asset = await getAssetFile(worldId, assetPath);
-          response.writeHead(200, { "Content-Type": asset.contentType });
-          fs.createReadStream(asset.fullPath).pipe(response);
-          return;
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets\/folders$/)) {
-        try {
-          const body = await parseJsonBody(request);
-          if (!body.name) return sendJson(response, 400, { error: "Missing folder name" });
-          const result = await createAssetFolder(worldId, body.parentPath || "", body.name);
-          return sendJson(response, 201, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets\/upload$/)) {
-        try {
-          const queryParams = getQueryParams(request.url);
-          const filename = queryParams.get("filename");
-          if (!filename) return sendJson(response, 400, { error: "Missing filename" });
-          const buffer = await readRequestBuffer(request);
-          const result = await saveAssetFile(worldId, queryParams.get("path") || "", filename, buffer);
-          return sendJson(response, 201, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets\/rename$/)) {
-        try {
-          const body = await parseJsonBody(request);
-          if (!body.path || !body.newName) return sendJson(response, 400, { error: "Missing path or newName" });
-          const result = await renameAsset(worldId, body.path, body.newName);
-          return sendJson(response, 200, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets\/move$/)) {
-        try {
-          const body = await parseJsonBody(request);
-          if (!body.sourcePath && body.sourcePath !== "") return sendJson(response, 400, { error: "Missing sourcePath" });
-          const result = await moveAsset(worldId, body.sourcePath, body.targetFolderPath || "");
-          return sendJson(response, 200, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets\/duplicate$/)) {
-        try {
-          const body = await parseJsonBody(request);
-          if (!body.path) return sendJson(response, 400, { error: "Missing asset path" });
-          const result = await duplicateAsset(worldId, body.path, {
-            includeChildren: Boolean(body.includeChildren),
-            name: body.name
-          });
-          return sendJson(response, 201, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-
-      if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^\/]+\/assets$/)) {
-        try {
-          const queryParams = getQueryParams(request.url);
-          const assetPath = queryParams.get("path");
-          if (!assetPath) return sendJson(response, 400, { error: "Missing asset path" });
-          const result = await deleteAsset(worldId, assetPath);
-          return sendJson(response, 200, result);
-        } catch (error) {
-          const statusCode = getErrorStatusCode(error);
-          return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
-        }
-      }
-    }
+    if (await handleAssetRoute({
+      request,
+      response,
+      pathname,
+      worldId: getWorldIdFromPath(request.url),
+      currentUser,
+      isPublicGet,
+      getUploadBodyLimit,
+      parseJsonBody,
+      requireWorldMemberOrAdmin
+    })) return;
 
     if (pathname.match(/^\/api\/worlds\/[^\/]+\/documents$/)) {
       const worldId = getWorldIdFromPath(request.url);

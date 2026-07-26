@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useLayoutEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Upload, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
+import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords, Shield, Castle, Map, Crown, Book, BookOpen, Scroll, ScrollText, Library, Star, Skull, Trash2, Search, Home, House, X, Copy, Image, Music, FolderPlus, MoveRight, LockKeyhole, Lock, LockOpen, MoveVertical, MoreVertical, Users, MapPin, Compass, Route, Flag, Landmark, Gem, Diamond, Flame, Eye, EyeOff, Maximize2, Minimize2, Sparkles, Tent, Mountain, Trees, TreePine, TreeDeciduous, DoorOpen, WandSparkles, Pickaxe, Axe, Hammer, Church, Ship, Anchor, Telescope, Moon, Sun, CloudLightning, Key, Coins, Footprints, Binoculars, Drama, Ghost, Sailboat, Waves, Pyramid, Feather, Archive, Boxes, Box, Briefcase, Building2, ClipboardList, Database, Dices, File, Files, FileArchive, FileBox, FileHeart, FileImage, FileLock, FilePenLine, FileSearch, FolderArchive, FolderHeart, FolderOpen, FolderRoot, Folders, Gamepad2, Heart, Layers, Notebook, NotebookTabs, NotebookText, Package, Palette, Plane, Rocket, School, Shapes, ShipWheel, Sprout, Target, UserRound, UsersRound, Waypoints, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import MapEditor from './features/map/MapEditor';
 import BoardEditor from './features/board/BoardEditor';
@@ -15,6 +15,7 @@ import { enqueueWorkspaceToast } from './workspace/workspaceToastUtils';
 import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
 import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
+import AssetExplorer from './features/assets/AssetExplorer';
 import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeShellStyle, getWorldThemeStyle } from './worldThemes';
 import {
   clampCoverPosition,
@@ -567,9 +568,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [isDirty, setIsDirty] = useState(false);
   const [viewMode, setViewMode] = useState('edit'); // 'view' or 'edit'
   const [searchQuery, setSearchQuery] = useState('');
-  const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [iconSearchQuery, setIconSearchQuery] = useState('');
-  const [activeSidebarTab, setActiveSidebarTab] = useState('wiki');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
       return window.sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
@@ -580,8 +579,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [isSidebarMobile, setIsSidebarMobile] = useState(() => window.matchMedia?.(SIDEBAR_MOBILE_QUERY).matches || false);
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [assetTree, setAssetTree] = useState([]);
-  const [assetLoading, setAssetLoading] = useState(false);
-  const [assetUploading, setAssetUploading] = useState(false);
+  const [, setAssetLoading] = useState(false);
+  const [assetExplorer, setAssetExplorer] = useState({ isOpen: false, initialFolderPath: '' });
+  const [assetClipboard, setAssetClipboard] = useState(null);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [previewAsset, setPreviewAsset] = useState(null);
   const [selectedAssetFolderPath, setSelectedAssetFolderPath] = useState('');
@@ -592,7 +592,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [toasts, setToasts] = useState([]);
   const nextToastIdRef = useRef(0);
   const [saveStatus, setSaveStatus] = useState('saved');
-  const assetFileInputRef = useRef(null);
   const coverFileInputRef = useRef(null);
   const documentIconButtonRef = useRef(null);
   
@@ -614,14 +613,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false });
   const [documentIconSaving, setDocumentIconSaving] = useState(false);
   const [renamingPath, setRenamingPath] = useState(null);
-  const [assetRenamingPath, setAssetRenamingPath] = useState(null);
+  const [, setAssetRenamingPath] = useState(null);
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
   const [pageTitleEdit, setPageTitleEdit] = useState({ isEditing: false, value: '' });
   const [tabDraft, setTabDraft] = useState({ isOpen: false, name: '', isCreating: false });
   const tabDraftDocumentUidRef = useRef('');
   const tabDraftOriginRef = useRef('');
   const [coverReposition, setCoverReposition] = useState({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
-  const assetUploadTargetPathRef = useRef('');
   const coverRef = useRef(null);
   const firstTabTypeRef = useRef(null);
   const latestContentRef = useRef('');
@@ -636,6 +634,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     else setIsSidebarCollapsed(prev => !prev);
   }, [isSidebarMobile]);
   const closeAssetPreview = useCallback(() => setPreviewAsset(null), []);
+
+  useEffect(() => {
+    setAssetClipboard(null);
+    setAssetExplorer({ isOpen: false, initialFolderPath: '' });
+  }, [worldId]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia?.(SIDEBAR_MOBILE_QUERY);
@@ -720,11 +723,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (message.worldId !== worldId) return;
       if (message.type === 'document-tree') {
         fetchTree();
+      } else if (message.type === 'asset-tree') {
+        fetchAssets();
       }
     } catch {
       // Ignore stateless messages not produced by Mysthra.
     }
-  }, [fetchTree, worldId]);
+  }, [fetchAssets, fetchTree, worldId]);
 
   const worldPresenceRoomName = (currentUser || isVisitor) ? `world:${worldId}:presence` : '';
   const worldPresence = useCollaborationRoom({
@@ -861,12 +866,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
     return () => clearTimeout(timer);
   }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
-
-  useEffect(() => {
-    if (activeSidebarTab === 'assets') {
-      fetchAssets();
-    }
-  }, [activeSidebarTab, fetchAssets]);
 
   useEffect(() => {
     if (activeTab?.contentType === 'map' || activeTab?.contentType === 'board') {
@@ -1583,23 +1582,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     return search(displayTree);
   }, [displayTree, searchQuery]);
 
-  const filteredAssetTree = useMemo(() => {
-    if (!assetSearchQuery) return assetTree;
-
-    const query = assetSearchQuery.toLowerCase();
-    const filterNodes = (nodes) => {
-      return nodes.map(node => {
-        const matches = node.name.toLowerCase().includes(query);
-        const children = node.children ? filterNodes(node.children) : [];
-        if (matches || children.length > 0) {
-          return { ...node, children };
-        }
-        return null;
-      }).filter(Boolean);
-    };
-
-    return filterNodes(assetTree);
-  }, [assetSearchQuery, assetTree]);
   const assetMoveTargets = useMemo(() => {
     const sourceNode = assetMovePrompt.node;
     return [
@@ -1721,39 +1703,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       });
       if (res.ok) {
         const folder = await res.json();
-        setAssetSearchQuery('');
         setSelectedAssetFolderPath(folder.path);
         setSelectedAsset(null);
         await fetchAssets();
         setAssetRenamingPath(folder.path);
         addToast(t('workspace.asset_folder_created'), 'success');
-      } else {
-        addToast(t('common.error'), 'error');
-      }
-    } catch {
-      addToast(t('common.error'), 'error');
-    }
-  };
-
-  const handleAssetRename = async (node, newName) => {
-    if (!node || !newName || newName === node.name) {
-      setAssetRenamingPath(null);
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/rename`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: node.path, newName })
-      });
-      if (res.ok) {
-        const renamed = await res.json();
-        setAssetRenamingPath(null);
-        if (selectedAsset?.path === node.path) setSelectedAsset(renamed.type === 'file' ? renamed : null);
-        if (selectedAssetFolderPath === node.path) setSelectedAssetFolderPath(renamed.path);
-        await fetchAssets();
-        addToast(t('common.renamed'), 'success');
       } else {
         addToast(t('common.error'), 'error');
       }
@@ -1863,7 +1817,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (res.ok) {
         const duplicated = await res.json();
         setAssetDuplicatePrompt({ isOpen: false, node: null });
-        setAssetSearchQuery('');
         await fetchAssets();
         setAssetRenamingPath(duplicated.path);
         if (duplicated.type === 'file') setSelectedAsset(duplicated);
@@ -1899,7 +1852,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (res.ok) {
         const moved = await res.json();
         setAssetMovePrompt({ isOpen: false, node: null, targetPath: '' });
-        setAssetSearchQuery('');
         await fetchAssets();
         if (moved.type === 'file') {
           setSelectedAsset(moved);
@@ -1917,48 +1869,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
-  const handleAssetUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    event.target.value = '';
-    if (files.length === 0) return;
-
-    const uploadPath = assetUploadTargetPathRef.current || selectedAssetFolderPath;
-    assetUploadTargetPathRef.current = '';
-    setAssetUploading(true);
-    try {
-      for (const file of files) {
-        const prepared = await prepareAssetUpload(file);
-        const query = new URLSearchParams({
-          path: uploadPath,
-          filename: prepared.filename
-        });
-        const res = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
-          method: 'POST',
-          headers: { 'Content-Type': prepared.contentType },
-          body: prepared.blob
-        });
-
-        if (!res.ok) {
-          addToast(t('workspace.asset_upload_failed', { name: file.name }), 'error');
-          continue;
-        }
-
-        const uploaded = await res.json();
-        setSelectedAsset(uploaded);
-      }
-
-      await fetchAssets();
-      addToast(t('workspace.assets_uploaded'), 'success');
-    } catch {
-      addToast(t('workspace.asset_unsupported'), 'error');
-    } finally {
-      setAssetUploading(false);
-    }
-  };
-
   const openAssetUpload = (targetPath = selectedAssetFolderPath) => {
-    assetUploadTargetPathRef.current = targetPath;
-    assetFileInputRef.current?.click();
+    setAssetExplorer({ isOpen: true, initialFolderPath: targetPath || '' });
   };
 
   const commitPageTitleRename = async () => {
@@ -2276,17 +2188,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: null });
   };
 
-  const handleAssetsBlankContextMenu = (event) => {
-    if (isVisitor) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setAssetContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node: null });
-  };
-
-  const sidebarTabs = [
-    { id: 'wiki', label: t('workspace.sidebar_tab_wiki'), icon: Book },
-    { id: 'assets', label: t('workspace.sidebar_tab_assets'), icon: Image }
-  ];
   const selectedTabs = getTabsForNode(selectedContainer);
   const visibleActiveTab = tabDraft.isOpen ? null : activeTab;
   const isMapTab = visibleActiveTab?.contentType === 'map';
@@ -2649,189 +2550,84 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       <WorkspaceBody>
       <WorkspaceSidebar
         isVisitor={isVisitor}
-        tabs={sidebarTabs}
-        activeTab={activeSidebarTab}
-        tabsLabel={t('workspace.sidebar_tabs_label')}
-        onTabChange={setActiveSidebarTab}
         isCollapsed={isSidebarCollapsed}
         isDrawerOpen={isSidebarDrawerOpen}
         isMobile={isSidebarMobile}
         collapseLabel={t('workspace.collapse_sidebar')}
         onClose={closeSidebarDrawer}
       >
-
-        {activeSidebarTab === 'wiki' ? (
-          <>
-            <nav
-              className={`sidebar-tree sidebar-nexus-tree ${tree.length === 0 ? 'is-empty' : ''}`}
-              onContextMenu={handleTreeBlankContextMenu}
-            >
-              {tree.length === 0 ? (
-                <div className="sidebar-empty-state">
-                  <div className="sidebar-empty-icon">
-                    <Castle size={30} />
-                  </div>
-                  <h2>{t('workspace.empty_sidebar_title')}</h2>
-                  <p>{t('workspace.empty_sidebar_hint')}</p>
-                  {!isVisitor && (
-                    <button className="btn-primary sidebar-empty-cta" onClick={() => createDocumentInline()}>
-                      <Plus size={16} /> {t('workspace.create_first_document')}
-                    </button>
-                  )}
-                </div>
-              ) : filteredTree.length === 0 ? (
-                <div className="sidebar-empty-state compact">
-                  <div className="sidebar-empty-icon">
-                    <Search size={26} />
-                  </div>
-                  <h2>{t('workspace.no_search_results')}</h2>
-                  <p>{t('workspace.no_search_results_hint')}</p>
-                </div>
-              ) : (
-                <FileTree 
-                  nodes={filteredTree} 
-                  onFileSelect={selectContainer}
-                  selectedFile={selectedContainer}
-                  onCreateChild={createDocumentInline}
-                  onContextMenu={(e, node) => setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, node })}
-                  renamingPath={renamingPath}
-                  onRename={handleRename}
-                  onRequestRename={(node) => setRenamingPath(node.path)}
-                  onDelete={handleDelete}
-                  isSearching={!!searchQuery}
-                  isVisitor={isVisitor}
-                  worldData={worldData}
-                />
-              )}
-            </nav>
-
-            <div className="sidebar-search-dock">
-              <div className="sidebar-context-bar">
-                <div className="sidebar-search-bar">
-                  <Search size={14} />
-                  <input
-                    aria-label={t('workspace.search_tree')}
-                    placeholder={t('workspace.search_tree')}
-                    value={searchQuery}
-                    onChange={event => setSearchQuery(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Escape') setSearchQuery('');
-                    }}
-                  />
-                  {searchQuery && (
-                    <button type="button" onClick={() => setSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
-                      <X size={13} />
-                    </button>
-                  )}
-                </div>
-                {!isVisitor && (
-                  <button type="button" className="sidebar-context-action" onClick={() => createDocumentInline()} title={t('workspace.create_root_document')} aria-label={t('workspace.create_root_document')}>
-                    <Plus size={15} />
-                  </button>
-                )}
+        <nav
+          className={`sidebar-tree sidebar-nexus-tree ${tree.length === 0 ? 'is-empty' : ''}`}
+          onContextMenu={handleTreeBlankContextMenu}
+        >
+          {tree.length === 0 ? (
+            <div className="sidebar-empty-state">
+              <div className="sidebar-empty-icon">
+                <Castle size={30} />
               </div>
-            </div>
-          </>
-        ) : activeSidebarTab === 'assets' ? (
-          <div className="sidebar-assets-panel">
-            <div
-              className="assets-tree-panel"
-              onContextMenu={(event) => {
-                handleAssetsBlankContextMenu(event);
-              }}
-              onClick={(event) => {
-                if (event.target === event.currentTarget) {
-                  setSelectedAssetFolderPath('');
-                }
-              }}
-            >
-              {assetLoading ? (
-                <div className="sidebar-local-loading">
-                  <div className="sidebar-local-loading-lines" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                  <strong>{t('workspace.loading_assets')}</strong>
-                </div>
-              ) : assetTree.length === 0 ? (
-                <div className="sidebar-empty-state compact">
-                  <div className="sidebar-empty-icon">
-                    <Image size={26} />
-                  </div>
-                  <h2>{t('workspace.assets_empty_title')}</h2>
-                  <p>{t('workspace.assets_empty_hint')}</p>
-                </div>
-              ) : filteredAssetTree.length === 0 ? (
-                <div className="sidebar-empty-state compact">
-                  <div className="sidebar-empty-icon">
-                    <Search size={26} />
-                  </div>
-                  <h2>{t('workspace.no_search_results')}</h2>
-                  <p>{t('workspace.no_search_results_hint')}</p>
-                </div>
-              ) : (
-                <AssetTree
-                  nodes={filteredAssetTree}
-                  selectedAsset={selectedAsset}
-                  selectedFolderPath={selectedAssetFolderPath}
-                  onSelectAsset={setSelectedAsset}
-                  onSelectFolder={setSelectedAssetFolderPath}
-                  onCreateFolder={createAssetFolderInline}
-                  onContextMenu={(event, node) => setAssetContextMenu({ isOpen: true, x: event.clientX, y: event.clientY, node })}
-                  renamingPath={assetRenamingPath}
-                  onRename={handleAssetRename}
-                  onRequestRename={(node) => setAssetRenamingPath(node.path)}
-                  onDelete={handleAssetDelete}
-                  isVisitor={isVisitor}
-                />
+              <h2>{t('workspace.empty_sidebar_title')}</h2>
+              <p>{t('workspace.empty_sidebar_hint')}</p>
+              {!isVisitor && (
+                <button className="btn-primary sidebar-empty-cta" onClick={() => createDocumentInline()}>
+                  <Plus size={16} /> {t('workspace.create_first_document')}
+                </button>
               )}
             </div>
-
-            <div className="assets-bottom-dock">
-              <input ref={assetFileInputRef} type="file" multiple accept="image/*,.gif,audio/*" onChange={handleAssetUpload} hidden />
-              <div className="sidebar-context-bar">
-                <div className="sidebar-search-bar">
-                  <Search size={14} />
-                  <input
-                    aria-label={t('workspace.assets_search')}
-                    placeholder={t('workspace.assets_search')}
-                    value={assetSearchQuery}
-                    onChange={event => setAssetSearchQuery(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Escape') setAssetSearchQuery('');
-                    }}
-                  />
-                  {assetSearchQuery && (
-                    <button type="button" onClick={() => setAssetSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
-                      <X size={13} />
-                    </button>
-                  )}
-                </div>
-                {!isVisitor && (
-                  <>
-                    <button type="button" className="sidebar-context-action" onClick={() => openAssetUpload()} disabled={assetUploading} title={assetUploading ? t('common.uploading') : t('workspace.assets_upload')} aria-label={assetUploading ? t('common.uploading') : t('workspace.assets_upload')}>
-                      <Upload size={15} />
-                    </button>
-                    <button type="button" className="sidebar-context-action" onClick={() => createAssetFolderInline()} title={t('workspace.assets_new_folder')} aria-label={t('workspace.assets_new_folder')}>
-                      <FolderPlus size={15} />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="sidebar-panel-placeholder">
+          ) : filteredTree.length === 0 ? (
             <div className="sidebar-empty-state compact">
               <div className="sidebar-empty-icon">
-                <FileText size={28} />
+                <Search size={26} />
               </div>
-              <h2>{t('workspace.templates_empty_title')}</h2>
-              <p>{t('workspace.templates_empty_hint')}</p>
+              <h2>{t('workspace.no_search_results')}</h2>
+              <p>{t('workspace.no_search_results_hint')}</p>
             </div>
+          ) : (
+            <FileTree
+              nodes={filteredTree}
+              onFileSelect={selectContainer}
+              selectedFile={selectedContainer}
+              onCreateChild={createDocumentInline}
+              onContextMenu={(e, node) => setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, node })}
+              renamingPath={renamingPath}
+              onRename={handleRename}
+              onRequestRename={(node) => setRenamingPath(node.path)}
+              onDelete={handleDelete}
+              isSearching={!!searchQuery}
+              isVisitor={isVisitor}
+              worldData={worldData}
+            />
+          )}
+        </nav>
+
+        <div className="sidebar-search-dock">
+          <div className="sidebar-context-bar">
+            <div className="sidebar-search-bar">
+              <Search size={14} />
+              <input
+                aria-label={t('workspace.search_tree')}
+                placeholder={t('workspace.search_tree')}
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') setSearchQuery('');
+                }}
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => setSearchQuery('')} title={t('common.cancel')} aria-label={t('common.cancel')}>
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {!isVisitor && (
+              <button type="button" className="sidebar-context-action" onClick={() => createDocumentInline()} title={t('workspace.create_root_document')} aria-label={t('workspace.create_root_document')}>
+                <Plus size={15} />
+              </button>
+            )}
+            <button type="button" className="sidebar-context-action" onClick={() => openAssetUpload('')} title={t('workspace.open_asset_explorer')} aria-label={t('workspace.open_asset_explorer')}>
+              <FolderOpen size={15} />
+            </button>
           </div>
-        )}
+        </div>
       </WorkspaceSidebar>
 
       {/* Área Principal */}
@@ -3555,6 +3351,19 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             />
           </div>
         </div>
+      )}
+
+      {assetExplorer.isOpen && (
+        <AssetExplorer
+          worldId={worldId}
+          initialFolderPath={assetExplorer.initialFolderPath}
+          readOnly={isVisitor}
+          clipboard={assetClipboard}
+          onClipboardChange={setAssetClipboard}
+          onAssetsChange={fetchAssets}
+          onClose={() => setAssetExplorer({ isOpen: false, initialFolderPath: '' })}
+          addToast={addToast}
+        />
       )}
 
       <AssetPreviewDialog

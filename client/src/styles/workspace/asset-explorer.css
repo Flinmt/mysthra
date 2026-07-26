@@ -1,0 +1,866 @@
+.asset-explorer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(5 7 8 / 64%);
+}
+
+.asset-explorer {
+  --asset-explorer-bg: color-mix(in srgb, var(--world-theme-background) 28%, var(--workspace-shell-surface));
+  --asset-explorer-raised: color-mix(in srgb, var(--world-theme-surface) 24%, var(--workspace-shell-raised));
+  --asset-explorer-control: color-mix(in srgb, var(--world-theme-background) 18%, var(--workspace-shell-bg));
+  --asset-explorer-hover: color-mix(in srgb, var(--world-theme-text) 6%, transparent);
+  --asset-explorer-border: color-mix(in srgb, var(--world-theme-accent) 15%, var(--workspace-shell-border));
+  --asset-explorer-border-soft: color-mix(in srgb, var(--world-theme-accent) 9%, var(--workspace-shell-border-soft));
+  --asset-explorer-text: var(--workspace-shell-text);
+  --asset-explorer-muted: var(--workspace-shell-muted);
+  --asset-explorer-accent: var(--world-theme-accent);
+  --asset-explorer-accent-soft: color-mix(in srgb, var(--world-theme-accent) 14%, transparent);
+  --asset-explorer-accent-hover: color-mix(in srgb, var(--world-theme-accent) 20%, transparent);
+  width: min(1180px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 32px));
+  display: grid;
+  grid-template-rows: 40px 40px 38px minmax(0, 1fr) 26px;
+  overflow: hidden;
+  color: var(--asset-explorer-text);
+  background: var(--asset-explorer-bg);
+  border: 1px solid var(--asset-explorer-border);
+  border-radius: 6px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 48%);
+  isolation: isolate;
+}
+
+.asset-explorer button,
+.asset-explorer select,
+.asset-explorer input {
+  color: inherit;
+  font: inherit;
+}
+
+.asset-explorer button {
+  border: 0;
+}
+
+.asset-explorer svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.asset-explorer-titlebar,
+.asset-explorer-toolbar,
+.asset-explorer-commandbar,
+.asset-explorer-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--asset-explorer-raised) 66%, var(--asset-explorer-bg));
+  border-bottom: 1px solid var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-titlebar {
+  justify-content: space-between;
+  padding: 4px 5px 4px 10px;
+}
+
+.asset-explorer-titlebar > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.asset-explorer-titlebar strong {
+  overflow: hidden;
+  font-size: .76rem;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-explorer-titlebar span,
+.asset-explorer-item-meta,
+.asset-explorer-statusbar {
+  color: var(--asset-explorer-muted);
+  font-size: .63rem;
+}
+
+.asset-explorer-titlebar button,
+.asset-explorer-navigation button,
+.asset-explorer-commandbar button {
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 7px;
+  color: var(--asset-explorer-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .68rem;
+  font-weight: 600;
+  transition: color .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.asset-explorer button:hover:not(:disabled),
+.asset-explorer button.active {
+  color: var(--asset-explorer-text);
+  background: var(--asset-explorer-hover);
+  border-color: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer button.active {
+  background: var(--asset-explorer-accent-soft);
+  border-color: color-mix(in srgb, var(--asset-explorer-accent) 20%, transparent);
+}
+
+.asset-explorer button:focus-visible,
+.asset-explorer select:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--asset-explorer-accent) 58%, transparent);
+  outline-offset: 1px;
+}
+
+.asset-explorer button:disabled {
+  cursor: default;
+  opacity: .38;
+}
+
+.asset-explorer-titlebar button {
+  width: 28px;
+  padding: 0;
+}
+
+.asset-explorer-titlebar button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.asset-explorer-toolbar {
+  padding: 5px;
+}
+
+.asset-explorer-navigation {
+  display: flex;
+  gap: 1px;
+}
+
+.asset-explorer-navigation button {
+  width: 28px;
+  padding: 0;
+}
+
+.asset-explorer-breadcrumbs {
+  min-width: 0;
+  height: 30px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 3px;
+  background: var(--asset-explorer-control);
+  border: 1px solid var(--asset-explorer-border-soft);
+  border-radius: 4px;
+}
+
+.asset-explorer-breadcrumbs button,
+.asset-explorer-breadcrumbs span {
+  min-width: 0;
+  padding: 3px 5px;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 3px;
+  font-size: .68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-explorer-breadcrumbs button:hover {
+  background: var(--asset-explorer-hover);
+}
+
+.asset-explorer-breadcrumbs svg {
+  width: 11px;
+  height: 11px;
+  color: var(--asset-explorer-muted);
+  opacity: .7;
+}
+
+.asset-explorer-search {
+  width: min(220px, 24vw);
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  color: var(--asset-explorer-muted);
+  background: var(--asset-explorer-control);
+  border: 1px solid var(--asset-explorer-border-soft);
+  border-radius: 4px;
+}
+
+.asset-explorer-search:focus-within {
+  border-color: color-mix(in srgb, var(--asset-explorer-accent) 52%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--asset-explorer-accent) 10%, transparent);
+}
+
+.asset-explorer-search:focus-within > svg {
+  color: var(--asset-explorer-accent);
+}
+
+.asset-explorer-search input {
+  min-width: 0;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: .69rem;
+}
+
+.asset-explorer-search input::placeholder {
+  color: color-mix(in srgb, var(--asset-explorer-muted) 78%, transparent);
+}
+
+.asset-explorer-commandbar {
+  padding: 4px 5px;
+  overflow-x: auto;
+}
+
+.asset-explorer-commandbar button {
+  height: 28px;
+  white-space: nowrap;
+}
+
+.asset-explorer-commandbar .danger,
+.asset-explorer .danger {
+  color: var(--error-color);
+}
+
+.asset-explorer-command-spacer {
+  flex: 1;
+}
+
+.asset-explorer-commandbar select {
+  height: 28px;
+  padding: 0 23px 0 7px;
+  color: var(--asset-explorer-muted);
+  background: var(--asset-explorer-control);
+  border: 1px solid var(--asset-explorer-border-soft);
+  border-radius: 4px;
+  font-size: .66rem;
+}
+
+.asset-explorer-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 190px minmax(280px, 1fr) 230px;
+}
+
+.asset-explorer-sidebar,
+.asset-explorer-preview {
+  min-width: 0;
+  padding: 5px;
+  overflow: auto;
+  background: var(--asset-explorer-bg);
+  border-right: 1px solid var(--asset-explorer-border-soft);
+  scrollbar-color: color-mix(in srgb, var(--asset-explorer-accent) 30%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.asset-explorer-sidebar > button {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  overflow: hidden;
+  color: var(--asset-explorer-text);
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .7rem;
+  transition: background .12s ease, border-color .12s ease;
+}
+
+.asset-explorer-sidebar button:hover {
+  background: var(--asset-explorer-hover);
+  border-color: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-sidebar button.active {
+  background: var(--asset-explorer-accent-soft);
+  border-color: color-mix(in srgb, var(--asset-explorer-accent) 20%, transparent);
+  box-shadow: inset 2px 0 0 var(--asset-explorer-accent);
+}
+
+.asset-explorer-sidebar button svg {
+  color: var(--asset-explorer-muted);
+}
+
+.asset-explorer-sidebar button.active svg {
+  color: var(--asset-explorer-accent);
+}
+
+.asset-explorer-sidebar button span {
+  margin-left: auto;
+  color: var(--asset-explorer-muted);
+  font-size: .61rem;
+}
+
+.asset-explorer-content {
+  min-width: 0;
+  padding: 6px;
+  overflow: auto;
+  background: var(--asset-explorer-control);
+  scrollbar-color: color-mix(in srgb, var(--asset-explorer-accent) 30%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.asset-explorer-content.grid {
+  align-content: start;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 88px);
+  justify-content: start;
+  gap: 5px;
+}
+
+.asset-explorer-content.is-state {
+  display: grid;
+  place-content: center;
+  place-items: center;
+}
+
+.asset-explorer .asset-explorer-item,
+.asset-explorer .asset-explorer-item > * {
+  cursor: pointer;
+}
+
+.asset-explorer-item {
+  position: relative;
+  min-width: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.asset-explorer-content.grid .asset-explorer-item {
+  min-height: 112px;
+  display: grid;
+  grid-template-rows: 72px auto auto;
+  gap: 2px;
+  padding: 5px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.asset-explorer-content.grid .asset-explorer-item.is-folder {
+  min-height: 80px;
+  grid-template-rows: 52px auto;
+}
+
+.asset-explorer-content.grid .asset-explorer-item:hover {
+  background: var(--asset-explorer-hover);
+  border-color: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-item.selected {
+  background: color-mix(in srgb, var(--asset-explorer-accent) 8%, transparent) !important;
+}
+
+.asset-explorer-item-preview {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--asset-explorer-raised) 54%, var(--asset-explorer-control));
+  border: 1px solid var(--asset-explorer-border-soft);
+  border-radius: 3px;
+}
+
+.asset-explorer-item-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.asset-explorer-item-preview.is-folder {
+  background: transparent;
+  border-color: transparent;
+}
+
+.asset-explorer-item-preview > svg {
+  width: 30px;
+  height: 30px;
+  color: var(--asset-explorer-muted);
+}
+
+.asset-explorer-item-preview .asset-explorer-folder-icon {
+  width: 40px;
+  height: 40px;
+  color: color-mix(in srgb, var(--asset-explorer-muted) 74%, var(--asset-explorer-text));
+  fill: color-mix(in srgb, var(--asset-explorer-accent) 10%, transparent);
+}
+
+.asset-explorer-item-name,
+.asset-explorer-item-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-explorer-item-name {
+  font-size: .69rem;
+  font-weight: 520;
+}
+
+.asset-explorer-content.grid .asset-explorer-item.is-folder .asset-explorer-item-name {
+  text-align: center;
+}
+
+.asset-explorer-content.grid .asset-explorer-item.is-folder .asset-explorer-item-meta {
+  display: none;
+}
+
+.asset-explorer-inline-rename {
+  min-width: 0;
+  width: 100%;
+  height: 22px;
+  padding: 0 4px;
+  color: var(--asset-explorer-text);
+  background: var(--asset-explorer-control);
+  border: 1px solid color-mix(in srgb, var(--asset-explorer-accent) 54%, transparent);
+  border-radius: 3px;
+  outline: none;
+  font-size: .69rem;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--asset-explorer-accent) 12%, transparent);
+}
+
+.asset-explorer-item-more {
+  display: none;
+}
+
+.asset-explorer-content.list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.asset-explorer-content.list .asset-explorer-item {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 28px minmax(110px, 1fr) 84px 20px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 5px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.asset-explorer-content.list .asset-explorer-item:hover {
+  background: var(--asset-explorer-hover);
+  border-color: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-content.list .asset-explorer-item-preview {
+  width: 26px;
+  height: 26px;
+}
+
+.asset-explorer-content.list .asset-explorer-item-preview > svg {
+  width: 18px;
+  height: 18px;
+}
+
+.asset-explorer-content.list .asset-explorer-item-more {
+  display: block;
+  color: var(--asset-explorer-muted);
+}
+
+.asset-explorer-preview {
+  display: none;
+  border-right: 0;
+  border-left: 1px solid var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-preview.visible {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.asset-explorer-preview strong {
+  overflow: hidden;
+  font-size: .72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-explorer-preview img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  background: var(--asset-explorer-control);
+  border: 1px solid var(--asset-explorer-border-soft);
+  border-radius: 3px;
+}
+
+.asset-explorer-preview audio {
+  width: 100%;
+  height: 32px;
+}
+
+.asset-explorer-preview dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 8px;
+  margin: 0;
+  font-size: .65rem;
+}
+
+.asset-explorer-preview dt {
+  color: var(--asset-explorer-muted);
+}
+
+.asset-explorer-preview dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.asset-explorer-state {
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--asset-explorer-muted);
+  font-size: .7rem;
+}
+
+.asset-explorer-state > svg {
+  width: 28px;
+  height: 28px;
+}
+
+.asset-explorer-statusbar {
+  justify-content: space-between;
+  min-height: 26px;
+  padding: 3px 8px;
+  border-top: 1px solid var(--asset-explorer-border-soft);
+  border-bottom: 0;
+}
+
+.asset-explorer-dialog-backdrop,
+.asset-explorer-context-dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 34%);
+}
+
+.asset-explorer-dialog {
+  width: min(350px, calc(100vw - 24px));
+  color: var(--asset-explorer-text);
+  background: var(--asset-explorer-raised);
+  border: 1px solid var(--asset-explorer-border);
+  border-radius: 5px;
+  box-shadow: 0 18px 46px rgb(0 0 0 / 46%);
+}
+
+.asset-explorer-trash-dialog {
+  width: min(390px, calc(100vw - 24px));
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 9px 11px;
+  padding: 14px;
+}
+
+.asset-explorer-trash-dialog > .asset-explorer-trash-dialog-mark {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  align-self: start;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.asset-explorer-trash-dialog-mark::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: color-mix(in srgb, var(--error-color) 9%, var(--asset-explorer-control));
+  border: 1px solid color-mix(in srgb, var(--error-color) 24%, transparent);
+  border-radius: 50%;
+}
+
+.asset-explorer-trash-dialog-mark span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--error-color) 76%, var(--asset-explorer-text));
+  background: color-mix(in srgb, var(--error-color) 12%, transparent);
+  border-radius: 50%;
+  line-height: 0;
+  transform: translate(-50%, -50%);
+}
+
+.asset-explorer-trash-dialog-mark svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.8;
+  transform: translateY(.5px);
+}
+
+.asset-explorer-trash-dialog > .asset-explorer-trash-dialog-copy {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 1px;
+}
+
+.asset-explorer-trash-dialog-copy strong {
+  font-size: .76rem;
+}
+
+.asset-explorer-trash-dialog-copy p {
+  margin: 0;
+  color: var(--asset-explorer-muted);
+  font-size: .68rem;
+  line-height: 1.4;
+}
+
+.asset-explorer-trash-dialog-copy span {
+  color: color-mix(in srgb, var(--error-color) 68%, var(--asset-explorer-muted));
+  font-size: .61rem;
+}
+
+.asset-explorer-trash-dialog > .asset-explorer-trash-dialog-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 3px;
+  padding-top: 9px;
+  border-top: 1px solid var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-trash-dialog-actions button,
+.asset-explorer-context button {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--asset-explorer-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .68rem;
+}
+
+.asset-explorer-trash-dialog-actions button {
+  background: var(--asset-explorer-control);
+  border-color: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-trash-dialog-actions button:hover:not(:disabled),
+.asset-explorer-trash-dialog-actions button:focus-visible {
+  color: var(--asset-explorer-text);
+  background: var(--asset-explorer-hover);
+  border-color: var(--asset-explorer-border);
+  outline: none;
+}
+
+.asset-explorer-trash-dialog-actions .asset-explorer-trash-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--asset-explorer-text);
+  background: color-mix(in srgb, var(--error-color) 15%, var(--asset-explorer-control));
+  border-color: color-mix(in srgb, var(--error-color) 30%, transparent);
+}
+
+.asset-explorer-trash-dialog-actions .asset-explorer-trash-confirm:hover:not(:disabled),
+.asset-explorer-trash-dialog-actions .asset-explorer-trash-confirm:focus-visible {
+  background: color-mix(in srgb, var(--error-color) 22%, var(--asset-explorer-control));
+}
+
+.asset-explorer-trash-dialog-actions button:disabled {
+  cursor: wait;
+  opacity: .58;
+}
+
+.asset-explorer-context-dismiss {
+  display: block;
+  background: transparent;
+}
+
+.asset-explorer-context {
+  position: absolute;
+  min-width: 168px;
+  max-height: calc(100vh - 16px);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  overflow-y: auto;
+  background: var(--asset-explorer-raised);
+  border: 1px solid var(--asset-explorer-border);
+  border-radius: 5px;
+  box-shadow: 0 12px 34px rgb(0 0 0 / 44%);
+}
+
+.asset-explorer-context-separator {
+  display: block;
+  height: 1px;
+  margin: 3px 5px;
+  background: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-context button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--asset-explorer-text);
+  text-align: left;
+}
+
+.asset-explorer-context button:hover:not(:disabled) {
+  background: var(--asset-explorer-hover);
+  border-color: var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-context button svg {
+  color: var(--asset-explorer-muted);
+}
+
+.asset-explorer-context button:hover svg {
+  color: var(--asset-explorer-accent);
+}
+
+.asset-explorer-context button.danger,
+.asset-explorer-context button.danger svg {
+  color: var(--error-color);
+}
+
+.asset-explorer-context button.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error-color) 12%, transparent);
+}
+
+.asset-explorer-uploads {
+  position: absolute;
+  right: 10px;
+  bottom: 32px;
+  width: min(300px, calc(100% - 20px));
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: var(--asset-explorer-raised);
+  border: 1px solid var(--asset-explorer-border);
+  border-radius: 5px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 38%);
+}
+
+.asset-explorer-uploads > div {
+  display: grid;
+  gap: 3px;
+  font-size: .65rem;
+}
+
+.asset-explorer-uploads progress {
+  width: 100%;
+  height: 5px;
+}
+
+.asset-explorer .spin {
+  animation: asset-explorer-spin 1s linear infinite;
+}
+
+@keyframes asset-explorer-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .asset-explorer-backdrop {
+    padding: 0;
+  }
+
+  .asset-explorer {
+    width: 100vw;
+    height: 100dvh;
+    grid-template-rows: 40px auto 38px minmax(0, 1fr) 26px;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .asset-explorer-layout {
+    grid-template-columns: 156px minmax(0, 1fr);
+  }
+
+  .asset-explorer-preview {
+    display: none !important;
+  }
+
+  .asset-explorer-search {
+    width: 170px;
+  }
+}
+
+@media (max-width: 620px) {
+  .asset-explorer-toolbar {
+    min-height: 72px;
+    flex-wrap: wrap;
+  }
+
+  .asset-explorer-breadcrumbs {
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .asset-explorer-search {
+    flex: 1;
+    width: auto;
+  }
+
+  .asset-explorer-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .asset-explorer-sidebar {
+    display: none;
+  }
+
+  .asset-explorer-content.grid {
+    grid-template-columns: repeat(auto-fill, 84px);
+  }
+
+  .asset-explorer-commandbar button {
+    font-size: 0;
+  }
+}

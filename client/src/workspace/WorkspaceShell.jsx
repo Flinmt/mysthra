@@ -114,7 +114,7 @@ export function WorkspaceBody({ navigator = null, content = null, inspector = nu
   )
 }
 
-export function WorkspaceSidebar({ tabs, activeTab, tabsLabel, onTabChange, isCollapsed, isDrawerOpen, isMobile, onClose, collapseLabel, children }) {
+export function WorkspaceSidebar({ tabs = [], activeTab, tabsLabel, onTabChange, isCollapsed, isDrawerOpen, isMobile, onClose, collapseLabel, children }) {
   const sidebarRef = useRef(null)
   const previousFocusRef = useRef(null)
 
@@ -136,8 +136,8 @@ export function WorkspaceSidebar({ tabs, activeTab, tabsLabel, onTabChange, isCo
     <>
       {isMobile && isDrawerOpen && <button type="button" className="workspace-sidebar-backdrop" onClick={onClose} aria-label={collapseLabel} />}
       <aside ref={sidebarRef} id="workspace-sidebar" className="workspace-sidebar sidebar-nexus" data-collapsed={!isMobile && isCollapsed ? 'true' : undefined} data-drawer-open={isMobile && isDrawerOpen ? 'true' : undefined} aria-hidden={isMobile && !isDrawerOpen ? 'true' : undefined} inert={isMobile && !isDrawerOpen ? true : undefined}>
-        <div className="world-navigator-header">
-          <div className="sidebar-nexus-tabs" role="tablist" aria-label={tabsLabel}>
+        {(tabs.length > 0 || isMobile) && <div className={`world-navigator-header ${tabs.length === 0 ? 'without-tabs' : ''}`}>
+          {tabs.length > 0 && <div className="sidebar-nexus-tabs" role="tablist" aria-label={tabsLabel}>
             {tabs.map(tab => {
               const TabIcon = tab.icon
               const isActive = activeTab === tab.id
@@ -147,9 +147,9 @@ export function WorkspaceSidebar({ tabs, activeTab, tabsLabel, onTabChange, isCo
                 </button>
               )
             })}
-          </div>
+          </div>}
           {isMobile && <button type="button" className="world-navigator-close" onClick={onClose} aria-label={collapseLabel}><X size={16} /></button>}
-        </div>
+        </div>}
         <div className="sidebar-content">{children}</div>
       </aside>
     </>

@@ -46,7 +46,7 @@ describe('WorkspaceShell', () => {
       </WorkspaceSidebar>
     )
 
-    expect(screen.getByRole('tablist')).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.getByText('Public document tree')).toBeTruthy()
   })

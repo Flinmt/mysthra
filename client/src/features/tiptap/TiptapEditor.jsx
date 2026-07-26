@@ -230,11 +230,6 @@ export default function TiptapEditor({
             <TiptapSlashMenu
               items={slashState.items}
               selectedIndex={slashState.selectedIndex}
-              shortcutHints={[
-                { label: t('workspace.tiptap_shortcut_undo'), shortcut: ['Mod', 'Z'] },
-                { label: t('workspace.tiptap_shortcut_redo'), shortcut: ['Mod', 'Shift', 'Z'] },
-                { label: t('workspace.tiptap_shortcut_clear_formatting'), shortcut: ['Mod', '\\'] }
-              ]}
               onSelect={executeSlashCommand}
               onClose={closeSlashMenu}
             />

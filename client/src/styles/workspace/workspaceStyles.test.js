@@ -26,6 +26,7 @@ describe('workspace style boundaries', () => {
       'editors.css',
       'tab-type-selector.css',
       'tiptap.css',
+      'asset-explorer.css',
       'map.css',
       'board.css',
       'overlays.css',
@@ -51,6 +52,18 @@ describe('workspace style boundaries', () => {
   it('keeps palette ownership centralized and free from the legacy purple theme', () => {
     expect(workspaceStyles).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe|5d34d0|a855f7|7c3aed|00f0ff)/i)
     expect(fs.readFileSync(path.join(import.meta.dirname, 'themes.css'), 'utf8')).not.toContain('[data-world-theme=')
+  })
+
+  it('matches the asset explorer density and palette distribution to the navigator', () => {
+    const explorer = fs.readFileSync(path.join(import.meta.dirname, 'asset-explorer.css'), 'utf8')
+
+    expect(explorer).toContain('--asset-explorer-bg: color-mix(in srgb, var(--world-theme-background) 28%, var(--workspace-shell-surface))')
+    expect(explorer).toContain('--asset-explorer-raised: color-mix(in srgb, var(--world-theme-surface) 24%, var(--workspace-shell-raised))')
+    expect(explorer).toContain('--asset-explorer-control: color-mix(in srgb, var(--world-theme-background) 18%, var(--workspace-shell-bg))')
+    expect(explorer).toContain('grid-template-rows: 40px 40px 38px minmax(0, 1fr) 26px')
+    expect(explorer).toContain('border-radius: 6px')
+    expect(explorer).toContain('min-height: 112px')
+    expect(explorer).toContain('background: var(--asset-explorer-raised)')
   })
 
   it('defines the studio shell in a single module', () => {

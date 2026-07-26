@@ -14,6 +14,7 @@ const MIME_TYPES = {
   ".ico": "image/x-icon",
   ".mp3": "audio/mpeg",
   ".ogg": "audio/ogg",
+  ".opus": "audio/ogg",
   ".wav": "audio/wav",
   ".m4a": "audio/mp4",
   ".mp4": "audio/mp4",
