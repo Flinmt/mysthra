@@ -23,6 +23,7 @@ vi.mock('react-i18next', () => ({
       'dashboard.open_world': `Open world ${values.name}`,
       'dashboard.world_actions': `Actions for ${values.name}`,
       'dashboard.theme_default': 'Default theme',
+      'dashboard.theme_custom': 'Custom',
       'dashboard.public': 'Public',
       'dashboard.default_world_description': 'New universe',
       'dashboard.no_search_results': 'No worlds found',
@@ -81,6 +82,34 @@ describe('WorldDashboard', () => {
     await user.click(screen.getByRole('button', { name: 'Open world Ember Archive' }))
 
     expect(props.onOpen).toHaveBeenCalledWith(worlds[0])
+  })
+
+  it('shows the selected custom preset name and its effective accent', () => {
+    const customWorld = {
+      ...worlds[0],
+      customTheme: {
+        colors: { accent: '#123456' },
+        preset: { id: 'preset-1', name: 'Moonlit Archive' }
+      }
+    }
+
+    renderDashboard({ filteredWorlds: [customWorld] })
+
+    const themeLabel = screen.getByText('Moonlit Archive')
+    expect(themeLabel).toBeTruthy()
+    expect(themeLabel.querySelector('i').style.backgroundColor).toBe('rgb(18, 52, 86)')
+  })
+
+  it('labels manually customized colors without reusing the base theme name', () => {
+    renderDashboard({
+      filteredWorlds: [{
+        ...worlds[0],
+        customTheme: { colors: { accent: '#654321' } }
+      }]
+    })
+
+    expect(screen.getByText('Custom')).toBeTruthy()
+    expect(screen.queryByText('Default theme')).toBeNull()
   })
 
   it('shows and clears an empty search result', async () => {

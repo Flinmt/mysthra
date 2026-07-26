@@ -32,6 +32,7 @@ const {
   readDocument,
   renameAsset,
   renameDocument,
+  resolveWorldThemePreset,
   saveAssetFile,
   saveWorldThumbnail,
   setHomePage,
@@ -147,6 +148,69 @@ test("world custom theme colors are normalized and stored", async () => {
 
   world = await updateWorld(worldName, { customTheme: null });
   assert.equal(world.customTheme, null);
+});
+
+test("world custom themes preserve valid selected preset metadata", async () => {
+  const worldName = "core-world-custom-theme-preset";
+  await resetWorld(worldName);
+  await createWorld({ name: worldName });
+
+  let world = await updateWorld(worldName, {
+    customTheme: {
+      colors: {
+        background: "#101820",
+        surface: "#202a34",
+        text: "#f4f7fa",
+        mutedText: "#9ba8b5",
+        accent: "#5577cc",
+        secondaryAccent: "#44aa99"
+      },
+      preset: { id: "preset-1", name: "Moonlit Archive" }
+    }
+  });
+
+  assert.deepEqual(world.customTheme.preset, {
+    id: "preset-1",
+    name: "Moonlit Archive"
+  });
+
+  world = await updateWorld(worldName, {
+    customTheme: {
+      colors: { accent: "#123456" },
+      preset: { id: "", name: "Invalid reference" }
+    }
+  });
+  assert.equal("preset" in world.customTheme, false);
+});
+
+test("legacy custom themes resolve matching preset metadata for the Nexus", () => {
+  const colors = {
+    background: "#101820",
+    surface: "#202a34",
+    text: "#f4f7fa",
+    mutedText: "#9ba8b5",
+    accent: "#5577cc",
+    secondaryAccent: "#44aa99"
+  };
+  const world = {
+    theme: "default",
+    customTheme: { colors }
+  };
+  const presets = [{
+    id: "preset-legacy",
+    name: "Legacy Moonlight",
+    baseTheme: "default",
+    colors
+  }];
+
+  assert.deepEqual(resolveWorldThemePreset(world, presets).customTheme.preset, {
+    id: "preset-legacy",
+    name: "Legacy Moonlight"
+  });
+  assert.equal(
+    resolveWorldThemePreset({ ...world, theme: "ember-archive" }, presets).customTheme.preset,
+    undefined
+  );
 });
 
 test("world public visitor access is stored per world", async () => {
