@@ -580,7 +580,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false);
   const [assetTree, setAssetTree] = useState([]);
   const [, setAssetLoading] = useState(false);
-  const [assetExplorer, setAssetExplorer] = useState({ isOpen: false, initialFolderPath: '' });
+  const [assetExplorer, setAssetExplorer] = useState({
+    isOpen: false,
+    initialFolderPath: '',
+    mode: 'manage',
+    mediaFilter: null,
+    onInsert: null
+  });
   const [assetClipboard, setAssetClipboard] = useState(null);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [previewAsset, setPreviewAsset] = useState(null);
@@ -637,7 +643,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
 
   useEffect(() => {
     setAssetClipboard(null);
-    setAssetExplorer({ isOpen: false, initialFolderPath: '' });
+    setAssetExplorer({ isOpen: false, initialFolderPath: '', mode: 'manage', mediaFilter: null, onInsert: null });
   }, [worldId]);
 
   useEffect(() => {
@@ -1870,8 +1876,26 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const openAssetUpload = (targetPath = selectedAssetFolderPath) => {
-    setAssetExplorer({ isOpen: true, initialFolderPath: targetPath || '' });
+    setAssetExplorer({
+      isOpen: true,
+      initialFolderPath: targetPath || '',
+      mode: 'manage',
+      mediaFilter: null,
+      onInsert: null
+    });
   };
+  const openNotionMediaPicker = useCallback((mediaFilter, onInsert) => {
+    setAssetExplorer({
+      isOpen: true,
+      initialFolderPath: '',
+      mode: 'insert',
+      mediaFilter,
+      onInsert
+    });
+  }, []);
+  const closeAssetExplorer = useCallback(() => {
+    setAssetExplorer({ isOpen: false, initialFolderPath: '', mode: 'manage', mediaFilter: null, onInsert: null });
+  }, []);
 
   const commitPageTitleRename = async () => {
     if (!selectedContainer) return;
@@ -2885,9 +2909,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         content={fileContent}
                         editable={isDocumentUnlocked && !isVisitor}
                         locked={!canWriteActiveTab}
+                        worldId={worldId}
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
                         isVisitor={isVisitor}
+                        onRequestMedia={openNotionMediaPicker}
                         onVisitorCountChange={setActiveTabVisitorCount}
                         onCollaborationSaveState={handleCollaborationSaveState}
                       />
@@ -3357,11 +3383,17 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         <AssetExplorer
           worldId={worldId}
           initialFolderPath={assetExplorer.initialFolderPath}
+          mode={assetExplorer.mode}
+          mediaFilter={assetExplorer.mediaFilter}
           readOnly={isVisitor}
           clipboard={assetClipboard}
           onClipboardChange={setAssetClipboard}
           onAssetsChange={fetchAssets}
-          onClose={() => setAssetExplorer({ isOpen: false, initialFolderPath: '' })}
+          onInsert={asset => {
+            assetExplorer.onInsert?.(asset);
+            closeAssetExplorer();
+          }}
+          onClose={closeAssetExplorer}
           addToast={addToast}
         />
       )}

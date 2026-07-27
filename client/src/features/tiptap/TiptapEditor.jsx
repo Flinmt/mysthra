@@ -15,7 +15,9 @@ import { TiptapBlockAwareness } from './tiptapBlockAwareness'
 import { TIPTAP_COMMANDS } from './tiptapCommands'
 import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
+import { insertAssetMedia, TiptapAssetAudio, TiptapAssetImage } from './tiptapMedia'
 import { useTiptapDocument } from './useTiptapDocument'
+import { getAssetFileUrl } from '../assets/assetApi'
 import {
   TiptapBlockquote,
   TiptapBulletList,
@@ -38,9 +40,11 @@ export default function TiptapEditor({
   content = '',
   editable,
   locked,
+  worldId,
   collaborationRoom,
   currentUser,
   isVisitor = false,
+  onRequestMedia,
   onVisitorCountChange,
   onCollaborationSaveState
 }) {
@@ -70,6 +74,15 @@ export default function TiptapEditor({
     Strike,
     Underline,
     HorizontalRule,
+    TiptapAssetImage.configure({
+      resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }),
+      unavailableLabel: t('workspace.tiptap_media_unavailable'),
+      resizeLabel: t('workspace.tiptap_resize_image')
+    }),
+    TiptapAssetAudio.configure({
+      resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }),
+      unavailableLabel: t('workspace.tiptap_media_unavailable')
+    }),
     TiptapEditingShortcuts.configure({
       collaborative: Boolean(collaboration.fragment)
     }),
@@ -83,7 +96,7 @@ export default function TiptapEditor({
       name: 'tiptapYjsCollaboration',
       addProseMirrorPlugins: () => [ySyncPlugin(collaboration.fragment), yUndoPlugin()]
     })] : [])
-  ], [collaboration.fragment, t])
+  ], [collaboration.fragment, t, worldId])
   const editor = useEditor({
     extensions,
     content: collaboration.doc ? undefined : content,
@@ -130,7 +143,9 @@ export default function TiptapEditor({
       return
     }
     const query = match[1].toLowerCase()
-    const items = TIPTAP_COMMANDS.filter(item => item.label.toLowerCase().includes(query))
+    const items = TIPTAP_COMMANDS.filter(item =>
+      [item.label, ...(item.keywords || [])].some(value => value.toLowerCase().includes(query))
+    )
     const coords = editor.view.coordsAtPos(lineStart)
     const position = getTiptapMenuPosition(coords, {
       width: window.innerWidth,
@@ -160,6 +175,14 @@ export default function TiptapEditor({
   const executeSlashCommand = useCallback((item) => {
     if (!editor || !slashState) return
     const chain = editor.chain().focus().deleteRange(slashState.range)
+    if (item.id === 'media') {
+      chain.run()
+      closeSlashMenu()
+      onRequestMedia?.(null, asset => {
+        insertAssetMedia(editor, asset?.mediaType, asset)
+      })
+      return
+    }
     if (item.id.startsWith('heading-')) chain.setHeading({ level: Number(item.id.split('-')[1]) })
     if (item.id.startsWith('toggle-heading-')) {
       chain.setToggleHeading({ level: Number(item.id.split('-')[2]) })
@@ -170,7 +193,7 @@ export default function TiptapEditor({
     if (item.id === 'horizontalRule') chain.setHorizontalRule()
     chain.run()
     closeSlashMenu()
-  }, [closeSlashMenu, editor, slashState])
+  }, [closeSlashMenu, editor, onRequestMedia, slashState])
 
   const handleEditorKeyDown = useCallback((event) => {
     const selectionFrom = editor?.state.selection.$from

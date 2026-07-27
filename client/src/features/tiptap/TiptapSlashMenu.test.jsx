@@ -30,6 +30,7 @@ describe('TiptapSlashMenu', () => {
     expect(getCommandOption('Título expansível 1').querySelector('kbd')).toBeNull()
     expect(getCommandOption('Título expansível 6')).not.toBeNull()
     expect(getCommandOption('Citação').querySelector('kbd')).toBeNull()
+    expect(getCommandOption('Inserir mídia').querySelector('kbd')).toBeNull()
     expect(screen.queryByText('Código')).toBeNull()
     expect(screen.queryByText('Expandir')).toBeNull()
     expect(screen.queryByLabelText('Atalhos essenciais')).toBeNull()
@@ -49,5 +50,21 @@ describe('TiptapSlashMenu', () => {
 
     fireEvent.click(getCommandOption('Lista'))
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'bulletList' }))
+  })
+
+  it('exposes Portuguese and English aliases for media commands', () => {
+    const media = TIPTAP_COMMANDS.find(item => item.id === 'media')
+
+    expect(media.keywords).toEqual(expect.arrayContaining([
+      'media',
+      'mídia',
+      'midia',
+      'image',
+      'imagem',
+      'gif',
+      'audio',
+      'áudio'
+    ]))
+    expect(TIPTAP_COMMANDS.filter(item => item.group === 'Mídia')).toHaveLength(1)
   })
 })

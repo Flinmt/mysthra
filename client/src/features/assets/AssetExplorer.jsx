@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Check,
   ChevronRight,
   Clipboard,
   Copy,
@@ -71,10 +72,13 @@ function AssetIcon({ item, worldId }) {
 export default function AssetExplorer({
   worldId,
   initialFolderPath = '',
+  mode = 'manage',
+  mediaFilter = null,
   readOnly = false,
   clipboard,
   onClipboardChange,
   onAssetsChange,
+  onInsert,
   onClose,
   addToast
 }) {
@@ -100,6 +104,7 @@ export default function AssetExplorer({
   const [emptyTrashPrompt, setEmptyTrashPrompt] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const [undoStack, setUndoStack] = useState([])
+  const isInsertMode = mode === 'insert'
   const inTrash = currentPath === ':trash'
 
   const flatItems = useMemo(() => flattenTree(tree), [tree])
@@ -113,22 +118,26 @@ export default function AssetExplorer({
         : currentPath
           ? currentFolder?.children || []
           : tree
-    return [...source].sort((left, right) => {
+    const visible = isInsertMode && mediaFilter
+      ? source.filter(item => item.type === 'folder' || item.mediaType === mediaFilter)
+      : source
+    return [...visible].sort((left, right) => {
       if (!inTrash && left.type !== right.type) return left.type === 'folder' ? -1 : 1
       if (sort === 'size') return (right.size || 0) - (left.size || 0)
       if (sort === 'type') return String(left.mediaType || left.type).localeCompare(String(right.mediaType || right.type))
       return left.name.localeCompare(right.name, i18n.language)
     })
-  }, [currentFolder, currentPath, flatItems, i18n.language, inTrash, query, sort, trash, tree])
+  }, [currentFolder, currentPath, flatItems, i18n.language, inTrash, isInsertMode, mediaFilter, query, sort, trash, tree])
   const selectedItems = currentItems.filter(item => selection.has(item.id))
   const preview = selectedItems.length === 1 && selectedItems[0].type === 'file' ? selectedItems[0] : null
+  const insertableAsset = isInsertMode && preview && (!mediaFilter || preview.mediaType === mediaFilter) ? preview : null
 
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
       const [assetsResult, trashResult] = await Promise.all([
         loadAssetTree(worldId),
-        readOnly ? Promise.resolve({ items: [] }) : loadAssetTrash(worldId)
+        readOnly || isInsertMode ? Promise.resolve({ items: [] }) : loadAssetTrash(worldId)
       ])
       setTree(assetsResult.items || [])
       setTrash(trashResult.items || [])
@@ -138,7 +147,7 @@ export default function AssetExplorer({
     } finally {
       setLoading(false)
     }
-  }, [addToast, onAssetsChange, readOnly, worldId])
+  }, [addToast, isInsertMode, onAssetsChange, readOnly, worldId])
 
   useEffect(() => {
     refresh()
@@ -316,7 +325,7 @@ export default function AssetExplorer({
           first?.focus()
         }
       }
-      if (modifier && event.key.toLowerCase() === 'a' && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+      if (!isInsertMode && modifier && event.key.toLowerCase() === 'a' && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
         event.preventDefault()
         setSelection(new Set(currentItems.map(item => item.id)))
       }
@@ -345,9 +354,14 @@ export default function AssetExplorer({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [contextMenu, currentItems, emptyTrashPrompt, executeAction, inTrash, onClipboardChange, onClose, paste, readOnly, selectedItems, undo, worldId])
+  }, [contextMenu, currentItems, emptyTrashPrompt, executeAction, inTrash, isInsertMode, onClipboardChange, onClose, paste, readOnly, selectedItems, undo, worldId])
 
   const chooseItem = (event, item, index) => {
+    if (isInsertMode) {
+      setAnchorId(item.id)
+      setSelection(new Set([item.id]))
+      return
+    }
     const next = new Set(event.ctrlKey || event.metaKey ? selection : [])
     if (event.shiftKey && anchorId) {
       const anchorIndex = currentItems.findIndex(candidate => candidate.id === anchorId)
@@ -367,10 +381,23 @@ export default function AssetExplorer({
   }
 
   const uploadFiles = async fileList => {
-    const files = [...fileList]
+    const requestedFiles = [...fileList]
+    const files = isInsertMode && mediaFilter
+      ? requestedFiles.filter(file => {
+          const extension = file.name.split('.').pop()?.toLowerCase()
+          if (mediaFilter === 'image') {
+            return file.type.startsWith('image/') || ['gif', 'jpg', 'jpeg', 'png', 'webp'].includes(extension)
+          }
+          return file.type.startsWith('audio/') || ['m4a', 'mp3', 'mp4', 'ogg', 'opus', 'wav'].includes(extension)
+        })
+      : requestedFiles
+    if (files.length !== requestedFiles.length) {
+      addToast?.(t('assetExplorer.wrongMediaType'), 'error')
+    }
     if (readOnly || !files.length || inTrash) return
     setBusy(true)
     const createdIds = []
+    const createdItems = []
     const knownFolders = new Set(folders.map(folder => folder.path))
     try {
       for (const file of files) {
@@ -392,10 +419,17 @@ export default function AssetExplorer({
           setUploads(previous => previous.map(entry => entry.name === file.name ? { ...entry, progress } : entry))
         })
         if (uploaded.id) createdIds.push(uploaded.id)
+        if (uploaded.id) createdItems.push(uploaded)
         setUploads(previous => previous.filter(entry => entry.name !== file.name))
       }
       if (createdIds.length) setUndoStack(previous => [...previous, { action: 'trash', ids: createdIds }])
       await refresh()
+      if (isInsertMode && createdItems[0]) {
+        const uploadedFolderPath = parentPath(createdItems[0].path)
+        if (uploadedFolderPath !== currentPath) navigate(uploadedFolderPath)
+        setSelection(new Set([createdItems[0].id]))
+        setAnchorId(createdItems[0].id)
+      }
     } catch (error) {
       addToast?.(error.message, 'error')
     } finally {
@@ -421,7 +455,7 @@ export default function AssetExplorer({
         <header className="asset-explorer-titlebar">
           <div>
             <strong>{t('assetExplorer.title')}</strong>
-            <span>{t('assetExplorer.worldLibrary')}</span>
+            <span>{isInsertMode ? t(mediaFilter ? `assetExplorer.insert${mediaFilter === 'audio' ? 'Audio' : 'Image'}` : 'assetExplorer.insertMedia') : t('assetExplorer.worldLibrary')}</span>
           </div>
           <button type="button" onClick={onClose} aria-label={t('common.close')}><X /></button>
         </header>
@@ -459,6 +493,14 @@ export default function AssetExplorer({
         </div>
 
         <div className="asset-explorer-commandbar">
+          {isInsertMode && (
+            <button
+              type="button"
+              className="asset-explorer-insert"
+              disabled={!insertableAsset}
+              onClick={() => insertableAsset && onInsert?.(insertableAsset)}
+            ><Check />{t('assetExplorer.insert')}</button>
+          )}
           {!readOnly && !inTrash && <>
             <button type="button" onClick={() => uploadInputRef.current?.click()} disabled={busy}><Upload />{t('assetExplorer.uploadFiles')}</button>
             <button type="button" onClick={() => folderInputRef.current?.click()} disabled={busy}><FolderPlus />{t('assetExplorer.uploadFolder')}</button>
@@ -481,7 +523,7 @@ export default function AssetExplorer({
         <div className="asset-explorer-layout">
           <aside className="asset-explorer-sidebar" aria-label={t('assetExplorer.sections')}>
             <button type="button" className={!inTrash ? 'active' : ''} onClick={() => navigate('')}><Folder />{t('assetExplorer.assets')}</button>
-            {!readOnly && <button type="button" className={inTrash ? 'active' : ''} onClick={() => navigate(':trash')}><Trash2 />{t('assetExplorer.trash')}<span>{trash.length || ''}</span></button>}
+            {!readOnly && !isInsertMode && <button type="button" className={inTrash ? 'active' : ''} onClick={() => navigate(':trash')}><Trash2 />{t('assetExplorer.trash')}<span>{trash.length || ''}</span></button>}
           </aside>
 
           <main
@@ -536,6 +578,7 @@ export default function AssetExplorer({
                     onClick={event => chooseItem(event, item, index)}
                     onKeyDown={event => {
                       if (event.key === 'Enter' && item.type === 'folder') navigate(item.path)
+                      if (event.key === 'Enter' && item.type === 'file' && isInsertMode && (!mediaFilter || item.mediaType === mediaFilter)) onInsert?.(item)
                       if (event.key === ' ') {
                         event.preventDefault()
                         chooseItem(event, item, index)
@@ -543,6 +586,7 @@ export default function AssetExplorer({
                     }}
                     onDoubleClick={() => {
                       if (item.type === 'folder') navigate(item.path)
+                      if (item.type === 'file' && isInsertMode && (!mediaFilter || item.mediaType === mediaFilter)) onInsert?.(item)
                     }}
                     onContextMenu={event => {
                       event.preventDefault()
@@ -606,10 +650,17 @@ export default function AssetExplorer({
           <span>{selection.size ? t('assetExplorer.selectedCount', { count: selection.size }) : t('assetExplorer.dropHint')}</span>
         </footer>
 
-        <input ref={uploadInputRef} type="file" multiple accept="image/*,audio/*,.opus" hidden onChange={event => {
+        <input
+          ref={uploadInputRef}
+          type="file"
+          multiple
+          accept={isInsertMode && mediaFilter ? mediaFilter === 'audio' ? 'audio/*,.opus' : 'image/*' : 'image/*,audio/*,.opus'}
+          hidden
+          onChange={event => {
           uploadFiles(event.target.files)
           event.target.value = ''
-        }} />
+          }}
+        />
         <input ref={folderInputRef} type="file" multiple webkitdirectory="" hidden onChange={event => {
           uploadFiles(event.target.files)
           event.target.value = ''

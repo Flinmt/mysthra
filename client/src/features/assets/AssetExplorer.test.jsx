@@ -19,6 +19,11 @@ vi.mock('react-i18next', () => ({
       'assetExplorer.trash': 'Lixeira',
       'assetExplorer.empty': 'Esta pasta está vazia',
       'assetExplorer.trashEmpty': 'A lixeira está vazia',
+      'assetExplorer.insert': 'Inserir',
+      'assetExplorer.insertMedia': 'Selecionar imagem, GIF ou áudio',
+      'assetExplorer.insertImage': 'Selecionar imagem ou GIF',
+      'assetExplorer.insertAudio': 'Selecionar áudio',
+      'assetExplorer.wrongMediaType': 'Tipo incompatível',
       'assetExplorer.newFolder': 'Nova pasta',
       'assetExplorer.uploadFiles': 'Enviar arquivos',
       'assetExplorer.uploadFolder': 'Enviar pasta',
@@ -97,5 +102,86 @@ describe('AssetExplorer rename flow', () => {
     await user.click(screen.getByRole('button', { name: 'Lixeira' }))
 
     expect(await screen.findByText('A lixeira está vazia')).toBeTruthy()
+  })
+
+  it('filters insertion mode and returns one compatible asset', async () => {
+    const user = userEvent.setup()
+    const image = {
+      id: 'image-1',
+      name: 'map.gif',
+      path: 'map.gif',
+      type: 'file',
+      mediaType: 'image',
+      contentType: 'image/gif',
+      size: 120
+    }
+    const audio = {
+      id: 'audio-1',
+      name: 'theme.opus',
+      path: 'theme.opus',
+      type: 'file',
+      mediaType: 'audio',
+      contentType: 'audio/ogg',
+      size: 240
+    }
+    const onInsert = vi.fn()
+    loadAssetTree.mockResolvedValue({ revision: 1, items: [image, audio] })
+    loadAssetTrash.mockResolvedValue({ revision: 1, items: [] })
+
+    render(
+      <AssetExplorer
+        worldId="world"
+        mode="insert"
+        mediaFilter="image"
+        clipboard={null}
+        onClipboardChange={vi.fn()}
+        onInsert={onInsert}
+        onClose={vi.fn()}
+      />
+    )
+
+    const imageItem = (await screen.findAllByRole('button', { name: /map.gif/ }))
+      .find(element => element.classList.contains('asset-explorer-item'))
+    expect(screen.queryByText('theme.opus')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Lixeira' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Inserir' }).disabled).toBe(true)
+
+    await user.click(imageItem)
+    await user.click(screen.getByRole('button', { name: 'Inserir' }))
+
+    expect(onInsert).toHaveBeenCalledTimes(1)
+    expect(onInsert).toHaveBeenCalledWith(image)
+  })
+
+  it('inserts a compatible asset on double click', async () => {
+    const audio = {
+      id: 'audio-1',
+      name: 'theme.opus',
+      path: 'theme.opus',
+      type: 'file',
+      mediaType: 'audio',
+      contentType: 'audio/ogg',
+      size: 240
+    }
+    const onInsert = vi.fn()
+    loadAssetTree.mockResolvedValue({ revision: 1, items: [audio] })
+    loadAssetTrash.mockResolvedValue({ revision: 1, items: [] })
+
+    render(
+      <AssetExplorer
+        worldId="world"
+        mode="insert"
+        clipboard={null}
+        onClipboardChange={vi.fn()}
+        onInsert={onInsert}
+        onClose={vi.fn()}
+      />
+    )
+
+    const audioItem = (await screen.findAllByRole('button', { name: /theme.opus/ }))
+      .find(element => element.classList.contains('asset-explorer-item'))
+    fireEvent.doubleClick(audioItem)
+
+    expect(onInsert).toHaveBeenCalledWith(audio)
   })
 })
