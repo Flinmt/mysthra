@@ -8,18 +8,22 @@ async function readResponse(response) {
   return payload
 }
 
-export function getAssetFileUrl(worldId, item) {
+function appendTabContext(query, tabUid) {
+  return tabUid ? `${query}&tabUid=${encodeURIComponent(tabUid)}` : query
+}
+
+export function getAssetFileUrl(worldId, item, tabUid = '') {
   const query = item?.id
     ? `id=${encodeURIComponent(item.id)}`
     : `path=${encodeURIComponent(item?.path || '')}`
-  return `${worldAssetsUrl(worldId, '/file')}?${query}`
+  return `${worldAssetsUrl(worldId, '/file')}?${appendTabContext(query, tabUid)}`
 }
 
-export function getAssetThumbnailUrl(worldId, item, size = 320) {
+export function getAssetThumbnailUrl(worldId, item, size = 320, tabUid = '') {
   const reference = item?.id
     ? `id=${encodeURIComponent(item.id)}`
     : `path=${encodeURIComponent(item?.path || '')}`
-  return `${worldAssetsUrl(worldId, '/thumbnail')}?${reference}&size=${size}`
+  return `${worldAssetsUrl(worldId, '/thumbnail')}?${appendTabContext(`${reference}&size=${size}`, tabUid)}`
 }
 
 export async function loadAssetTree(worldId) {
@@ -28,6 +32,25 @@ export async function loadAssetTree(worldId) {
 
 export async function loadAssetTrash(worldId) {
   return readResponse(await fetch(worldAssetsUrl(worldId, '/trash')))
+}
+
+export async function loadAssetPermissions(worldId, item) {
+  const query = item?.id
+    ? `id=${encodeURIComponent(item.id)}`
+    : `path=${encodeURIComponent(item?.path || '')}`
+  return readResponse(await fetch(`${worldAssetsUrl(worldId, '/permissions')}?${query}`))
+}
+
+export async function saveAssetPermissions(worldId, item, permissions) {
+  return readResponse(await fetch(worldAssetsUrl(worldId, '/permissions'), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: item?.id || undefined,
+      path: item?.id ? undefined : item?.path,
+      permissions
+    })
+  }))
 }
 
 export async function createAssetFolder(worldId, parentPath, name) {

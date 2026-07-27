@@ -67,6 +67,8 @@ The project is in beta. It is already usable as a private worldbuilding workspac
 - The global admin is controlled by environment variables.
 - World members can be regular members or world admins.
 - Documents support inherited permissions with `none`, `read`, `write`, and `admin` levels.
+- Media folders and files are owner-scoped and support inherited `read`/`write` sharing with individual users or all world members.
+- Visitors cannot browse the media explorer; public pages may deliver only assets referenced by the page being viewed.
 - Public visitor mode is read-only and must be enabled per world.
 
 ---
@@ -191,7 +193,7 @@ Key files and directories:
 - `users.json`: internal non-admin users.
 - `sessions.json`: active server-side sessions.
 - `world.json`: world metadata, members, theme, thumbnail, home page, and public visitor settings.
-- `assets.json`: versioned asset catalog with stable file/folder IDs, revision numbers, current paths, media metadata, hashes, and recycle-bin records.
+- `assets.json`: versioned asset catalog with stable file/folder IDs, ownership, inherited permissions, revision numbers, current paths, media metadata, hashes, and recycle-bin records.
 - `.cache/assets/`: disposable server-generated WebP thumbnails. This directory can be removed and is rebuilt on demand.
 - `pages/`: document tree, tab content, and document metadata.
 - `assets/`: uploaded WebP, GIF, JPEG, PNG, MP3, OGG, WAV, and M4A/MP4 audio files. Deleted items remain in the hidden `.trash/` area for up to 30 days unless permanently removed sooner.

@@ -41,6 +41,7 @@ export default function TiptapEditor({
   editable,
   locked,
   worldId,
+  documentUid = '',
   collaborationRoom,
   currentUser,
   isVisitor = false,
@@ -75,12 +76,12 @@ export default function TiptapEditor({
     Underline,
     HorizontalRule,
     TiptapAssetImage.configure({
-      resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }),
+      resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }, documentUid),
       unavailableLabel: t('workspace.tiptap_media_unavailable'),
       resizeLabel: t('workspace.tiptap_resize_image')
     }),
     TiptapAssetAudio.configure({
-      resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }),
+      resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }, documentUid),
       unavailableLabel: t('workspace.tiptap_media_unavailable')
     }),
     TiptapEditingShortcuts.configure({
@@ -96,7 +97,7 @@ export default function TiptapEditor({
       name: 'tiptapYjsCollaboration',
       addProseMirrorPlugins: () => [ySyncPlugin(collaboration.fragment), yUndoPlugin()]
     })] : [])
-  ], [collaboration.fragment, t, worldId])
+  ], [collaboration.fragment, documentUid, t, worldId])
   const editor = useEditor({
     extensions,
     content: collaboration.doc ? undefined : content,

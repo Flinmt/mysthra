@@ -722,6 +722,149 @@
   opacity: .58;
 }
 
+.asset-explorer-access-dialog {
+  width: min(650px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 32px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+}
+
+.asset-explorer-access-dialog > header,
+.asset-explorer-access-dialog > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-access-dialog > header > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--asset-explorer-accent);
+  background: var(--asset-explorer-accent-soft);
+  border-radius: 4px;
+}
+
+.asset-explorer-access-dialog > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.asset-explorer-access-dialog > header strong {
+  font-size: .76rem;
+}
+
+.asset-explorer-access-dialog > header small {
+  overflow: hidden;
+  color: var(--asset-explorer-muted);
+  font-size: .63rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-explorer-access-dialog > header > button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.asset-explorer-access-inherit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  color: var(--asset-explorer-muted);
+  background: var(--asset-explorer-control);
+  border-bottom: 1px solid var(--asset-explorer-border-soft);
+  font-size: .68rem;
+}
+
+.asset-explorer-access-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 5px;
+}
+
+.asset-explorer-access-row {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--asset-explorer-border-soft);
+}
+
+.asset-explorer-access-row > strong {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-size: .68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-explorer-access-row > strong small {
+  color: var(--asset-explorer-accent);
+  font-size: .57rem;
+  font-weight: 600;
+}
+
+.asset-explorer-access-row > div {
+  display: flex;
+  gap: 2px;
+}
+
+.asset-explorer-access-row button,
+.asset-explorer-access-dialog > footer button {
+  min-height: 26px;
+  padding: 3px 7px;
+  color: var(--asset-explorer-muted);
+  background: var(--asset-explorer-control);
+  border: 1px solid var(--asset-explorer-border-soft);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: .63rem;
+}
+
+.asset-explorer-access-row button.active,
+.asset-explorer-access-dialog > footer button.primary {
+  color: var(--asset-explorer-text);
+  background: var(--asset-explorer-accent-soft);
+  border-color: color-mix(in srgb, var(--asset-explorer-accent) 35%, transparent);
+}
+
+.asset-explorer-access-row button:disabled,
+.asset-explorer-access-dialog > footer button:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
+.asset-explorer-access-error {
+  margin: 0;
+  padding: 6px 11px;
+  color: var(--error-color);
+  font-size: .65rem;
+}
+
+.asset-explorer-access-dialog > footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--asset-explorer-border-soft);
+  border-bottom: 0;
+}
+
 .asset-explorer-context-dismiss {
   display: block;
   background: transparent;

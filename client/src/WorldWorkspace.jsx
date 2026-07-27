@@ -729,13 +729,13 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       if (message.worldId !== worldId) return;
       if (message.type === 'document-tree') {
         fetchTree();
-      } else if (message.type === 'asset-tree') {
+      } else if (message.type === 'asset-tree' && !isVisitor) {
         fetchAssets();
       }
     } catch {
       // Ignore stateless messages not produced by Mysthra.
     }
-  }, [fetchAssets, fetchTree, worldId]);
+  }, [fetchAssets, fetchTree, isVisitor, worldId]);
 
   const worldPresenceRoomName = (currentUser || isVisitor) ? `world:${worldId}:presence` : '';
   const worldPresence = useCollaborationRoom({
@@ -874,10 +874,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
 
   useEffect(() => {
-    if (activeTab?.contentType === 'map' || activeTab?.contentType === 'board') {
+    if (!isVisitor && (activeTab?.contentType === 'map' || activeTab?.contentType === 'board')) {
       fetchAssets();
     }
-  }, [activeTab?.contentType, fetchAssets]);
+  }, [activeTab?.contentType, fetchAssets, isVisitor]);
 
   useEffect(() => {
     setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
@@ -1678,7 +1678,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const getAssetUrl = (assetPath) => {
-    return `/api/worlds/${encodeURIComponent(worldId)}/assets/file?path=${encodeURIComponent(assetPath)}`;
+    const tabContext = activeTab?.uid ? `&tabUid=${encodeURIComponent(activeTab.uid)}` : '';
+    return `/api/worlds/${encodeURIComponent(worldId)}/assets/file?path=${encodeURIComponent(assetPath)}${tabContext}`;
   };
 
   const getUniqueAssetFolderName = (parentPath = '') => {
@@ -2647,9 +2648,11 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                 <Plus size={15} />
               </button>
             )}
-            <button type="button" className="sidebar-context-action" onClick={() => openAssetUpload('')} title={t('workspace.open_asset_explorer')} aria-label={t('workspace.open_asset_explorer')}>
-              <FolderOpen size={15} />
-            </button>
+            {!isVisitor && (
+              <button type="button" className="sidebar-context-action" onClick={() => openAssetUpload('')} title={t('workspace.open_asset_explorer')} aria-label={t('workspace.open_asset_explorer')}>
+                <FolderOpen size={15} />
+              </button>
+            )}
           </div>
         </div>
       </WorkspaceSidebar>
@@ -2910,6 +2913,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         editable={isDocumentUnlocked && !isVisitor}
                         locked={!canWriteActiveTab}
                         worldId={worldId}
+                        documentUid={activeTab.uid}
                         collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
                         currentUser={currentUser}
                         isVisitor={isVisitor}
@@ -3379,7 +3383,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         </div>
       )}
 
-      {assetExplorer.isOpen && (
+      {!isVisitor && assetExplorer.isOpen && (
         <AssetExplorer
           worldId={worldId}
           initialFolderPath={assetExplorer.initialFolderPath}

@@ -15,6 +15,8 @@ describe('asset explorer API', () => {
       .toBe('/api/worlds/my%20world/assets/file?id=asset-1')
     expect(getAssetThumbnailUrl('my world', { id: 'asset-1' }, 160))
       .toBe('/api/worlds/my%20world/assets/thumbnail?id=asset-1&size=160')
+    expect(getAssetFileUrl('my world', { id: 'asset-1' }, 'tab-1'))
+      .toBe('/api/worlds/my%20world/assets/file?id=asset-1&tabUid=tab-1')
   })
 
   it('sends batch operations with a stable target folder id', async () => {
