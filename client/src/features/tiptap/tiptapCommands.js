@@ -6,6 +6,7 @@ import {
   Heading4,
   Heading5,
   Heading6,
+  Images,
   List,
   ListOrdered,
   Minus,
@@ -13,11 +14,12 @@ import {
   Quote
 } from 'lucide-react'
 
-const command = (id, label, group, Icon, shortcut = null) => ({
+const command = (id, label, group, Icon, shortcut = null, keywords = []) => ({
   id,
   label,
   group,
   shortcut,
+  keywords,
   icon: createElement(Icon, { size: 15, strokeWidth: 1.8, 'aria-hidden': true })
 })
 
@@ -38,5 +40,16 @@ export const TIPTAP_COMMANDS = [
   command('toggle-heading-6', 'Título expansível 6', 'Títulos expansíveis', Heading6),
   command('bulletList', 'Lista', 'Listas', List, ['Mod', 'Shift', '8']),
   command('orderedList', 'Lista numerada', 'Listas', ListOrdered, ['Mod', 'Shift', '7']),
-  command('horizontalRule', 'Divisor', 'Estrutura', Minus)
+  command('horizontalRule', 'Divisor', 'Estrutura', Minus),
+  command('media', 'Inserir mídia', 'Mídia', Images, null, [
+    'media',
+    'mídia',
+    'midia',
+    'image',
+    'imagem',
+    'gif',
+    'audio',
+    'áudio',
+    'som'
+  ])
 ]

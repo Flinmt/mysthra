@@ -121,6 +121,32 @@ describe('WorldSettingsDialog', () => {
     }))
   })
 
+  it('preserves the selected custom preset metadata when saving the world', async () => {
+    const user = userEvent.setup()
+    const customWorld = {
+      ...world,
+      customTheme: {
+        colors: {
+          background: '#101820',
+          surface: '#202a34',
+          text: '#f4f7fa',
+          mutedText: '#9ba8b5',
+          accent: '#5577cc',
+          secondaryAccent: '#44aa99'
+        },
+        preset: { id: 'preset-1', name: 'Moonlit Archive' }
+      }
+    }
+    fetch.mockImplementationOnce(() => jsonResponse(customWorld))
+
+    render(<WorldSettingsDialog world={customWorld} currentUser={{ globalRole: 'root' }} onClose={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'dashboard.save_changes' }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce())
+    const payload = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(payload.customTheme.preset).toEqual({ id: 'preset-1', name: 'Moonlit Archive' })
+  })
+
   it('applies the selected appearance to the settings dialog', async () => {
     const user = userEvent.setup()
 

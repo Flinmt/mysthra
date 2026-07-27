@@ -179,6 +179,8 @@ data/
   worlds/
     <world>/
       world.json
+      assets.json
+      .cache/
       pages/
       assets/
       yjs/
@@ -189,8 +191,10 @@ Key files and directories:
 - `users.json`: internal non-admin users.
 - `sessions.json`: active server-side sessions.
 - `world.json`: world metadata, members, theme, thumbnail, home page, and public visitor settings.
+- `assets.json`: versioned asset catalog with stable file/folder IDs, revision numbers, current paths, media metadata, hashes, and recycle-bin records.
+- `.cache/assets/`: disposable server-generated WebP thumbnails. This directory can be removed and is rebuilt on demand.
 - `pages/`: document tree, tab content, and document metadata.
-- `assets/`: uploaded media.
+- `assets/`: uploaded WebP, GIF, JPEG, PNG, MP3, OGG, WAV, and M4A/MP4 audio files. Deleted items remain in the hidden `.trash/` area for up to 30 days unless permanently removed sooner.
 - `yjs/`: persisted collaborative tab state.
 
 Do not edit files under `data/` while the server is running unless you know the impact. The backend maintains an in-memory UID index for document paths and rebuilds it on startup.

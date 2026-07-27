@@ -53,8 +53,12 @@ function getInitialTab(mode, worldId, initialTab) {
   }
 }
 
-function buildCustomThemePayload(enabled, colors) {
-  return enabled ? normalizeCustomTheme({ colors }) : null
+function buildCustomThemePayload(enabled, colors, preset = null) {
+  if (!enabled) return null
+  const customTheme = normalizeCustomTheme({ colors })
+  return customTheme
+    ? { ...customTheme, ...(preset ? { preset } : {}) }
+    : null
 }
 
 function PresetButton({ presetKey, selectedKey, name, colors, onClick }) {
@@ -335,7 +339,16 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
   const [themePresetsLoaded, setThemePresetsLoaded] = useState(false)
   const [themePresetsLoading, setThemePresetsLoading] = useState(false)
   const [selectedPresetKey, setSelectedPresetKey] = useState(
-    isEditing && world?.customTheme ? null : getBuiltInPresetKey(initialTheme)
+    isEditing && world?.customTheme?.preset?.id
+      ? getCustomPresetKey(world.customTheme.preset.id)
+      : isEditing && world?.customTheme
+        ? null
+        : getBuiltInPresetKey(initialTheme)
+  )
+  const [selectedPresetSnapshot, setSelectedPresetSnapshot] = useState(
+    isEditing && world?.customTheme?.preset
+      ? { ...world.customTheme.preset }
+      : null
   )
   const [presetAction, setPresetAction] = useState('')
   const [presetStatus, setPresetStatus] = useState(null)
@@ -382,7 +395,10 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
           const matchingPreset = items.find(preset => (
             preset.baseTheme === theme && colorsMatch(preset.colors, customThemeColors)
           ))
-          if (matchingPreset) setSelectedPresetKey(getCustomPresetKey(matchingPreset.id))
+          if (matchingPreset) {
+            setSelectedPresetKey(getCustomPresetKey(matchingPreset.id))
+            setSelectedPresetSnapshot({ id: matchingPreset.id, name: matchingPreset.name })
+          }
         }
       })
       .catch(fetchError => {
@@ -401,6 +417,7 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
     setCustomThemeEnabled(false)
     setCustomThemeColors(getThemeColors(nextTheme))
     setSelectedPresetKey(getBuiltInPresetKey(nextTheme))
+    setSelectedPresetSnapshot(null)
     setPresetStatus(null)
   }
 
@@ -409,6 +426,7 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
     setCustomThemeEnabled(true)
     setCustomThemeColors({ ...preset.colors })
     setSelectedPresetKey(getCustomPresetKey(preset.id))
+    setSelectedPresetSnapshot({ id: preset.id, name: preset.name })
     setPresetStatus(null)
   }
 
@@ -416,6 +434,7 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
     setCustomThemeEnabled(true)
     setCustomThemeColors(previous => ({ ...previous, [key]: value }))
     setSelectedPresetKey(null)
+    setSelectedPresetSnapshot(null)
     setPresetStatus(null)
   }
 
@@ -528,7 +547,10 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || t('dashboard.theme_preset_delete_error'))
       setThemePresets(previous => previous.filter(preset => preset.id !== deletePreset.id))
-      if (selectedPresetKey === getCustomPresetKey(deletePreset.id)) setSelectedPresetKey(null)
+      if (selectedPresetKey === getCustomPresetKey(deletePreset.id)) {
+        setSelectedPresetKey(null)
+        setSelectedPresetSnapshot(null)
+      }
       setPresetStatus({ tone: 'success', message: t('dashboard.theme_preset_deleted', { name: deletePreset.name }) })
       setDeletePreset(null)
     } catch (deleteError) {
@@ -557,7 +579,13 @@ export default function WorldSettingsDialog({ mode = 'edit', world = null, curre
       const response = await fetch(isEditing ? `/api/worlds/${encodeURIComponent(worldId)}` : '/api/worlds', {
         method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description, theme, customTheme: buildCustomThemePayload(customThemeEnabled, customThemeColors), publicRead })
+        body: JSON.stringify({
+          name,
+          description,
+          theme,
+          customTheme: buildCustomThemePayload(customThemeEnabled, customThemeColors, selectedPresetSnapshot),
+          publicRead
+        })
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {

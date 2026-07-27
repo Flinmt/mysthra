@@ -10,6 +10,7 @@ const {
 const { indexWorld, removeWorldFromIndex } = require("./indexer");
 const { getFileTree } = require("./tree");
 const { getUserById } = require("./users");
+const { listThemePresets } = require("./themePresets");
 const { isGlobalAdmin } = require("../utils/roles");
 
 const THUMBNAIL_TYPES = {
@@ -83,7 +84,41 @@ function normalizeCustomTheme(value) {
     if (normalizedColor) colors[key] = normalizedColor;
   }
 
-  return Object.keys(colors).length > 0 ? { colors } : null;
+  if (Object.keys(colors).length === 0) return null;
+
+  const presetId = typeof value.preset?.id === "string" ? value.preset.id.trim() : "";
+  const presetName = typeof value.preset?.name === "string" ? value.preset.name.trim() : "";
+  const preset = presetId && presetName && presetName.length <= 60
+    ? { id: presetId, name: presetName }
+    : null;
+
+  return {
+    colors,
+    ...(preset ? { preset } : {})
+  };
+}
+
+function resolveWorldThemePreset(world, presets = []) {
+  if (!world?.customTheme?.colors || world.customTheme.preset) return world;
+  const matchingPreset = presets.find((preset) => (
+    preset.baseTheme === world.theme &&
+    [...CUSTOM_THEME_COLOR_KEYS].every((key) => (
+      typeof world.customTheme.colors[key] === "string" &&
+      world.customTheme.colors[key].toLowerCase() === preset.colors?.[key]?.toLowerCase()
+    ))
+  ));
+  if (!matchingPreset) return world;
+
+  return {
+    ...world,
+    customTheme: {
+      ...world.customTheme,
+      preset: {
+        id: matchingPreset.id,
+        name: matchingPreset.name
+      }
+    }
+  };
 }
 
 async function readWorldConfigById(worldId) {
@@ -148,12 +183,15 @@ async function listWorlds(user = null) {
       ? worlds.filter((world) => isWorldMemberConfig(world, user.userId))
       : worlds;
 
-    visibleWorlds.sort((a, b) => {
+    const presets = await listThemePresets().catch(() => []);
+    const resolvedWorlds = visibleWorlds.map((world) => resolveWorldThemePreset(world, presets));
+
+    resolvedWorlds.sort((a, b) => {
       const timeA = Number(a.createdAt) || 0;
       const timeB = Number(b.createdAt) || 0;
       return timeB - timeA;
     });
-    return visibleWorlds;
+    return resolvedWorlds;
   } catch (error) {
     return [];
   }
@@ -492,5 +530,6 @@ module.exports = {
   removeWorldMember,
   removeUserFromAllWorlds,
   saveWorldThumbnail,
-  setHomePage
+  setHomePage,
+  resolveWorldThemePreset
 };

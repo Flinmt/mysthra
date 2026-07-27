@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Globe2, LogOut, MoreVertical, Plus, RefreshCw, Search, Settings, Trash2, Users, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getWorldTheme } from '../../worldThemes'
+import { getThemeColors, getWorldTheme } from '../../worldThemes'
 import WorldDialog from './WorldDialog'
 
 function WorldActions({ world, canEdit, canDelete, onEdit, onDelete }) {
@@ -49,6 +49,8 @@ function WorldCard({ world, canEdit, canDelete, onOpen, onEdit, onDelete }) {
   const { t } = useTranslation()
   const name = world.displayName || world.name
   const theme = getWorldTheme(world.theme)
+  const colors = getThemeColors(world.theme, world.customTheme)
+  const themeName = world.customTheme?.preset?.name || (world.customTheme ? t('dashboard.theme_custom') : t(theme.labelKey))
   const thumbnail = world.thumbnail?.filename
     ? `url(/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0})`
     : undefined
@@ -60,7 +62,7 @@ function WorldCard({ world, canEdit, canDelete, onOpen, onEdit, onDelete }) {
         <span className="world-dashboard-card-shade" />
         <span className="world-dashboard-card-content">
           <span className="world-dashboard-card-meta">
-            <span className="world-dashboard-theme"><i style={{ backgroundColor: theme.colors.accent }} />{t(theme.labelKey)}</span>
+            <span className="world-dashboard-theme"><i style={{ backgroundColor: colors.accent }} />{themeName}</span>
             {world.publicRead && <span><Globe2 size={13} />{t('dashboard.public')}</span>}
           </span>
           <strong>{name}</strong>

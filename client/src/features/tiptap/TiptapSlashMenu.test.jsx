@@ -13,18 +13,11 @@ function getCommandOption(label) {
 describe('TiptapSlashMenu', () => {
   afterEach(cleanup)
 
-  const shortcutHints = [
-    { label: 'Desfazer', shortcut: ['Mod', 'Z'] },
-    { label: 'Refazer', shortcut: ['Mod', 'Shift', 'Z'] },
-    { label: 'Limpar formatação', shortcut: ['Mod', '\\'] }
-  ]
-
-  it('shows subtle shortcut hints only for commands that support them', () => {
+  it('shows shortcut hints only beside commands that support them', () => {
     render(
       <TiptapSlashMenu
         items={TIPTAP_COMMANDS}
         selectedIndex={0}
-        shortcutHints={shortcutHints}
         onSelect={vi.fn()}
         onClose={vi.fn()}
       />
@@ -37,11 +30,10 @@ describe('TiptapSlashMenu', () => {
     expect(getCommandOption('Título expansível 1').querySelector('kbd')).toBeNull()
     expect(getCommandOption('Título expansível 6')).not.toBeNull()
     expect(getCommandOption('Citação').querySelector('kbd')).toBeNull()
+    expect(getCommandOption('Inserir mídia').querySelector('kbd')).toBeNull()
     expect(screen.queryByText('Código')).toBeNull()
     expect(screen.queryByText('Expandir')).toBeNull()
-    expect(screen.getByText('Desfazer')).toBeTruthy()
-    expect(screen.getByText('Refazer')).toBeTruthy()
-    expect(screen.getByText('Limpar formatação')).toBeTruthy()
+    expect(screen.queryByLabelText('Atalhos essenciais')).toBeNull()
     expect(getCommandOption('Texto').title).toContain('Ctrl')
   })
 
@@ -58,5 +50,21 @@ describe('TiptapSlashMenu', () => {
 
     fireEvent.click(getCommandOption('Lista'))
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'bulletList' }))
+  })
+
+  it('exposes Portuguese and English aliases for media commands', () => {
+    const media = TIPTAP_COMMANDS.find(item => item.id === 'media')
+
+    expect(media.keywords).toEqual(expect.arrayContaining([
+      'media',
+      'mídia',
+      'midia',
+      'image',
+      'imagem',
+      'gif',
+      'audio',
+      'áudio'
+    ]))
+    expect(TIPTAP_COMMANDS.filter(item => item.group === 'Mídia')).toHaveLength(1)
   })
 })

@@ -321,6 +321,21 @@ async function broadcastWorldTreeUpdate(worldName, details = {}) {
   }
 }
 
+async function broadcastWorldAssetUpdate(worldName, details = {}) {
+  if (!activeCollaborationServer) return;
+  const safeWorldName = validateWorldName(worldName);
+  const directConnection = await activeCollaborationServer.openDirectConnection(`world:${safeWorldName}:presence`);
+  try {
+    directConnection.document?.broadcastStateless(JSON.stringify({
+      type: "asset-tree",
+      worldId: safeWorldName,
+      ...details
+    }));
+  } finally {
+    await directConnection.disconnect();
+  }
+}
+
 async function removeCollaborationState(worldName, metadata) {
   if (!metadata?.uid || metadata.type !== "tab") return;
   const statePath = getTabStatePath(worldName, metadata.uid);
@@ -341,6 +356,7 @@ async function copyCollaborationState(worldName, sourceMetadata, targetMetadata)
 
 module.exports = {
   COLLABORATION_PATH,
+  broadcastWorldAssetUpdate,
   broadcastWorldTreeUpdate,
   closeCollaborationRoom,
   copyCollaborationState,

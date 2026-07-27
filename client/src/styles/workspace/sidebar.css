@@ -48,6 +48,10 @@
   border-bottom: 1px solid var(--navigator-border-soft);
 }
 
+.workspace-container .world-navigator-header.without-tabs {
+  justify-content: flex-end;
+}
+
 .workspace-container .sidebar-nexus-tabs {
   min-width: 0;
   flex: 1;
