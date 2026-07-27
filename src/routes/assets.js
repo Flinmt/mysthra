@@ -7,15 +7,22 @@ const {
   duplicateAsset,
   emptyTrash,
   getAssetFile,
+  getAssetPermissions,
   getAssetThumbnail,
+  getDocumentAccess,
+  hasDocumentAccessLevel,
+  isAssetReferencedByTab,
   listAssets,
   listTrash,
+  listWorldMembers,
   moveAsset,
   permanentlyDeleteTrashItems,
   renameAsset,
+  resolveTabRoom,
   restoreTrashItems,
   saveAssetStream,
-  trashAssets
+  trashAssets,
+  updateAssetPermissions
 } = require("../services");
 const { getMediaCapabilities } = require("../services/mediaTypes");
 const { sendJson } = require("../utils/http");
@@ -159,6 +166,43 @@ async function broadcastAssetResult(worldId, result) {
   await broadcastWorldAssetUpdate(worldId, { revision: result?.revision });
 }
 
+async function hasDocumentAssetContext(worldId, tabUid, currentUser, asset) {
+  if (!tabUid) return false;
+  const room = await resolveTabRoom({ type: "tab", worldId, tabUid });
+  const requestUser = currentUser || { userId: "visitor", username: "Visitor", isVisitor: true };
+  const access = await getDocumentAccess(worldId, room.path, requestUser);
+  if (!hasDocumentAccessLevel(access, "read")) return false;
+  const metadataPaths = [
+    room.metadata?.coverAssetPath,
+    room.metadata?.mapBackgroundAssetPath,
+    room.parentMetadata?.coverAssetPath
+  ].filter(Boolean);
+  if (asset?.path && metadataPaths.includes(asset.path)) return true;
+  return isAssetReferencedByTab(worldId, tabUid, asset);
+}
+
+async function getAuthorizedAsset(worldId, reference, currentUser, tabUid, thumbnailSize = null) {
+  const options = { actor: currentUser };
+  try {
+    return thumbnailSize === null
+      ? await getAssetFile(worldId, reference, options)
+      : await getAssetThumbnail(worldId, reference, thumbnailSize, options);
+  } catch (error) {
+    if (error.code !== "FORBIDDEN" || !tabUid) throw error;
+    const candidate = await getAssetFile(worldId, reference, {
+      actor: currentUser,
+      allowDocumentContext: true
+    });
+    if (!(await hasDocumentAssetContext(worldId, tabUid, currentUser, candidate))) throw error;
+    return thumbnailSize === null
+      ? candidate
+      : getAssetThumbnail(worldId, reference, thumbnailSize, {
+          actor: currentUser,
+          allowDocumentContext: true
+        });
+  }
+}
+
 async function handleAssetRoute({
   request,
   response,
@@ -171,8 +215,11 @@ async function handleAssetRoute({
   requireWorldMemberOrAdmin
 }) {
   if (!pathname.match(/^\/api\/worlds\/[^/]+\/assets(\/.*)?$/)) return false;
-  const isPrivateAssetRoute = pathname.match(/^\/api\/worlds\/[^/]+\/assets\/trash$/);
-  if ((currentUser || !isPublicGet || isPrivateAssetRoute) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) {
+  const isMediaDeliveryRoute = (
+    ["GET", "HEAD"].includes(request.method)
+    && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/(file|thumbnail)$/)
+  );
+  if ((!isMediaDeliveryRoute || currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) {
     return true;
   }
 
@@ -185,29 +232,60 @@ async function handleAssetRoute({
     }
 
     if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/trash$/)) {
-      const result = await listTrash(worldId);
+      const result = await listTrash(worldId, currentUser);
       return sendHandledJson(response, 200, result);
     }
 
     if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^/]+\/assets$/)) {
-      const result = await listAssets(worldId, query.get("path") || "");
+      const result = await listAssets(worldId, query.get("path") || "", currentUser);
       return sendHandledJson(response, 200, result);
     }
 
     if (["GET", "HEAD"].includes(request.method) && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/thumbnail$/)) {
-      const asset = await getAssetThumbnail(
+      const asset = await getAuthorizedAsset(
         worldId,
         getAssetReference(query.get("id"), query.get("path")),
-        query.get("size")
+        currentUser,
+        query.get("tabUid"),
+        query.get("size") || 320
       );
       await serveAssetFile(request, response, asset);
       return true;
     }
 
     if (["GET", "HEAD"].includes(request.method) && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/file$/)) {
-      const asset = await getAssetFile(worldId, getAssetReference(query.get("id"), query.get("path")));
+      const asset = await getAuthorizedAsset(
+        worldId,
+        getAssetReference(query.get("id"), query.get("path")),
+        currentUser,
+        query.get("tabUid")
+      );
       await serveAssetFile(request, response, asset);
       return true;
+    }
+
+    if (request.method === "GET" && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/permissions$/)) {
+      const result = await getAssetPermissions(
+        worldId,
+        getAssetReference(query.get("id"), query.get("path")),
+        currentUser
+      );
+      return sendHandledJson(response, 200, {
+        ...result,
+        members: await listWorldMembers(worldId)
+      });
+    }
+
+    if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/permissions$/)) {
+      const body = await parseJsonBody(request);
+      const result = await updateAssetPermissions(
+        worldId,
+        getAssetReference(body.id, body.path),
+        body.permissions,
+        currentUser
+      );
+      await broadcastAssetResult(worldId, result);
+      return sendHandledJson(response, 200, result);
     }
 
     if (request.method === "POST" && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/folders$/)) {
@@ -216,7 +294,8 @@ async function handleAssetRoute({
       const result = await createAssetFolder(
         worldId,
         body.parentId ? { id: body.parentId } : body.parentPath || "",
-        body.name
+        body.name,
+        currentUser
       );
       await broadcastAssetResult(worldId, result);
       return sendHandledJson(response, 201, result);
@@ -238,7 +317,8 @@ async function handleAssetRoute({
         request,
         {
           contentType: request.headers?.["content-type"],
-          maxBytes
+          maxBytes,
+          actor: currentUser
         }
       );
       await broadcastAssetResult(worldId, result);
@@ -248,7 +328,7 @@ async function handleAssetRoute({
     if (request.method === "PATCH" && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/rename$/)) {
       const body = await parseJsonBody(request);
       if (!body.newName) throw createInvalidPathError("Missing newName", body.newName);
-      const result = await renameAsset(worldId, getAssetReference(body.id, body.path), body.newName);
+      const result = await renameAsset(worldId, getAssetReference(body.id, body.path), body.newName, currentUser);
       await broadcastAssetResult(worldId, result);
       return sendHandledJson(response, 200, result);
     }
@@ -258,7 +338,8 @@ async function handleAssetRoute({
       const result = await moveAsset(
         worldId,
         getAssetReference(body.id, body.sourcePath),
-        body.targetFolderId ? { id: body.targetFolderId } : body.targetFolderPath || ""
+        body.targetFolderId ? { id: body.targetFolderId } : body.targetFolderPath || "",
+        currentUser
       );
       await broadcastAssetResult(worldId, result);
       return sendHandledJson(response, 200, result);
@@ -269,6 +350,7 @@ async function handleAssetRoute({
       const result = await duplicateAsset(worldId, getAssetReference(body.id, body.path), {
         includeChildren: Boolean(body.includeChildren),
         name: body.name,
+        actor: currentUser,
         ...(body.targetFolderId ? { targetFolderReference: { id: body.targetFolderId } } : {}),
         ...(body.targetFolderPath !== undefined ? { targetFolderReference: body.targetFolderPath } : {})
       });
@@ -284,19 +366,20 @@ async function handleAssetRoute({
       let result;
 
       if (body.action === "trash") {
-        result = await trashAssets(worldId, itemIds.map((id) => ({ id })));
+        result = await trashAssets(worldId, itemIds.map((id) => ({ id })), currentUser);
       } else if (body.action === "restore") {
-        result = await restoreTrashItems(worldId, itemIds);
+        result = await restoreTrashItems(worldId, itemIds, currentUser);
       } else if (body.action === "delete-permanently") {
-        result = await permanentlyDeleteTrashItems(worldId, itemIds);
+        result = await permanentlyDeleteTrashItems(worldId, itemIds, currentUser);
       } else if (body.action === "move" || body.action === "copy") {
         const items = [];
         for (const id of itemIds) {
           try {
             const item = body.action === "move"
-              ? await moveAsset(worldId, { id }, referenceTarget)
+              ? await moveAsset(worldId, { id }, referenceTarget, currentUser)
               : await duplicateAsset(worldId, { id }, {
                 includeChildren: true,
+                actor: currentUser,
                 targetFolderReference: referenceTarget
               });
             items.push(item);
@@ -304,7 +387,7 @@ async function handleAssetRoute({
             items.push({ id, error: getErrorMessage(error, getErrorStatusCode(error)) });
           }
         }
-        const current = await listAssets(worldId);
+        const current = await listAssets(worldId, "", currentUser);
         result = { items, revision: current.revision };
       } else {
         throw createInvalidPathError("Unsupported asset action", body.action);
@@ -315,13 +398,13 @@ async function handleAssetRoute({
     }
 
     if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^/]+\/assets\/trash$/)) {
-      const result = await emptyTrash(worldId);
+      const result = await emptyTrash(worldId, currentUser);
       await broadcastAssetResult(worldId, result);
       return sendHandledJson(response, 200, result);
     }
 
     if (request.method === "DELETE" && pathname.match(/^\/api\/worlds\/[^/]+\/assets$/)) {
-      const result = await deleteAsset(worldId, getAssetReference(query.get("id"), query.get("path")));
+      const result = await deleteAsset(worldId, getAssetReference(query.get("id"), query.get("path")), currentUser);
       await broadcastAssetResult(worldId, result);
       return sendHandledJson(response, 200, result);
     }

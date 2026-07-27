@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   copyCollaborationState,
   createCollaborationServer,
+  isAssetReferencedByTab,
   parseCollaborationRoom,
   removeCollaborationState,
   resolveTabRoom
@@ -113,6 +114,40 @@ test("collaboration state follows tab copy and delete lifecycle", async () => {
     () => fs.stat(targetPath),
     { code: "ENOENT" }
   );
+});
+
+test("collaboration asset references are indexed across supported editor types", async () => {
+  const worldName = `collab-assets-${Date.now()}`;
+  createdWorlds.add(worldName);
+  await createWorld({ name: worldName });
+  const tiptapTab = await createDocument(worldName, "Notion", "", { type: "tab", contentType: "tiptap" });
+  const boardTab = await createDocument(worldName, "Board", "", { type: "tab", contentType: "board" });
+  const markdownTab = await createDocument(worldName, "Markdown", "", { type: "tab", contentType: "markdown" });
+  const yjsRoot = path.join(getDataRoot(), "worlds", worldName, "yjs");
+  await fs.mkdir(yjsRoot, { recursive: true });
+
+  const tiptapDocument = new Y.Doc();
+  const mediaNode = new Y.XmlElement("assetImage");
+  mediaNode.setAttribute("assetId", "image-id");
+  tiptapDocument.getXmlFragment("tiptap").push([mediaNode]);
+  await fs.writeFile(path.join(yjsRoot, `${tiptapTab.uid}.bin`), Buffer.from(Y.encodeStateAsUpdate(tiptapDocument)));
+
+  const boardDocument = new Y.Doc();
+  boardDocument.getArray("boardItems").push([{ props: { assetPath: "boards/image.webp" } }]);
+  await fs.writeFile(path.join(yjsRoot, `${boardTab.uid}.bin`), Buffer.from(Y.encodeStateAsUpdate(boardDocument)));
+
+  const markdownDocument = new Y.Doc();
+  markdownDocument.getText("markdown").insert(0, "![Map]({{asset:maps/world.webp}})");
+  await fs.writeFile(path.join(yjsRoot, `${markdownTab.uid}.bin`), Buffer.from(Y.encodeStateAsUpdate(markdownDocument)));
+
+  assert.equal(await isAssetReferencedByTab(worldName, tiptapTab.uid, { id: "image-id" }), true);
+  assert.equal(await isAssetReferencedByTab(worldName, boardTab.uid, { path: "boards/image.webp" }), true);
+  assert.equal(await isAssetReferencedByTab(worldName, markdownTab.uid, { path: "maps/world.webp" }), true);
+  assert.equal(await isAssetReferencedByTab(worldName, markdownTab.uid, { path: "maps/private.webp" }), false);
+
+  tiptapDocument.destroy();
+  boardDocument.destroy();
+  markdownDocument.destroy();
 });
 
 function createLocalWebSocketPolyfill(server, cookie = "") {

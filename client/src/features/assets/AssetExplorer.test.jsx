@@ -1,11 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import AssetExplorer from './AssetExplorer'
 import {
   loadAssetTrash,
   loadAssetTree,
-  renameAssetItem
+  loadAssetPermissions,
+  renameAssetItem,
+  saveAssetPermissions
 } from './assetApi'
 
 vi.mock('react-i18next', () => ({
@@ -30,6 +32,14 @@ vi.mock('react-i18next', () => ({
       'assetExplorer.copy': 'Copiar',
       'assetExplorer.cut': 'Recortar',
       'assetExplorer.trashAction': 'Mover para lixeira',
+      'assetExplorer.manageAccess': 'Gerenciar acesso',
+      'assetExplorer.inheritAccess': 'Herdar permissões',
+      'assetExplorer.allWorldMembers': 'Todos os membros do mundo',
+      'assetExplorer.accessInherited': 'Herdado',
+      'assetExplorer.accessNone': 'Sem acesso',
+      'assetExplorer.accessRead': 'Leitura',
+      'assetExplorer.accessWrite': 'Escrita',
+      'assetExplorer.owner': 'Proprietário',
       'assetExplorer.refresh': 'Atualizar'
     })[key] || key
   })
@@ -39,6 +49,8 @@ vi.mock('./assetApi', async importOriginal => ({
   ...await importOriginal(),
   loadAssetTree: vi.fn(),
   loadAssetTrash: vi.fn(),
+  loadAssetPermissions: vi.fn(),
+  saveAssetPermissions: vi.fn(),
   renameAssetItem: vi.fn()
 }))
 
@@ -183,5 +195,53 @@ describe('AssetExplorer rename flow', () => {
     fireEvent.doubleClick(audioItem)
 
     expect(onInsert).toHaveBeenCalledWith(audio)
+  })
+
+  it('lets an item administrator share it with all world members', async () => {
+    const user = userEvent.setup()
+    const folder = {
+      id: 'folder-1',
+      name: 'Shared',
+      path: 'Shared',
+      type: 'folder',
+      ownerUserId: 'owner-1',
+      currentUserAccess: 'admin',
+      canManagePermissions: true,
+      children: []
+    }
+    loadAssetTree.mockResolvedValue({ revision: 1, items: [folder] })
+    loadAssetTrash.mockResolvedValue({ revision: 1, items: [] })
+    loadAssetPermissions.mockResolvedValue({
+      ...folder,
+      permissions: { inherit: true, users: {} },
+      members: [{ userId: 'reader-1', user: { username: 'Reader' } }]
+    })
+    saveAssetPermissions.mockResolvedValue({ revision: 2 })
+
+    render(
+      <AssetExplorer
+        worldId="world"
+        clipboard={null}
+        onClipboardChange={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+
+    const item = (await screen.findAllByRole('button', { name: /Shared/ }))
+      .find(element => element.classList.contains('asset-explorer-item'))
+    fireEvent.contextMenu(item, { clientX: 100, clientY: 100 })
+    await user.click(screen.getByRole('button', { name: 'Gerenciar acesso' }))
+
+    const worldMembersRow = screen.getByText('Todos os membros do mundo').closest('.asset-explorer-access-row')
+    await user.click(within(worldMembersRow).getByRole('button', { name: 'Leitura' }))
+    await user.click(screen.getByRole('button', { name: 'common.save' }))
+
+    await waitFor(() => {
+      expect(saveAssetPermissions).toHaveBeenCalledWith('world', folder, {
+        inherit: true,
+        users: {},
+        worldMembers: 'read'
+      })
+    })
   })
 })

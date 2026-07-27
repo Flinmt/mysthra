@@ -53,7 +53,8 @@ test("asset catalog assigns stable ids to legacy files without changing them", a
   assert.deepEqual(await fs.readFile(path.join(worldPaths.assets, "legacy.webp")), legacyBytes);
 
   const catalog = JSON.parse(await fs.readFile(path.join(worldPaths.worldRoot, "assets.json"), "utf-8"));
-  assert.equal(catalog.version, 2);
+  assert.equal(catalog.version, 3);
+  assert.equal(catalog.items[0].ownerUserId, null);
   assert.equal(catalog.items[0].id, firstAsset.id);
   assert.match(catalog.items[0].sha256, /^[0-9a-f]{64}$/);
 });

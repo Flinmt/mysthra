@@ -3,10 +3,18 @@ const fs = require("node:fs/promises");
 const { Readable } = require("node:stream");
 const test = require("node:test");
 const sharp = require("sharp");
+const path = require("node:path");
+const Y = require("yjs");
 
-const { resolveWorldRoot } = require("../../src/data");
+const { getDataRoot, resolveWorldRoot } = require("../../src/data");
 const { router } = require("../../src/routes");
-const { createWorld, updateWorld } = require("../../src/services");
+const {
+  addWorldMember,
+  createDocument,
+  createUser,
+  createWorld,
+  updateWorld
+} = require("../../src/services");
 const { generateSessionToken } = require("../../src/utils/auth");
 
 const createdWorlds = new Set();
@@ -76,6 +84,14 @@ async function invokeRouter({ method, url, headers = {}, body = "" }) {
 
 function authenticatedHeaders(extra = {}) {
   const token = generateSessionToken({ userId: "root", username: "admin", globalRole: "root" });
+  return {
+    cookie: `mysthra_session=${token}`,
+    ...extra
+  };
+}
+
+function userHeaders(user, extra = {}) {
+  const token = generateSessionToken({ userId: user.id, username: user.username });
   return {
     cookie: `mysthra_session=${token}`,
     ...extra
@@ -370,7 +386,7 @@ test("asset uploads reject unsupported or mismatched media", async () => {
   assert.equal(worldFiles.some((filename) => String(filename).includes(".upload-")), false);
 });
 
-test("public worlds expose asset reads but keep uploads authenticated", async () => {
+test("public worlds keep the explorer private and expose only document-referenced media", async () => {
   const worldName = "route-public-assets";
   createdWorlds.add(worldName);
   await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
@@ -384,16 +400,41 @@ test("public worlds expose asset reads but keep uploads authenticated", async ()
   });
   await updateWorld(worldName, { publicRead: true });
 
-  const publicRead = await invokeRouter({
+  const publicTree = await invokeRouter({
+    method: "GET",
+    url: `/api/worlds/${worldName}/assets`
+  });
+  assert.equal(publicTree.status, 401);
+
+  const directRead = await invokeRouter({
     method: "GET",
     url: `/api/worlds/${worldName}/assets/file?id=${upload.json.id}`
+  });
+  assert.equal(directRead.status, 403);
+
+  const tab = await createDocument(worldName, "Public Media", "", {
+    type: "tab",
+    contentType: "tiptap"
+  });
+  const document = new Y.Doc();
+  const mediaNode = new Y.XmlElement("assetImage");
+  mediaNode.setAttribute("assetId", upload.json.id);
+  document.getXmlFragment("tiptap").push([mediaNode]);
+  const yjsRoot = path.join(getDataRoot(), "worlds", worldName, "yjs");
+  await fs.mkdir(yjsRoot, { recursive: true });
+  await fs.writeFile(path.join(yjsRoot, `${tab.uid}.bin`), Buffer.from(Y.encodeStateAsUpdate(document)));
+  document.destroy();
+
+  const publicRead = await invokeRouter({
+    method: "GET",
+    url: `/api/worlds/${worldName}/assets/file?id=${upload.json.id}&tabUid=${tab.uid}`
   });
   assert.equal(publicRead.status, 200);
   assert.equal(publicRead.headers["content-type"], "image/png");
 
   const publicHead = await invokeRouter({
     method: "HEAD",
-    url: `/api/worlds/${worldName}/assets/file?id=${upload.json.id}`
+    url: `/api/worlds/${worldName}/assets/file?id=${upload.json.id}&tabUid=${tab.uid}`
   });
   assert.equal(publicHead.status, 200);
   assert.equal(publicHead.body.length, 0);
@@ -405,6 +446,130 @@ test("public worlds expose asset reads but keep uploads authenticated", async ()
     body: createPngBytes("denied")
   });
   assert.equal(anonymousUpload.status, 401);
+});
+
+test("asset ownership and inherited permissions isolate world members", async () => {
+  const worldName = "route-asset-permissions";
+  createdWorlds.add(worldName);
+  await fs.rm(resolveWorldRoot(worldName), { recursive: true, force: true });
+  await createWorld({ name: worldName });
+  const suffix = Date.now();
+  const owner = await createUser({ username: `asset-owner-${suffix}`, password: "secret-pass" });
+  const writer = await createUser({ username: `asset-writer-${suffix}`, password: "secret-pass" });
+  const outsider = await createUser({ username: `asset-outsider-${suffix}`, password: "secret-pass" });
+  await addWorldMember(worldName, owner.id);
+  await addWorldMember(worldName, writer.id);
+  await addWorldMember(worldName, outsider.id);
+
+  const folder = await invokeRouter({
+    method: "POST",
+    url: `/api/worlds/${worldName}/assets/folders`,
+    headers: userHeaders(owner, { "content-type": "application/json" }),
+    body: JSON.stringify({ name: "Shared" })
+  });
+  assert.equal(folder.status, 201);
+  assert.equal(folder.json.ownerUserId, owner.id);
+
+  const hidden = await invokeRouter({
+    method: "GET",
+    url: `/api/worlds/${worldName}/assets`,
+    headers: userHeaders(outsider)
+  });
+  assert.deepEqual(hidden.json.items, []);
+
+  const shared = await invokeRouter({
+    method: "PATCH",
+    url: `/api/worlds/${worldName}/assets/permissions`,
+    headers: userHeaders(owner, { "content-type": "application/json" }),
+    body: JSON.stringify({
+      id: folder.json.id,
+      permissions: {
+        inherit: true,
+        worldMembers: "read",
+        users: { [writer.id]: "write" }
+      }
+    })
+  });
+  assert.equal(shared.status, 200);
+
+  const writerUpload = await invokeRouter({
+    method: "POST",
+    url: `/api/worlds/${worldName}/assets/upload?filename=shared.png&path=Shared`,
+    headers: userHeaders(writer, { "content-type": "image/png" }),
+    body: createPngBytes("shared")
+  });
+  assert.equal(writerUpload.status, 201);
+  assert.equal(writerUpload.json.ownerUserId, writer.id);
+
+  const outsiderTree = await invokeRouter({
+    method: "GET",
+    url: `/api/worlds/${worldName}/assets`,
+    headers: userHeaders(outsider)
+  });
+  assert.equal(outsiderTree.json.items[0].currentUserAccess, "read");
+  assert.equal(outsiderTree.json.items[0].children[0].currentUserAccess, "read");
+
+  const deniedRename = await invokeRouter({
+    method: "PATCH",
+    url: `/api/worlds/${worldName}/assets/rename`,
+    headers: userHeaders(outsider, { "content-type": "application/json" }),
+    body: JSON.stringify({ id: writerUpload.json.id, newName: "denied.png" })
+  });
+  assert.equal(deniedRename.status, 403);
+
+  const ownerRename = await invokeRouter({
+    method: "PATCH",
+    url: `/api/worlds/${worldName}/assets/rename`,
+    headers: userHeaders(owner, { "content-type": "application/json" }),
+    body: JSON.stringify({ id: writerUpload.json.id, newName: "approved.png" })
+  });
+  assert.equal(ownerRename.status, 200);
+
+  const isolatedFile = await invokeRouter({
+    method: "PATCH",
+    url: `/api/worlds/${worldName}/assets/permissions`,
+    headers: userHeaders(owner, { "content-type": "application/json" }),
+    body: JSON.stringify({
+      id: writerUpload.json.id,
+      permissions: {
+        inherit: false,
+        users: { [outsider.id]: "read" }
+      }
+    })
+  });
+  assert.equal(isolatedFile.status, 200);
+  await invokeRouter({
+    method: "PATCH",
+    url: `/api/worlds/${worldName}/assets/permissions`,
+    headers: userHeaders(owner, { "content-type": "application/json" }),
+    body: JSON.stringify({
+      id: folder.json.id,
+      permissions: {
+        inherit: true,
+        worldMembers: "read",
+        users: {
+          [writer.id]: "write",
+          [outsider.id]: "none"
+        }
+      }
+    })
+  });
+
+  const traversalTree = await invokeRouter({
+    method: "GET",
+    url: `/api/worlds/${worldName}/assets`,
+    headers: userHeaders(outsider)
+  });
+  assert.equal(traversalTree.json.items[0].traversalOnly, true);
+  assert.equal(traversalTree.json.items[0].currentUserAccess, "none");
+  assert.equal(traversalTree.json.items[0].children[0].currentUserAccess, "read");
+
+  const outsiderPermissions = await invokeRouter({
+    method: "GET",
+    url: `/api/worlds/${worldName}/assets/permissions?id=${folder.json.id}`,
+    headers: userHeaders(outsider)
+  });
+  assert.equal(outsiderPermissions.status, 403);
 });
 
 test("asset uploads enforce MAX_UPLOAD_SIZE before writing", async () => {

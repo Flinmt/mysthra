@@ -17,6 +17,67 @@ const COLLABORATION_PATH = "/collaboration";
 const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
 
 let activeCollaborationServer = null;
+const tabAssetReferences = new Map();
+
+function getAssetReferenceCacheKey(worldId, tabUid) {
+  return `${worldId}:${tabUid}`;
+}
+
+function collectAssetReferences(value, references, key = "", seen = new WeakSet()) {
+  if (value === null || value === undefined) return;
+  if (typeof value === "string") {
+    if (key === "assetId") references.ids.add(value);
+    if (["assetPath", "backgroundAssetPath"].includes(key)) references.paths.add(value);
+    for (const match of value.matchAll(/\{\{asset:([^}]+)\}\}/g)) {
+      const assetPath = String(match[1] || "").trim();
+      if (assetPath) references.paths.add(assetPath);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectAssetReferences(item, references, "", seen));
+    return;
+  }
+  if (typeof value === "object") {
+    if (seen.has(value)) return;
+    seen.add(value);
+  }
+  if (value instanceof Y.Map) {
+    for (const [entryKey, entryValue] of value.entries()) {
+      collectAssetReferences(entryValue, references, entryKey, seen);
+    }
+    return;
+  }
+  if (value instanceof Y.Array || value instanceof Y.XmlFragment || value instanceof Y.XmlElement) {
+    if (value instanceof Y.XmlElement) {
+      const attributes = value.getAttributes();
+      for (const [attribute, attributeValue] of Object.entries(attributes)) {
+        collectAssetReferences(attributeValue, references, attribute, seen);
+      }
+    }
+    value.toArray().forEach((item) => collectAssetReferences(item, references, "", seen));
+    return;
+  }
+  if (value instanceof Y.Text || value instanceof Y.XmlText) {
+    collectAssetReferences(value.toString(), references, key, seen);
+    return;
+  }
+  if (typeof value === "object" && (
+    Object.getPrototypeOf(value) === Object.prototype
+    || Object.getPrototypeOf(value) === null
+  )) {
+    for (const [entryKey, entryValue] of Object.entries(value)) {
+      collectAssetReferences(entryValue, references, entryKey, seen);
+    }
+  }
+}
+
+function indexDocumentAssetReferences(document, room) {
+  const references = { ids: new Set(), paths: new Set() };
+  for (const sharedType of document.share.values()) collectAssetReferences(sharedType, references);
+  tabAssetReferences.set(getAssetReferenceCacheKey(room.worldId, room.tabUid), references);
+  return references;
+}
 
 function isCollaborationDebugEnabled() {
   return ["1", "true", "yes", "on"].includes(String(process.env.COLLABORATION_DEBUG || "").trim().toLowerCase());
@@ -83,6 +144,8 @@ async function resolveTabRoom(room) {
   const safePath = validateRelativePath(await getPathByUidWithFallback(room.worldId, room.tabUid));
   const { pages: pagesDir } = getWorldPaths(room.worldId);
   const metadata = await readDocumentMetadata(pagesDir, safePath);
+  const parentPath = path.dirname(safePath) === "." ? "" : path.dirname(safePath).replace(/\\/g, "/");
+  const parentMetadata = parentPath ? await readDocumentMetadata(pagesDir, parentPath) : {};
 
   if (
     metadata.uid !== room.tabUid ||
@@ -98,7 +161,8 @@ async function resolveTabRoom(room) {
     ...room,
     path: safePath,
     pagesDir,
-    metadata
+    metadata,
+    parentMetadata
   };
 }
 
@@ -121,11 +185,30 @@ async function readPersistedState(room) {
   }
 }
 
+function prepareCollaborationDocumentTypes(document, room) {
+  if (room.metadata?.contentType === "tiptap") {
+    document.getXmlFragment("tiptap");
+  } else if (room.metadata?.contentType === "map") {
+    document.getMap("mapCanvas");
+    document.getArray("mapItems");
+    document.getMap("mapSettings");
+    document.getArray("mapLayers");
+  } else if (room.metadata?.contentType === "board") {
+    document.getMap("boardCanvas");
+    document.getMap("boardSettings");
+    document.getArray("boardItems");
+  } else if (["markdown", "wiki"].includes(room.metadata?.contentType)) {
+    document.getText("markdown");
+  }
+}
+
 async function loadCollaborationDocument(document, room) {
+  prepareCollaborationDocumentTypes(document, room);
   const persistedState = await readPersistedState(room);
   if (persistedState) {
     Y.applyUpdate(document, persistedState);
   }
+  indexDocumentAssetReferences(document, room);
   debugCollaboration("load", {
     room: `world:${room.worldId}:tab:${room.tabUid}`,
     bytes: persistedState?.length || 0
@@ -138,10 +221,33 @@ async function storeCollaborationDocument(document, room) {
   const statePath = getTabStatePath(room.worldId, room.tabUid);
   const state = Buffer.from(Y.encodeStateAsUpdate(document));
   await fs.writeFile(statePath, state);
+  indexDocumentAssetReferences(document, room);
   debugCollaboration("store", {
     room: `world:${room.worldId}:tab:${room.tabUid}`,
     bytes: state.length
   });
+}
+
+async function getTabAssetReferences(worldId, tabUid) {
+  const room = await resolveTabRoom({ type: "tab", worldId: validateWorldName(worldId), tabUid: validateWorldName(tabUid) });
+  const cacheKey = getAssetReferenceCacheKey(room.worldId, room.tabUid);
+  const cached = tabAssetReferences.get(cacheKey);
+  if (cached) return cached;
+  const document = new Y.Doc();
+  try {
+    await loadCollaborationDocument(document, room);
+    return tabAssetReferences.get(cacheKey) || { ids: new Set(), paths: new Set() };
+  } finally {
+    document.destroy();
+  }
+}
+
+async function isAssetReferencedByTab(worldId, tabUid, asset) {
+  const references = await getTabAssetReferences(worldId, tabUid);
+  return Boolean(
+    (asset?.id && references.ids.has(asset.id))
+    || (asset?.path && references.paths.has(asset.path))
+  );
 }
 
 function encodeStateVector(document) {
@@ -340,6 +446,7 @@ async function removeCollaborationState(worldName, metadata) {
   if (!metadata?.uid || metadata.type !== "tab") return;
   const statePath = getTabStatePath(worldName, metadata.uid);
   await fs.rm(statePath, { force: true });
+  tabAssetReferences.delete(getAssetReferenceCacheKey(validateWorldName(worldName), validateWorldName(metadata.uid)));
 }
 
 async function copyCollaborationState(worldName, sourceMetadata, targetMetadata) {
@@ -349,6 +456,15 @@ async function copyCollaborationState(worldName, sourceMetadata, targetMetadata)
   try {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.copyFile(sourcePath, targetPath);
+    const sourceKey = getAssetReferenceCacheKey(validateWorldName(worldName), validateWorldName(sourceMetadata.uid));
+    const targetKey = getAssetReferenceCacheKey(validateWorldName(worldName), validateWorldName(targetMetadata.uid));
+    const references = tabAssetReferences.get(sourceKey);
+    if (references) {
+      tabAssetReferences.set(targetKey, {
+        ids: new Set(references.ids),
+        paths: new Set(references.paths)
+      });
+    }
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
@@ -361,6 +477,7 @@ module.exports = {
   closeCollaborationRoom,
   copyCollaborationState,
   createCollaborationServer,
+  isAssetReferencedByTab,
   parseCollaborationRoom,
   removeCollaborationState,
   resolveTabRoom

@@ -17,6 +17,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  ShieldCheck,
   Trash,
   Trash2,
   Undo2,
@@ -29,12 +30,21 @@ import {
   emptyAssetTrash,
   getAssetFileUrl,
   getAssetThumbnailUrl,
+  loadAssetPermissions,
   loadAssetTrash,
   loadAssetTree,
   renameAssetItem,
   runAssetAction,
+  saveAssetPermissions,
   uploadAsset
 } from './assetApi'
+
+const ACCESS_RANK = new Map(['none', 'read', 'write', 'admin'].map((access, index) => [access, index]))
+
+function hasItemAccess(item, required) {
+  if (item && !item.currentUserAccess) return true
+  return (ACCESS_RANK.get(item?.currentUserAccess) || 0) >= (ACCESS_RANK.get(required) || 0)
+}
 
 function flattenTree(items, parentPath = '', output = []) {
   for (const item of items) {
@@ -103,6 +113,14 @@ export default function AssetExplorer({
   const [inlineRename, setInlineRename] = useState(null)
   const [emptyTrashPrompt, setEmptyTrashPrompt] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
+  const [accessPanel, setAccessPanel] = useState({
+    isOpen: false,
+    item: null,
+    loading: false,
+    members: [],
+    permissions: { inherit: true, users: {} },
+    error: ''
+  })
   const [undoStack, setUndoStack] = useState([])
   const isInsertMode = mode === 'insert'
   const inTrash = currentPath === ':trash'
@@ -129,6 +147,14 @@ export default function AssetExplorer({
     })
   }, [currentFolder, currentPath, flatItems, i18n.language, inTrash, isInsertMode, mediaFilter, query, sort, trash, tree])
   const selectedItems = currentItems.filter(item => selection.has(item.id))
+  const selectedItemsWritable = selectedItems.length > 0 && selectedItems.every(item => hasItemAccess(item, 'write'))
+  const canWriteCurrentFolder = !readOnly && !inTrash && (!currentFolder || hasItemAccess(currentFolder, 'write'))
+  const accessOptions = [
+    ['inherit', t('assetExplorer.accessInherited')],
+    ['none', t('assetExplorer.accessNone')],
+    ['read', t('assetExplorer.accessRead')],
+    ['write', t('assetExplorer.accessWrite')]
+  ]
   const preview = selectedItems.length === 1 && selectedItems[0].type === 'file' ? selectedItems[0] : null
   const insertableAsset = isInsertMode && preview && (!mediaFilter || preview.mediaType === mediaFilter) ? preview : null
 
@@ -196,7 +222,7 @@ export default function AssetExplorer({
   }, [addToast, readOnly, refresh, setBusy, worldId])
 
   const createNewFolder = async () => {
-    if (readOnly || busy || inTrash) return
+    if (!canWriteCurrentFolder || busy) return
     setBusy(true)
     setQuery('')
     try {
@@ -251,7 +277,7 @@ export default function AssetExplorer({
   }, [flatItems, folders])
 
   const paste = useCallback(async () => {
-    if (readOnly || !clipboard?.ids?.length || clipboard.worldId !== worldId || inTrash) return
+    if (!canWriteCurrentFolder || !clipboard?.ids?.length || clipboard.worldId !== worldId) return
     const moveUndo = clipboard.mode === 'cut' ? getMoveUndo(clipboard.ids) : null
     const result = await executeAction(
       clipboard.mode === 'cut' ? 'move' : 'copy',
@@ -266,7 +292,7 @@ export default function AssetExplorer({
       const createdIds = result.items?.filter(item => item.id && !item.error).map(item => item.id) || []
       setUndoStack(previous => [...previous, { action: 'trash', ids: createdIds }])
     }
-  }, [clipboard, currentFolder, executeAction, getMoveUndo, inTrash, onClipboardChange, readOnly, worldId])
+  }, [canWriteCurrentFolder, clipboard, currentFolder, executeAction, getMoveUndo, onClipboardChange, worldId])
 
   const undo = useCallback(async () => {
     const command = undoStack.at(-1)
@@ -288,6 +314,8 @@ export default function AssetExplorer({
   }, [addToast, executeAction, refresh, undoStack, worldId])
 
   const dropAssets = async (event, targetFolder) => {
+    if (targetFolder && !hasItemAccess(targetFolder, 'write')) return
+    if (!targetFolder && !canWriteCurrentFolder) return
     const ids = JSON.parse(event.dataTransfer.getData('application/x-mysthra-assets') || '[]')
     if (!ids.length) return
     const action = event.ctrlKey ? 'copy' : 'move'
@@ -308,7 +336,9 @@ export default function AssetExplorer({
     const handleKeyDown = event => {
       const modifier = event.ctrlKey || event.metaKey
       if (event.key === 'Escape') {
-        if (contextMenu || emptyTrashPrompt) {
+        if (accessPanel.isOpen) {
+          setAccessPanel(previous => ({ ...previous, isOpen: false }))
+        } else if (contextMenu || emptyTrashPrompt) {
           setContextMenu(null)
           setEmptyTrashPrompt(false)
         } else onClose()
@@ -333,7 +363,7 @@ export default function AssetExplorer({
         event.preventDefault()
         onClipboardChange({ mode: 'copy', ids: selectedItems.map(item => item.id), worldId })
       }
-      if (!readOnly && modifier && event.key.toLowerCase() === 'x' && selectedItems.length && !inTrash) {
+      if (!readOnly && modifier && event.key.toLowerCase() === 'x' && selectedItemsWritable && !inTrash) {
         event.preventDefault()
         onClipboardChange({ mode: 'cut', ids: selectedItems.map(item => item.id), worldId })
       }
@@ -345,7 +375,7 @@ export default function AssetExplorer({
         event.preventDefault()
         undo()
       }
-      if (!readOnly && (event.key === 'Delete' || event.key === 'Backspace') && selectedItems.length && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+      if (!readOnly && (event.key === 'Delete' || event.key === 'Backspace') && selectedItemsWritable && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
         event.preventDefault()
         executeAction(inTrash ? 'delete-permanently' : 'trash', selectedItems.map(item => item.id), null, inTrash
           ? null
@@ -354,7 +384,7 @@ export default function AssetExplorer({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [contextMenu, currentItems, emptyTrashPrompt, executeAction, inTrash, isInsertMode, onClipboardChange, onClose, paste, readOnly, selectedItems, undo, worldId])
+  }, [accessPanel.isOpen, contextMenu, currentItems, emptyTrashPrompt, executeAction, inTrash, isInsertMode, onClipboardChange, onClose, paste, readOnly, selectedItems, selectedItemsWritable, undo, worldId])
 
   const chooseItem = (event, item, index) => {
     if (isInsertMode) {
@@ -394,7 +424,7 @@ export default function AssetExplorer({
     if (files.length !== requestedFiles.length) {
       addToast?.(t('assetExplorer.wrongMediaType'), 'error')
     }
-    if (readOnly || !files.length || inTrash) return
+    if (!canWriteCurrentFolder || !files.length) return
     setBusy(true)
     const createdIds = []
     const createdItems = []
@@ -438,6 +468,55 @@ export default function AssetExplorer({
   }
 
   const breadcrumbParts = currentPath === ':trash' ? [] : currentPath.split('/').filter(Boolean)
+
+  const openAccessPanel = async item => {
+    if (!item?.canManagePermissions) return
+    setAccessPanel(previous => ({ ...previous, isOpen: true, item, loading: true, error: '' }))
+    try {
+      const result = await loadAssetPermissions(worldId, item)
+      setAccessPanel({
+        isOpen: true,
+        item,
+        loading: false,
+        members: result.members || [],
+        permissions: result.permissions || { inherit: true, users: {} },
+        error: ''
+      })
+    } catch (error) {
+      setAccessPanel(previous => ({ ...previous, loading: false, error: error.message }))
+    }
+  }
+
+  const setAccessRule = (principal, access) => {
+    setAccessPanel(previous => {
+      const permissions = {
+        ...previous.permissions,
+        users: { ...(previous.permissions.users || {}) }
+      }
+      if (principal === 'worldMembers') {
+        if (access === 'inherit') delete permissions.worldMembers
+        else permissions.worldMembers = access
+      } else if (access === 'inherit') {
+        delete permissions.users[principal]
+      } else {
+        permissions.users[principal] = access
+      }
+      return { ...previous, permissions }
+    })
+  }
+
+  const commitAccessPanel = async () => {
+    if (!accessPanel.item) return
+    setAccessPanel(previous => ({ ...previous, loading: true, error: '' }))
+    try {
+      await saveAssetPermissions(worldId, accessPanel.item, accessPanel.permissions)
+      setAccessPanel(previous => ({ ...previous, isOpen: false, loading: false }))
+      await refresh()
+      addToast?.(t('common.saved'), 'success')
+    } catch (error) {
+      setAccessPanel(previous => ({ ...previous, loading: false, error: error.message }))
+    }
+  }
 
   return (
     <div className="asset-explorer-backdrop" role="presentation" onMouseDown={event => {
@@ -501,7 +580,7 @@ export default function AssetExplorer({
               onClick={() => insertableAsset && onInsert?.(insertableAsset)}
             ><Check />{t('assetExplorer.insert')}</button>
           )}
-          {!readOnly && !inTrash && <>
+          {canWriteCurrentFolder && <>
             <button type="button" onClick={() => uploadInputRef.current?.click()} disabled={busy}><Upload />{t('assetExplorer.uploadFiles')}</button>
             <button type="button" onClick={() => folderInputRef.current?.click()} disabled={busy}><FolderPlus />{t('assetExplorer.uploadFolder')}</button>
             <button type="button" onClick={createNewFolder} disabled={busy}><FolderPlus />{t('assetExplorer.newFolder')}</button>
@@ -560,17 +639,17 @@ export default function AssetExplorer({
                     tabIndex="0"
                     key={item.trashId || item.id}
                     className={`asset-explorer-item ${item.type === 'folder' ? 'is-folder' : ''} ${selection.has(item.id) ? 'selected' : ''}`}
-                    draggable={!readOnly && !inTrash}
+                    draggable={!readOnly && !inTrash && hasItemAccess(item, 'write') && (!selection.has(item.id) || selectedItemsWritable)}
                     onDragStart={event => {
                       const ids = selection.has(item.id) ? [...selection] : [item.id]
                       event.dataTransfer.setData('application/x-mysthra-assets', JSON.stringify(ids))
                       event.dataTransfer.effectAllowed = 'copyMove'
                     }}
                     onDragOver={event => {
-                      if (item.type === 'folder') event.preventDefault()
+                      if (item.type === 'folder' && hasItemAccess(item, 'write')) event.preventDefault()
                     }}
                     onDrop={event => {
-                      if (item.type !== 'folder') return
+                      if (item.type !== 'folder' || !hasItemAccess(item, 'write')) return
                       event.preventDefault()
                       event.stopPropagation()
                       dropAssets(event, item)
@@ -706,9 +785,78 @@ export default function AssetExplorer({
           </section>
         </div>}
 
+        {accessPanel.isOpen && <div className="asset-explorer-dialog-backdrop">
+          <section className="asset-explorer-dialog asset-explorer-access-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-explorer-access-title">
+            <header>
+              <span aria-hidden="true"><ShieldCheck /></span>
+              <div>
+                <strong id="asset-explorer-access-title">{t('assetExplorer.manageAccess')}</strong>
+                <small>{accessPanel.item?.name}</small>
+              </div>
+              <button type="button" onClick={() => setAccessPanel(previous => ({ ...previous, isOpen: false }))} aria-label={t('common.close')}><X /></button>
+            </header>
+            <label className="asset-explorer-access-inherit">
+              <input
+                type="checkbox"
+                checked={accessPanel.permissions.inherit !== false}
+                onChange={event => setAccessPanel(previous => ({
+                  ...previous,
+                  permissions: { ...previous.permissions, inherit: event.target.checked }
+                }))}
+                disabled={accessPanel.loading}
+              />
+              <span>{t('assetExplorer.inheritAccess')}</span>
+            </label>
+            <div className="asset-explorer-access-list">
+              <div className="asset-explorer-access-row">
+                <strong>{t('assetExplorer.allWorldMembers')}</strong>
+                <div>
+                  {accessOptions.map(([access, label]) => (
+                    <button
+                      key={access}
+                      type="button"
+                      className={(accessPanel.permissions.worldMembers ?? 'inherit') === access ? 'active' : ''}
+                      onClick={() => setAccessRule('worldMembers', access)}
+                      disabled={accessPanel.loading}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+              {accessPanel.members.map(member => {
+                const userId = member.userId
+                const access = accessPanel.permissions.users?.[userId] ?? 'inherit'
+                return (
+                  <div className="asset-explorer-access-row" key={userId}>
+                    <strong>
+                      {member.user?.username || userId}
+                      {userId === accessPanel.item?.ownerUserId && <small>{t('assetExplorer.owner')}</small>}
+                    </strong>
+                    <div>
+                      {accessOptions.map(([nextAccess, label]) => (
+                        <button
+                          key={nextAccess}
+                          type="button"
+                          className={access === nextAccess ? 'active' : ''}
+                          onClick={() => setAccessRule(userId, nextAccess)}
+                          disabled={accessPanel.loading || userId === accessPanel.item?.ownerUserId}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {accessPanel.error && <p className="asset-explorer-access-error">{accessPanel.error}</p>}
+            <footer>
+              <button type="button" onClick={() => setAccessPanel(previous => ({ ...previous, isOpen: false }))} disabled={accessPanel.loading}>{t('common.cancel')}</button>
+              <button type="button" className="primary" onClick={commitAccessPanel} disabled={accessPanel.loading}>{accessPanel.loading ? t('common.saving') : t('common.save')}</button>
+            </footer>
+          </section>
+        </div>}
+
         {contextMenu && <div className="asset-explorer-context-dismiss" onMouseDown={() => setContextMenu(null)}>
           <div className="asset-explorer-context" style={{ left: contextMenu.x, top: contextMenu.y }} onMouseDown={event => event.stopPropagation()}>
-            {!readOnly && !inTrash && <>
+            {canWriteCurrentFolder && <>
               <button type="button" onClick={() => { createNewFolder(); setContextMenu(null) }}><FolderPlus />{t('assetExplorer.newFolder')}</button>
               <button type="button" onClick={() => { uploadInputRef.current?.click(); setContextMenu(null) }}><Upload />{t('assetExplorer.uploadFiles')}</button>
               <button type="button" onClick={() => { folderInputRef.current?.click(); setContextMenu(null) }}><FolderPlus />{t('assetExplorer.uploadFolder')}</button>
@@ -716,10 +864,11 @@ export default function AssetExplorer({
               <span className="asset-explorer-context-separator" />
             </>}
             {!readOnly && !inTrash && selection.size > 0 && <button type="button" onClick={() => { onClipboardChange({ mode: 'copy', ids: [...selection], worldId }); setContextMenu(null) }}><Copy />{t('assetExplorer.copy')}</button>}
-            {!readOnly && !inTrash && selection.size > 0 && <button type="button" onClick={() => { onClipboardChange({ mode: 'cut', ids: [...selection], worldId }); setContextMenu(null) }}><Clipboard />{t('assetExplorer.cut')}</button>}
-            {!readOnly && !inTrash && selection.size === 1 && <button type="button" onClick={() => { setInlineRename({ item: contextMenu.item, value: contextMenu.item.name }); setContextMenu(null) }}><Pencil />{t('common.rename')}</button>}
-            {!readOnly && inTrash && <button type="button" onClick={() => { executeAction('restore', [...selection], null, { action: 'trash', ids: [...selection] }); setContextMenu(null) }}><Undo2 />{t('assetExplorer.restore')}</button>}
-            {!readOnly && selection.size > 0 && <button type="button" className="danger" onClick={() => { executeAction(inTrash ? 'delete-permanently' : 'trash', [...selection]); setContextMenu(null) }}><Trash2 />{inTrash ? t('assetExplorer.deleteForever') : t('assetExplorer.trashAction')}</button>}
+            {!readOnly && !inTrash && selectedItemsWritable && <button type="button" onClick={() => { onClipboardChange({ mode: 'cut', ids: [...selection], worldId }); setContextMenu(null) }}><Clipboard />{t('assetExplorer.cut')}</button>}
+            {!readOnly && !inTrash && selection.size === 1 && hasItemAccess(contextMenu.item, 'write') && <button type="button" onClick={() => { setInlineRename({ item: contextMenu.item, value: contextMenu.item.name }); setContextMenu(null) }}><Pencil />{t('common.rename')}</button>}
+            {!inTrash && selection.size === 1 && contextMenu.item?.canManagePermissions && <button type="button" onClick={() => { openAccessPanel(contextMenu.item); setContextMenu(null) }}><ShieldCheck />{t('assetExplorer.manageAccess')}</button>}
+            {!readOnly && inTrash && selectedItemsWritable && <button type="button" onClick={() => { executeAction('restore', [...selection], null, { action: 'trash', ids: [...selection] }); setContextMenu(null) }}><Undo2 />{t('assetExplorer.restore')}</button>}
+            {!readOnly && selectedItemsWritable && <button type="button" className="danger" onClick={() => { executeAction(inTrash ? 'delete-permanently' : 'trash', [...selection]); setContextMenu(null) }}><Trash2 />{inTrash ? t('assetExplorer.deleteForever') : t('assetExplorer.trashAction')}</button>}
             <button type="button" onClick={() => { refresh(); setContextMenu(null) }}><RefreshCw />{t('assetExplorer.refresh')}</button>
           </div>
         </div>}
