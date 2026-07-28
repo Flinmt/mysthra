@@ -1,0 +1,410 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  Copy,
+  GripVertical,
+  Plus,
+  Trash2
+} from 'lucide-react'
+import {
+  autoScrollEditorDuringDrag,
+  deleteRootBlock,
+  duplicateRootBlock,
+  getRootBlockInfo,
+  insertRootParagraph,
+  moveRootBlock,
+  rootBlockPositionFromPoint,
+  rootBlockPositionFromPointer,
+  selectRootBlock
+} from './tiptapBlocks'
+
+const BLOCK_MENU_WIDTH = 184
+
+function clamp(value, minimum, maximum) {
+  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum))
+}
+
+function containsTarget(container, target) {
+  return target instanceof Node && Boolean(container?.contains(target))
+}
+
+function BlockMenuAction({ children, danger = false, onClick }) {
+  return (
+    <button
+      type="button"
+      className={danger ? 'is-danger' : ''}
+      role="menuitem"
+      onMouseDown={event => event.preventDefault()}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  )
+}
+
+export default function TiptapBlockControls({
+  editor,
+  labels,
+  renderExtraMenu
+}) {
+  const [selectedPosition, setSelectedPosition] = useState(null)
+  const [hoveredPosition, setHoveredPosition] = useState(null)
+  const [pointerInsideEditor, setPointerInsideEditor] = useState(false)
+  const [lockedPosition, setLockedPosition] = useState(null)
+  const [layout, setLayout] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [dragState, setDragState] = useState(null)
+  const layerRef = useRef(null)
+  const dragStateRef = useRef(null)
+  const didDragRef = useRef(false)
+  const hoverExitTimerRef = useRef(null)
+  const activePosition = lockedPosition ?? (
+    pointerInsideEditor ? hoveredPosition : selectedPosition
+  )
+  const isDragging = Boolean(dragState)
+  const updateDragState = useCallback(value => {
+    const nextValue = typeof value === 'function'
+      ? value(dragStateRef.current)
+      : value
+    dragStateRef.current = nextValue
+    setDragState(nextValue)
+  }, [])
+  const cancelHoverExit = useCallback(() => {
+    if (hoverExitTimerRef.current === null) return
+    window.clearTimeout(hoverExitTimerRef.current)
+    hoverExitTimerRef.current = null
+  }, [])
+  const scheduleHoverExit = useCallback(() => {
+    cancelHoverExit()
+    hoverExitTimerRef.current = window.setTimeout(() => {
+      setHoveredPosition(null)
+      setPointerInsideEditor(false)
+      hoverExitTimerRef.current = null
+    }, 180)
+  }, [cancelHoverExit])
+
+  const updateLayout = useCallback(preferredPosition => {
+    if (
+      !editor ||
+      editor.isDestroyed ||
+      !editor.isEditable ||
+      preferredPosition === null
+    ) {
+      setLayout(null)
+      return
+    }
+    const info = getRootBlockInfo(editor.state, preferredPosition)
+    const dom = info && editor.view.nodeDOM(info.position)
+    if (!info || !(dom instanceof HTMLElement)) {
+      setLayout(null)
+      return
+    }
+    const rect = dom.getBoundingClientRect()
+    const top = clamp(rect.top + Math.min(8, Math.max(0, (rect.height - 22) / 2)), 4, window.innerHeight - 26)
+    const gripLeft = clamp(rect.left - 30, 22, window.innerWidth - 24)
+    const plusLeft = clamp(gripLeft - 22, 0, window.innerWidth - 46)
+    const menuLeft = clamp(
+      gripLeft,
+      8,
+      window.innerWidth - BLOCK_MENU_WIDTH - 8
+    )
+    const menuHeight = info.node.type.name === 'table' ? 250 : 148
+    setLayout({
+      block: info,
+      grip: { left: gripLeft, top },
+      plus: { left: plusLeft, top },
+      menu: {
+        left: menuLeft,
+        top: clamp(top + 25, 8, window.innerHeight - menuHeight)
+      },
+      rect
+    })
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return undefined
+    const activateFromSelection = () => {
+      const info = getRootBlockInfo(editor.state)
+      setSelectedPosition(info?.position ?? null)
+    }
+    const activateFromPointer = event => {
+      if (menuOpen || isDragging) return
+      cancelHoverExit()
+      setPointerInsideEditor(true)
+      const info = rootBlockPositionFromPointer(
+        editor,
+        event.clientX,
+        event.clientY
+      )
+      if (!info) {
+        setHoveredPosition(null)
+        return
+      }
+      setHoveredPosition(info.position)
+    }
+    const clearPointer = event => {
+      if (containsTarget(layerRef.current, event.relatedTarget)) {
+        cancelHoverExit()
+        return
+      }
+      scheduleHoverExit()
+    }
+    activateFromSelection()
+    editor.on('selectionUpdate', activateFromSelection)
+    editor.on('transaction', activateFromSelection)
+    editor.view.dom.addEventListener('pointermove', activateFromPointer)
+    editor.view.dom.addEventListener('pointerleave', clearPointer)
+    return () => {
+      editor.off('selectionUpdate', activateFromSelection)
+      editor.off('transaction', activateFromSelection)
+      editor.view.dom.removeEventListener('pointermove', activateFromPointer)
+      editor.view.dom.removeEventListener('pointerleave', clearPointer)
+    }
+  }, [
+    cancelHoverExit,
+    editor,
+    isDragging,
+    menuOpen,
+    scheduleHoverExit
+  ])
+
+  useEffect(() => cancelHoverExit, [cancelHoverExit])
+
+  useEffect(() => {
+    updateLayout(activePosition)
+  }, [activePosition, updateLayout])
+
+  useEffect(() => {
+    const reposition = () => updateLayout(activePosition)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
+    return () => {
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+  }, [activePosition, updateLayout])
+
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const close = event => {
+      if (layerRef.current?.contains(event.target)) return
+      setMenuOpen(false)
+      setLockedPosition(null)
+    }
+    const closeOnEscape = event => {
+      if (event.key !== 'Escape') return
+      setMenuOpen(false)
+      setLockedPosition(null)
+      editor.view.focus()
+    }
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [editor, menuOpen])
+
+  useEffect(() => {
+    if (!isDragging) return undefined
+    const handleDragOver = event => {
+      autoScrollEditorDuringDrag(editor, event.clientY)
+      const target = rootBlockPositionFromPoint(editor, event.clientX, event.clientY)
+      const currentDrag = dragStateRef.current
+      if (!currentDrag || !target) return
+      if (target.position === currentDrag.sourcePosition) {
+        updateDragState(current => ({
+          ...current,
+          targetPosition: null,
+          indicator: null
+        }))
+        return
+      }
+      const targetDom = editor.view.nodeDOM(target.position)
+      if (!(targetDom instanceof HTMLElement)) return
+      event.preventDefault()
+      const rect = targetDom.getBoundingClientRect()
+      const after = event.clientY >= rect.top + rect.height / 2
+      updateDragState(current => ({
+        ...current,
+        targetPosition: after ? target.position + target.node.nodeSize : target.position,
+        indicator: {
+          left: rect.left,
+          top: after ? rect.bottom : rect.top,
+          width: rect.width
+        }
+      }))
+    }
+    const handleDrop = event => {
+      event.preventDefault()
+      event.stopPropagation()
+      const currentDrag = dragStateRef.current
+      if (currentDrag && currentDrag.targetPosition !== null) {
+        moveRootBlock(editor, currentDrag.sourcePosition, currentDrag.targetPosition)
+      }
+      updateDragState(null)
+      setHoveredPosition(null)
+      setPointerInsideEditor(false)
+      setLockedPosition(null)
+      window.setTimeout(() => {
+        didDragRef.current = false
+      }, 0)
+    }
+    const handleEnd = () => {
+      updateDragState(null)
+      setHoveredPosition(null)
+      setPointerInsideEditor(false)
+      setLockedPosition(null)
+      window.setTimeout(() => {
+        didDragRef.current = false
+      }, 0)
+    }
+    document.addEventListener('dragover', handleDragOver)
+    document.addEventListener('drop', handleDrop)
+    document.addEventListener('dragend', handleEnd)
+    editor.view.dom.addEventListener('drop', handleDrop, true)
+    return () => {
+      document.removeEventListener('dragover', handleDragOver)
+      document.removeEventListener('drop', handleDrop)
+      document.removeEventListener('dragend', handleEnd)
+      editor.view.dom.removeEventListener('drop', handleDrop, true)
+    }
+  }, [editor, isDragging, updateDragState])
+
+  if (!layout || !editor?.isEditable) return null
+  const run = callback => {
+    callback()
+    setMenuOpen(false)
+    setHoveredPosition(null)
+    setPointerInsideEditor(false)
+    setLockedPosition(null)
+    window.requestAnimationFrame(() => updateLayout(selectedPosition))
+  }
+  const insert = side => {
+    if (!insertRootParagraph(editor, layout.block.position, side)) return
+    setMenuOpen(false)
+    setHoveredPosition(null)
+    setPointerInsideEditor(false)
+    setLockedPosition(null)
+  }
+  const extraMenu = renderExtraMenu?.({
+    block: layout.block,
+    close: () => setMenuOpen(false),
+    run
+  })
+  const leaveControls = event => {
+    if (menuOpen || isDragging) return
+    const nextTarget = event.relatedTarget
+    if (
+      containsTarget(layerRef.current, nextTarget) ||
+      containsTarget(editor.view.dom, nextTarget)
+    ) {
+      cancelHoverExit()
+      return
+    }
+    scheduleHoverExit()
+  }
+
+  return (
+    <div
+      className="tiptap-block-control-layer"
+      ref={layerRef}
+      onPointerEnter={cancelHoverExit}
+      onPointerLeave={leaveControls}
+    >
+      <div
+        className={`tiptap-block-selection${menuOpen || dragState ? ' is-active' : ''}`}
+        style={{
+          left: layout.rect.left,
+          top: layout.rect.top,
+          width: layout.rect.width,
+          height: layout.rect.height
+        }}
+      />
+      <button
+        type="button"
+        className="tiptap-block-add"
+        style={layout.plus}
+        aria-label={labels.add}
+        title={labels.addHint}
+        onMouseDown={event => event.preventDefault()}
+        onPointerEnter={cancelHoverExit}
+        onClick={event => insert(event.altKey ? 'before' : 'after')}
+      >
+        <Plus size={14} />
+      </button>
+      <button
+        type="button"
+        draggable
+        className="tiptap-block-handle"
+        style={layout.grip}
+        aria-label={labels.menu}
+        aria-expanded={menuOpen}
+        title={labels.menu}
+        onPointerEnter={cancelHoverExit}
+        onClick={() => {
+          if (didDragRef.current) {
+            didDragRef.current = false
+            return
+          }
+          const opening = !menuOpen
+          selectRootBlock(editor, layout.block.position)
+          setLockedPosition(opening ? layout.block.position : null)
+          setMenuOpen(opening)
+        }}
+        onDragStart={event => {
+          didDragRef.current = true
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData(
+            'application/x-mysthra-block',
+            String(layout.block.position)
+          )
+          setMenuOpen(false)
+          setLockedPosition(layout.block.position)
+          updateDragState({
+            sourcePosition: layout.block.position,
+            targetPosition: null,
+            indicator: null
+          })
+        }}
+      >
+        <GripVertical size={14} />
+      </button>
+      {menuOpen && (
+        <div
+          className="tiptap-block-menu"
+          style={layout.menu}
+          role="menu"
+          aria-label={labels.actions}
+          onPointerEnter={cancelHoverExit}
+        >
+          {extraMenu}
+          {extraMenu && <div className="tiptap-block-menu-separator" />}
+          <BlockMenuAction onClick={() => insert('before')}>
+            <ArrowUpToLine size={13} />
+            {labels.insertAbove}
+          </BlockMenuAction>
+          <BlockMenuAction onClick={() => insert('after')}>
+            <ArrowDownToLine size={13} />
+            {labels.insertBelow}
+          </BlockMenuAction>
+          <BlockMenuAction onClick={() => run(() => duplicateRootBlock(editor, layout.block.position))}>
+            <Copy size={13} />
+            {labels.duplicate}
+          </BlockMenuAction>
+          <BlockMenuAction
+            danger
+            onClick={() => run(() => deleteRootBlock(editor, layout.block.position))}
+          >
+            <Trash2 size={13} />
+            {labels.delete}
+          </BlockMenuAction>
+        </div>
+      )}
+      {dragState?.indicator && (
+        <div className="tiptap-block-drop-indicator" style={dragState.indicator} />
+      )}
+    </div>
+  )
+}

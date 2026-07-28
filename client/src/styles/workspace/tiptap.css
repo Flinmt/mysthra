@@ -37,13 +37,19 @@
   --tiptap-toggle-hover: var(--workspace-theme-accent-soft);
   --tiptap-toggle-line: var(--workspace-theme-accent-border);
   --tiptap-toggle-text: var(--text-primary);
+  --tiptap-context-surface: color-mix(in srgb, var(--theme-custom-surface) 96%, var(--theme-custom-bg));
+  --tiptap-callout-neutral: var(--text-secondary);
+  --tiptap-callout-info: var(--accent-color);
+  --tiptap-callout-success: #55a879;
+  --tiptap-callout-warning: #c69045;
+  --tiptap-callout-danger: #bd625e;
 }
 
 .tiptap-editor .ProseMirror {
   min-height: 320px;
-  padding: 0 28px 80px;
+  padding: 0 28px 80px 52px;
   outline: none;
-  font-size: 13px;
+  font-size: var(--workspace-editor-body-font-size);
   line-height: 1.6;
 }
 
@@ -62,6 +68,453 @@
   color: var(--text-secondary);
   border-left: 2px solid var(--arcane-color);
 }
+
+.tiptap-callout {
+  --tiptap-callout-color: var(--tiptap-callout-info);
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 6px;
+  margin: 2px 0 12px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--tiptap-callout-color) 10%, var(--theme-custom-surface));
+  border: 1px solid color-mix(in srgb, var(--tiptap-callout-color) 34%, var(--workspace-shell-border));
+  border-radius: 5px;
+}
+
+.tiptap-callout[data-variant="neutral"] { --tiptap-callout-color: var(--tiptap-callout-neutral); }
+.tiptap-callout[data-variant="success"] { --tiptap-callout-color: var(--tiptap-callout-success); }
+.tiptap-callout[data-variant="warning"] { --tiptap-callout-color: var(--tiptap-callout-warning); }
+.tiptap-callout[data-variant="danger"] { --tiptap-callout-color: var(--tiptap-callout-danger); }
+
+.tiptap-callout-controls {
+  position: relative;
+  min-width: 0;
+}
+
+.tiptap-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--tiptap-callout-color);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.tiptap-editor .ProseMirror[contenteditable="true"] .tiptap-callout-icon {
+  cursor: pointer;
+}
+
+.tiptap-editor .ProseMirror[contenteditable="true"] .tiptap-callout-icon:hover,
+.tiptap-callout-icon[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--tiptap-callout-color) 14%, transparent);
+}
+
+.tiptap-callout-icon:disabled {
+  opacity: 1;
+}
+
+.tiptap-callout-content {
+  min-width: 0;
+}
+
+.tiptap-callout-content > * {
+  margin: 0 0 7px;
+}
+
+.tiptap-callout-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap-callout-popover {
+  position: absolute;
+  top: 29px;
+  left: -6px;
+  z-index: 120;
+  width: 208px;
+  padding: 7px;
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-context-surface);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 5px;
+  box-shadow: 0 12px 28px var(--tiptap-menu-shadow);
+}
+
+.tiptap-callout-popover-label {
+  display: block;
+  padding: 2px 2px 5px;
+  color: var(--tiptap-menu-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.tiptap-callout-variants,
+.tiptap-callout-icons {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.tiptap-callout-variants {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.tiptap-callout-icons {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.tiptap-callout-variants button,
+.tiptap-callout-icons button,
+.tiptap-callout-convert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  padding: 0;
+  color: var(--tiptap-menu-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tiptap-callout-variants button {
+  --variant-color: var(--tiptap-callout-info);
+}
+
+.tiptap-callout-variants button[data-variant="neutral"] { --variant-color: var(--tiptap-callout-neutral); }
+.tiptap-callout-variants button[data-variant="success"] { --variant-color: var(--tiptap-callout-success); }
+.tiptap-callout-variants button[data-variant="warning"] { --variant-color: var(--tiptap-callout-warning); }
+.tiptap-callout-variants button[data-variant="danger"] { --variant-color: var(--tiptap-callout-danger); }
+
+.tiptap-callout-variants button::before {
+  width: 13px;
+  height: 13px;
+  content: '';
+  background: var(--variant-color);
+  border-radius: 50%;
+}
+
+.tiptap-callout-variants button:hover,
+.tiptap-callout-variants button.is-selected,
+.tiptap-callout-icons button:hover,
+.tiptap-callout-icons button.is-selected {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+  border-color: var(--tiptap-menu-border);
+}
+
+.tiptap-callout-convert {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 6px;
+  border-top: 1px solid var(--tiptap-menu-border);
+  border-radius: 0 0 3px 3px;
+  font: inherit;
+  font-size: 11px;
+}
+
+.tiptap-callout-convert:hover {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+}
+
+.tiptap-editor .tableWrapper {
+  width: 100%;
+  margin: 4px 0 12px;
+  overflow-x: auto;
+  scrollbar-color: var(--accent-color) transparent;
+}
+
+.tiptap-editor table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tiptap-editor th,
+.tiptap-editor td {
+  position: relative;
+  min-width: 80px;
+  height: 29px;
+  padding: 4px 7px;
+  vertical-align: top;
+  border: 1px solid var(--workspace-theme-accent-border);
+}
+
+.tiptap-editor th {
+  color: var(--text-primary);
+  background: var(--workspace-theme-accent-soft);
+  font-weight: 650;
+}
+
+.tiptap-editor td {
+  background: color-mix(in srgb, var(--theme-custom-surface) 78%, transparent);
+}
+
+.tiptap-editor th > p,
+.tiptap-editor td > p {
+  min-height: 20px;
+  margin: 0;
+}
+
+.tiptap-editor .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  content: '';
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 46%, transparent);
+  pointer-events: none;
+}
+
+.tiptap-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  z-index: 4;
+  width: 4px;
+  background: var(--accent-color);
+  cursor: col-resize;
+  pointer-events: none;
+}
+
+.resize-cursor {
+  cursor: col-resize;
+}
+
+.tiptap-block-control-layer,
+.tiptap-table-context-layer {
+  display: contents;
+}
+
+.tiptap-block-add,
+.tiptap-block-handle {
+  position: fixed;
+  z-index: 116;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  color: var(--tiptap-menu-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: .64;
+}
+
+.tiptap-block-add:hover,
+.tiptap-block-add:focus-visible,
+.tiptap-block-handle:hover,
+.tiptap-block-handle:focus-visible,
+.tiptap-block-handle[aria-expanded="true"] {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+  outline: none;
+  opacity: 1;
+}
+
+.tiptap-block-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.tiptap-block-handle:active {
+  cursor: grabbing;
+}
+
+.tiptap-block-selection {
+  position: fixed;
+  z-index: 109;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tiptap-block-selection.is-active {
+  background: color-mix(in srgb, var(--accent-color) 5%, transparent);
+  border-color: color-mix(in srgb, var(--accent-color) 42%, transparent);
+}
+
+.tiptap-block-menu,
+.tiptap-table-axis-menu {
+  position: fixed;
+  z-index: 119;
+  width: 184px;
+  padding: 4px;
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-context-surface);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 5px;
+  box-shadow: 0 10px 24px var(--tiptap-menu-shadow);
+}
+
+.tiptap-block-menu-title {
+  display: block;
+  padding: 5px 7px 6px;
+  color: var(--tiptap-menu-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.tiptap-block-menu button,
+.tiptap-table-axis-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 7px;
+  color: var(--tiptap-menu-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.tiptap-block-menu button:hover,
+.tiptap-block-menu button.is-active,
+.tiptap-table-axis-menu button:hover,
+.tiptap-table-axis-menu button.is-active {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+}
+
+.tiptap-block-menu button.is-danger,
+.tiptap-table-axis-menu button.is-danger {
+  color: var(--danger-color, #d97872);
+}
+
+.tiptap-block-menu button:disabled,
+.tiptap-table-axis-menu button:disabled {
+  cursor: default;
+  opacity: .4;
+}
+
+.tiptap-block-menu-separator,
+.tiptap-table-axis-menu-separator {
+  height: 1px;
+  margin: 3px 5px;
+  background: var(--tiptap-menu-border);
+}
+
+.tiptap-block-drop-indicator,
+.tiptap-table-axis-drop-indicator {
+  position: fixed;
+  z-index: 121;
+  height: 2px;
+  background: var(--accent-color);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 24%, transparent);
+  pointer-events: none;
+}
+
+.tiptap-table-active-cell {
+  position: fixed;
+  z-index: 110;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 72%, transparent);
+  pointer-events: none;
+}
+
+.tiptap-table-axis-handle {
+  position: fixed;
+  z-index: 116;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: #fff;
+  background: var(--accent-color);
+  border: 0;
+  border-radius: 4px;
+  box-shadow: 0 3px 9px var(--tiptap-menu-shadow);
+  cursor: grab;
+  opacity: .88;
+  touch-action: none;
+  user-select: none;
+}
+
+.tiptap-table-axis-handle:hover,
+.tiptap-table-axis-handle:focus-visible,
+.tiptap-table-axis-handle[aria-expanded="true"] {
+  color: var(--tiptap-menu-accent);
+  background: var(--tiptap-menu-hover);
+  outline: none;
+  opacity: 1;
+}
+
+.tiptap-table-axis-handle.is-column {
+  height: 18px;
+}
+
+.tiptap-table-axis-menu {
+  width: 210px;
+}
+
+.tiptap-table-menu-toggle {
+  white-space: nowrap;
+}
+
+.tiptap-table-menu-toggle .tiptap-table-toggle-status {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.tiptap-table-toggle-switch {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  background: color-mix(in srgb, var(--tiptap-menu-muted) 24%, transparent);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 999px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.tiptap-table-toggle-switch > span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  background: var(--tiptap-menu-muted);
+  border-radius: 50%;
+  transition: left 120ms ease, background 120ms ease;
+}
+
+.tiptap-table-menu-toggle[aria-checked="true"] .tiptap-table-toggle-switch {
+  background: color-mix(in srgb, var(--accent-color) 38%, transparent);
+  border-color: color-mix(in srgb, var(--accent-color) 70%, transparent);
+}
+
+.tiptap-table-menu-toggle[aria-checked="true"] .tiptap-table-toggle-switch > span {
+  left: 12px;
+  background: var(--accent-color);
+}
+
 .tiptap-editor .ProseMirror .tiptap-expand {
   margin: 0 0 10px;
   position: relative;
@@ -513,7 +966,11 @@
     margin-left: 0;
   }
 
-  .tiptap-editor .ProseMirror,
+  .tiptap-editor .ProseMirror {
+    padding-right: 18px;
+    padding-left: 52px;
+  }
+
   .tiptap-toolbar { padding-inline: 18px; }
 
   .tiptap-media-image {

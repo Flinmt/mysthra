@@ -29,7 +29,7 @@ export const codeMirrorTheme = EditorView.theme({
   '&': {
     color: 'var(--workspace-editor-text)',
     backgroundColor: 'transparent',
-    fontSize: '0.95rem'
+    fontSize: 'calc(var(--workspace-editor-body-font-size, 13px) + 1px)'
   },
   '.cm-scroller': {
     fontFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
@@ -60,7 +60,9 @@ export const MARKDOWN_PREVIEW_STYLES = `
     padding: 0;
     color: var(--workspace-editor-text);
     background: transparent;
-    font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: var(--workspace-editor-body-font-size, 13px);
+    line-height: 1.65;
   }
   h1, h2, h3, h4, h5, h6 { color: var(--workspace-editor-text); line-height: 1.15; margin: 1.35em 0 0.55em; }
   h1:first-child, h2:first-child, h3:first-child { margin-top: 0; }

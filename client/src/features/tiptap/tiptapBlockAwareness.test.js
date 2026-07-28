@@ -1,5 +1,6 @@
 import { Editor, Node } from '@tiptap/core'
 import Paragraph from '@tiptap/extension-paragraph'
+import { TableKit } from '@tiptap/extension-table'
 import Text from '@tiptap/extension-text'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TiptapBlockAwareness } from './tiptapBlockAwareness'
@@ -10,6 +11,7 @@ import {
   TiptapListItem,
   TiptapToggleHeading
 } from './tiptapNodes'
+import { TiptapTableCell, TiptapTableHeader } from './tiptapTables'
 
 const TiptapTestDocument = Node.create({
   name: 'doc',
@@ -34,6 +36,12 @@ function createEditor(content, editable = true) {
       TiptapBulletList,
       TiptapBlockquote,
       TiptapToggleHeading,
+      TableKit.configure({
+        tableCell: false,
+        tableHeader: false
+      }),
+      TiptapTableCell,
+      TiptapTableHeader,
       TiptapBlockAwareness.configure({
         rootPlaceholder: 'Root prompt',
         blockPlaceholder: 'Block prompt',
@@ -158,6 +166,30 @@ describe('Tiptap block awareness', () => {
     expect(paragraphElement.classList.contains('tiptap-active-block')).toBe(true)
     expect(paragraphElement.classList.contains('is-empty')).toBe(false)
     expect(paragraphElement.hasAttribute('data-placeholder')).toBe(false)
+  })
+
+  it('does not show placeholders inside table cells or headers', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [{ type: 'tableHeader', content: [paragraph()] }]
+          },
+          {
+            type: 'tableRow',
+            content: [{ type: 'tableCell', content: [paragraph()] }]
+          }
+        ]
+      }]
+    })
+    const paragraphs = editor.view.dom.querySelectorAll('table p')
+
+    expect(paragraphs[0].hasAttribute('data-placeholder')).toBe(false)
+    editor.commands.setTextSelection(textblockPositions(editor)[1])
+    expect(paragraphs[1].hasAttribute('data-placeholder')).toBe(false)
   })
 
   it('removes the placeholder when content is inserted', () => {

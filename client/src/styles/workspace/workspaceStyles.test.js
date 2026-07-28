@@ -39,10 +39,15 @@ describe('workspace style boundaries', () => {
 
   it('keeps the Notion writing surface compact and avoids a fixed editor height', () => {
     const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
+    const editors = fs.readFileSync(path.join(import.meta.dirname, 'editors.css'), 'utf8')
+    const markdownTheme = fs.readFileSync(path.join(sourceRoot, 'workspace/markdownTheme.js'), 'utf8')
     const document = fs.readFileSync(path.join(import.meta.dirname, 'document.css'), 'utf8')
 
     expect(tiptap).not.toContain('min-height: 420px')
-    expect(tiptap).toContain('font-size: 13px')
+    expect(editors).toContain('--workspace-editor-body-font-size: 13px')
+    expect(tiptap).toContain('font-size: var(--workspace-editor-body-font-size)')
+    expect(markdownTheme).toContain("fontSize: 'calc(var(--workspace-editor-body-font-size, 13px) + 1px)'")
+    expect(markdownTheme).toContain('font-size: var(--workspace-editor-body-font-size, 13px)')
     expect(tiptap).toContain('padding: 0 28px 80px')
     expect(document).toContain('width: min(780px,100% - 80px)')
     expect(document).toContain('.editor-page.is-wiki-page.is-wide-content .document-content-frame')

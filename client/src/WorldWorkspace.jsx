@@ -2719,6 +2719,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         title: t('workspace.tab_type_selector_title'),
                         description: t('workspace.tab_type_selector_hint'),
                         stableGroup: t('workspace.tab_type_stable_group'),
+                        experimentalGroup: t('workspace.tab_type_experimental_group'),
+                        experimental: t('workspace.experimental'),
                         notion: t('workspace.tab_type_notion'),
                         notionHint: t('workspace.tab_type_notion_hint'),
                         markdown: t('workspace.tab_type_markdown'),

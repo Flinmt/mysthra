@@ -7,6 +7,8 @@ const labels = {
   title: 'Choose tab type',
   description: 'Select how this tab should work.',
   stableGroup: 'Tab types',
+  experimentalGroup: 'Under evaluation',
+  experimental: 'Experimental',
   notion: 'Notion',
   notionHint: 'Block editor',
   markdown: 'Markdown/HTML',
@@ -29,11 +31,18 @@ describe('TabTypeSelector', () => {
 
     const stableGroup = screen.getByRole('group', { name: 'Tab types' })
     expect(stableGroup).toBeTruthy()
-    for (const button of stableGroup.querySelectorAll('button')) {
-      expect(button.className).toBe('tab-type-option')
-    }
+    expect(stableGroup.querySelectorAll('button')).toHaveLength(1)
     expect(screen.getByRole('button', { name: /Notion/ }).className).toBe('tab-type-option')
-    expect(screen.queryByText('Experimental')).toBeNull()
+    const experimentalGroup = screen.getByRole('group', { name: 'Under evaluation' })
+    expect(experimentalGroup.querySelectorAll('button')).toHaveLength(3)
+    for (const button of experimentalGroup.querySelectorAll('button')) {
+      expect(button.className).toBe('tab-type-option is-experimental')
+    }
+    expect(screen.getAllByText('Experimental')).toHaveLength(3)
+    expect(screen.getByRole('button', { name: /Notion/ }).textContent).not.toContain('Experimental')
+    expect(screen.getByRole('button', { name: /Markdown\/HTML/ }).textContent).toContain('Experimental')
+    expect(screen.getByRole('button', { name: /Map/ }).textContent).toContain('Experimental')
+    expect(screen.getByRole('button', { name: /Board/ }).textContent).toContain('Experimental')
     expect(screen.queryByText('Tiptap')).toBeNull()
     await user.click(screen.getByRole('button', { name: /Markdown\/HTML/ }))
     await user.click(screen.getByRole('button', { name: /Notion/ }))
