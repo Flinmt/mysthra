@@ -30,6 +30,8 @@ describe('TiptapSlashMenu', () => {
     expect(getCommandOption('Título expansível 1').querySelector('kbd')).toBeNull()
     expect(getCommandOption('Título expansível 6')).not.toBeNull()
     expect(getCommandOption('Citação').querySelector('kbd')).toBeNull()
+    expect(getCommandOption('Destaque').querySelector('kbd')).toBeNull()
+    expect(getCommandOption('Tabela').querySelector('kbd')).toBeNull()
     expect(getCommandOption('Inserir mídia').querySelector('kbd')).toBeNull()
     expect(screen.queryByText('Código')).toBeNull()
     expect(screen.queryByText('Expandir')).toBeNull()
@@ -66,5 +68,13 @@ describe('TiptapSlashMenu', () => {
       'áudio'
     ]))
     expect(TIPTAP_COMMANDS.filter(item => item.group === 'Mídia')).toHaveLength(1)
+  })
+
+  it('exposes callout and table aliases in Portuguese and English', () => {
+    const callout = TIPTAP_COMMANDS.find(item => item.id === 'callout')
+    const table = TIPTAP_COMMANDS.find(item => item.id === 'table')
+
+    expect(callout.keywords).toEqual(expect.arrayContaining(['callout', 'aviso', 'destaque']))
+    expect(table.keywords).toEqual(expect.arrayContaining(['table', 'tabela', 'grade', 'planilha']))
   })
 })

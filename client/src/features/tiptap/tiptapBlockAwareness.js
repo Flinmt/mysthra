@@ -15,6 +15,12 @@ function findAncestor($position, nodeName) {
 function getPlaceholder($anchor, options) {
   const block = $anchor.parent
   if (block.content.size > 0) return null
+  if (
+    findAncestor($anchor, 'tableCell') ||
+    findAncestor($anchor, 'tableHeader')
+  ) {
+    return null
+  }
 
   if (block.type.name === 'heading') {
     const toggleHeading = findAncestor($anchor, 'toggleHeading')

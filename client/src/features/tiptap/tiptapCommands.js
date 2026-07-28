@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import {
+  Grid3X3,
   Heading1,
   Heading2,
   Heading3,
@@ -7,6 +8,7 @@ import {
   Heading5,
   Heading6,
   Images,
+  Info,
   List,
   ListOrdered,
   Minus,
@@ -23,25 +25,56 @@ const command = (id, label, group, Icon, shortcut = null, keywords = []) => ({
   icon: createElement(Icon, { size: 15, strokeWidth: 1.8, 'aria-hidden': true })
 })
 
-export const TIPTAP_COMMANDS = [
-  command('paragraph', 'Texto', 'Texto', Pilcrow, ['Mod', 'Alt', '0']),
-  command('heading-1', 'Título 1', 'Texto', Heading1, ['Mod', 'Alt', '1']),
-  command('heading-2', 'Título 2', 'Texto', Heading2, ['Mod', 'Alt', '2']),
-  command('heading-3', 'Título 3', 'Texto', Heading3, ['Mod', 'Alt', '3']),
-  command('heading-4', 'Título 4', 'Texto', Heading4, ['Mod', 'Alt', '4']),
-  command('heading-5', 'Título 5', 'Texto', Heading5, ['Mod', 'Alt', '5']),
-  command('heading-6', 'Título 6', 'Texto', Heading6, ['Mod', 'Alt', '6']),
-  command('blockquote', 'Citação', 'Texto', Quote),
-  command('toggle-heading-1', 'Título expansível 1', 'Títulos expansíveis', Heading1),
-  command('toggle-heading-2', 'Título expansível 2', 'Títulos expansíveis', Heading2),
-  command('toggle-heading-3', 'Título expansível 3', 'Títulos expansíveis', Heading3),
-  command('toggle-heading-4', 'Título expansível 4', 'Títulos expansíveis', Heading4),
-  command('toggle-heading-5', 'Título expansível 5', 'Títulos expansíveis', Heading5),
-  command('toggle-heading-6', 'Título expansível 6', 'Títulos expansíveis', Heading6),
-  command('bulletList', 'Lista', 'Listas', List, ['Mod', 'Shift', '8']),
-  command('orderedList', 'Lista numerada', 'Listas', ListOrdered, ['Mod', 'Shift', '7']),
-  command('horizontalRule', 'Divisor', 'Estrutura', Minus),
-  command('media', 'Inserir mídia', 'Mídia', Images, null, [
+const translate = (t, key, fallback) => {
+  const value = t?.(key, fallback)
+  return !value || value === key ? fallback : value
+}
+
+export function createTiptapCommands(t) {
+  const textGroup = translate(t, 'workspace.tiptap_group_text', 'Texto')
+  const toggleGroup = translate(t, 'workspace.tiptap_group_toggles', 'Títulos expansíveis')
+  const listGroup = translate(t, 'workspace.tiptap_group_lists', 'Listas')
+  const highlightGroup = translate(t, 'workspace.tiptap_group_highlights', 'Destaques')
+  const structureGroup = translate(t, 'workspace.tiptap_group_structure', 'Estrutura')
+  const mediaGroup = translate(t, 'workspace.tiptap_group_media', 'Mídia')
+
+  return [
+    command('paragraph', translate(t, 'workspace.tiptap_command_text', 'Texto'), textGroup, Pilcrow, ['Mod', 'Alt', '0']),
+    ...[1, 2, 3, 4, 5, 6].map(level => command(
+      `heading-${level}`,
+      translate(t, 'workspace.tiptap_command_heading', `Título ${level}`).replace('{{level}}', level),
+      textGroup,
+      [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6][level - 1],
+      ['Mod', 'Alt', String(level)]
+    )),
+    command('blockquote', translate(t, 'workspace.tiptap_command_quote', 'Citação'), textGroup, Quote),
+    ...[1, 2, 3, 4, 5, 6].map(level => command(
+      `toggle-heading-${level}`,
+      translate(t, 'workspace.tiptap_command_toggle_heading', `Título expansível ${level}`).replace('{{level}}', level),
+      toggleGroup,
+      [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6][level - 1]
+    )),
+    command('bulletList', translate(t, 'workspace.tiptap_command_list', 'Lista'), listGroup, List, ['Mod', 'Shift', '8']),
+    command('orderedList', translate(t, 'workspace.tiptap_command_ordered_list', 'Lista numerada'), listGroup, ListOrdered, ['Mod', 'Shift', '7']),
+    command('callout', translate(t, 'workspace.tiptap_command_callout', 'Destaque'), highlightGroup, Info, null, [
+      'callout',
+      'aviso',
+      'destaque',
+      'informação',
+      'informacao',
+      'notice',
+      'alert'
+    ]),
+    command('horizontalRule', translate(t, 'workspace.tiptap_command_divider', 'Divisor'), structureGroup, Minus),
+    command('table', translate(t, 'workspace.tiptap_command_table', 'Tabela'), structureGroup, Grid3X3, null, [
+      'table',
+      'tabela',
+      'grade',
+      'grid',
+      'planilha',
+      'spreadsheet'
+    ]),
+    command('media', translate(t, 'workspace.tiptap_command_media', 'Inserir mídia'), mediaGroup, Images, null, [
     'media',
     'mídia',
     'midia',
@@ -51,5 +84,8 @@ export const TIPTAP_COMMANDS = [
     'audio',
     'áudio',
     'som'
-  ])
-]
+    ])
+  ]
+}
+
+export const TIPTAP_COMMANDS = createTiptapCommands()

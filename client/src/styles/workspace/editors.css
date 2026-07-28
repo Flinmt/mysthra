@@ -1,3 +1,8 @@
+.markdown-html-editor,
+.tiptap-editor-shell {
+  --workspace-editor-body-font-size: 13px;
+}
+
 .markdown-html-editor {
   color: #f8fafceb;
   min-height: 420px;

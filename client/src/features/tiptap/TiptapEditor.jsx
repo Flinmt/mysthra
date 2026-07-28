@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Component, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Extension, Node } from '@tiptap/core'
+import { TableKit } from '@tiptap/extension-table'
 import Bold from '@tiptap/extension-bold'
 import Italic from '@tiptap/extension-italic'
 import Strike from '@tiptap/extension-strike'
@@ -11,11 +12,24 @@ import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror'
 import TiptapSlashMenu from './TiptapSlashMenu'
+import { TiptapCallout } from './TiptapCallout'
 import { TiptapBlockAwareness } from './tiptapBlockAwareness'
-import { TIPTAP_COMMANDS } from './tiptapCommands'
+import TiptapBlockControls from './TiptapBlockControls'
+import { createTiptapCommands } from './tiptapCommands'
 import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { insertAssetMedia, TiptapAssetAudio, TiptapAssetImage } from './tiptapMedia'
+import {
+  TiptapTableBlockMenu,
+  TiptapTableControls
+} from './TiptapTableUi'
+import {
+  ensureParagraphAfterTable,
+  TiptapTableCell,
+  TiptapTableClipboard,
+  TiptapTableHeader,
+  TiptapTableNavigation
+} from './tiptapTables'
 import { useTiptapDocument } from './useTiptapDocument'
 import { getAssetFileUrl } from '../assets/assetApi'
 import {
@@ -35,6 +49,33 @@ const TiptapDocument = Node.create({
   topNode: true,
   content: 'block+'
 })
+
+class TiptapControlsBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { failed: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error) {
+    console.error('Tiptap contextual controls failed to mount', error)
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
+}
+
+function isInsideTableCell($position) {
+  for (let depth = $position.depth - 1; depth > 0; depth -= 1) {
+    const name = $position.node(depth).type.name
+    if (name === 'tableCell' || name === 'tableHeader') return true
+  }
+  return false
+}
 
 export default function TiptapEditor({
   content = '',
@@ -57,6 +98,37 @@ export default function TiptapEditor({
     setAwarenessField
   } = collaboration
   const [slashState, setSlashState] = useState(null)
+  const commands = useMemo(() => createTiptapCommands(t), [t])
+  const blockLabels = useMemo(() => ({
+    add: t('workspace.tiptap_block_add', 'Adicionar bloco'),
+    addHint: t('workspace.tiptap_block_add_hint', 'Clique para adicionar abaixo; Alt+clique para adicionar acima'),
+    menu: t('workspace.tiptap_block_menu', 'Abrir ações do bloco ou arrastar'),
+    actions: t('workspace.tiptap_block_actions', 'Ações do bloco'),
+    insertAbove: t('workspace.tiptap_block_insert_above', 'Inserir acima'),
+    insertBelow: t('workspace.tiptap_block_insert_below', 'Inserir abaixo'),
+    duplicate: t('workspace.tiptap_block_duplicate', 'Duplicar'),
+    delete: t('workspace.tiptap_block_delete', 'Excluir')
+  }), [t])
+  const tableLabels = useMemo(() => ({
+    row: t('workspace.tiptap_table_row', 'Linha'),
+    column: t('workspace.tiptap_table_column', 'Coluna'),
+    openRowMenu: t('workspace.tiptap_table_open_row_menu', 'Abrir controles da linha'),
+    openColumnMenu: t('workspace.tiptap_table_open_column_menu', 'Abrir controles da coluna'),
+    cannotDeleteLast: t('workspace.tiptap_table_cannot_delete_last', 'Use Excluir tabela para remover a tabela inteira'),
+    headerRow: t('workspace.tiptap_table_header_row', 'Linha de cabeçalho'),
+    headerColumn: t('workspace.tiptap_table_header_column', 'Coluna de cabeçalho'),
+    addRowAbove: t('workspace.tiptap_table_add_row_above', 'Adicionar linha acima'),
+    addRowBelow: t('workspace.tiptap_table_add_row_below', 'Adicionar linha abaixo'),
+    deleteRow: t('workspace.tiptap_table_delete_row', 'Excluir linha'),
+    duplicateRow: t('workspace.tiptap_table_duplicate_row', 'Duplicar linha'),
+    clearRow: t('workspace.tiptap_table_clear_row', 'Limpar linha'),
+    addColumnLeft: t('workspace.tiptap_table_add_column_left', 'Adicionar coluna à esquerda'),
+    addColumnRight: t('workspace.tiptap_table_add_column_right', 'Adicionar coluna à direita'),
+    deleteColumn: t('workspace.tiptap_table_delete_column', 'Excluir coluna'),
+    duplicateColumn: t('workspace.tiptap_table_duplicate_column', 'Duplicar coluna'),
+    clearColumn: t('workspace.tiptap_table_clear_column', 'Limpar coluna'),
+    table: t('workspace.tiptap_table', 'Tabela')
+  }), [t])
   const extensions = useMemo(() => [
     TiptapDocument,
     Text,
@@ -70,6 +142,35 @@ export default function TiptapEditor({
     TiptapBlockquote,
     TiptapCodeBlock,
     TiptapHardBreak,
+    TiptapCallout.configure({
+      labels: {
+        customize: t('workspace.tiptap_callout_customize', 'Personalizar destaque'),
+        color: t('workspace.tiptap_callout_color', 'Cor'),
+        icon: t('workspace.tiptap_callout_icon', 'Ícone'),
+        convert: t('workspace.tiptap_callout_convert', 'Converter em blocos normais'),
+        variants: {
+          neutral: t('workspace.tiptap_callout_neutral', 'Neutro'),
+          info: t('workspace.tiptap_callout_info', 'Informação'),
+          success: t('workspace.tiptap_callout_success', 'Sucesso'),
+          warning: t('workspace.tiptap_callout_warning', 'Aviso'),
+          danger: t('workspace.tiptap_callout_danger', 'Perigo')
+        }
+      }
+    }),
+    TableKit.configure({
+      table: {
+        resizable: true,
+        renderWrapper: true,
+        cellMinWidth: 80,
+        lastColumnResizable: true
+      },
+      tableCell: false,
+      tableHeader: false
+    }),
+    TiptapTableCell,
+    TiptapTableHeader,
+    TiptapTableClipboard,
+    TiptapTableNavigation,
     Bold,
     Italic,
     Strike,
@@ -131,12 +232,13 @@ export default function TiptapEditor({
   const closeSlashMenu = useCallback(() => setSlashState(null), [])
   const updateSlashMenu = useCallback(() => {
     if (!editor) return
-    if (editor.state.selection.$from.parent.type.name !== 'paragraph') {
+    const { $from } = editor.state.selection
+    if ($from.parent.type.name !== 'paragraph' || isInsideTableCell($from)) {
       setSlashState(null)
       return
     }
     const { from } = editor.state.selection
-    const lineStart = editor.state.selection.$from.start()
+    const lineStart = $from.start()
     const textBeforeCursor = editor.state.doc.textBetween(lineStart, from, '\n')
     const match = textBeforeCursor.match(/^\/(\S*)$/)
     if (!match) {
@@ -144,7 +246,7 @@ export default function TiptapEditor({
       return
     }
     const query = match[1].toLowerCase()
-    const items = TIPTAP_COMMANDS.filter(item =>
+    const items = commands.filter(item =>
       [item.label, ...(item.keywords || [])].some(value => value.toLowerCase().includes(query))
     )
     const coords = editor.view.coordsAtPos(lineStart)
@@ -159,7 +261,7 @@ export default function TiptapEditor({
       ...position,
       range: { from: from - textBeforeCursor.length, to: from }
     }))
-  }, [editor])
+  }, [commands, editor])
 
   useEffect(() => {
     if (!editor) return undefined
@@ -184,6 +286,16 @@ export default function TiptapEditor({
       })
       return
     }
+    if (item.id === 'table') {
+      chain.insertTable({
+        rows: 3,
+        cols: 3,
+        withHeaderRow: true
+      }).run()
+      ensureParagraphAfterTable(editor, { focus: false })
+      closeSlashMenu()
+      return
+    }
     if (item.id.startsWith('heading-')) chain.setHeading({ level: Number(item.id.split('-')[1]) })
     if (item.id.startsWith('toggle-heading-')) {
       chain.setToggleHeading({ level: Number(item.id.split('-')[2]) })
@@ -191,6 +303,7 @@ export default function TiptapEditor({
     if (item.id === 'bulletList') chain.toggleBulletList()
     if (item.id === 'orderedList') chain.toggleOrderedList()
     if (item.id === 'blockquote') chain.setBlockquote()
+    if (item.id === 'callout') chain.insertCallout({ variant: 'info', icon: 'Info' })
     if (item.id === 'horizontalRule') chain.setHorizontalRule()
     chain.run()
     closeSlashMenu()
@@ -236,10 +349,38 @@ export default function TiptapEditor({
     }
   }, [closeSlashMenu, editor, executeSlashCommand, slashState])
 
+  const renderBlockExtraMenu = useCallback(({ block, run }) => (
+    block.node.type.name === 'table'
+      ? (
+          <TiptapTableBlockMenu
+            block={block}
+            editor={editor}
+            labels={tableLabels}
+            run={run}
+          />
+        )
+      : null
+  ), [editor, tableLabels])
+  const contextualControlsReady = Boolean(
+    editor &&
+    editor.state.doc.childCount > 0 &&
+    (!collaborationRoom || collaboration.synced)
+  )
+
   return (
     <div className="tiptap-editor-shell" onKeyDownCapture={handleEditorKeyDown}>
       <div className="tiptap-editor">
         <EditorContent editor={editor} />
+        {contextualControlsReady && (
+          <TiptapControlsBoundary>
+            <TiptapBlockControls
+              editor={editor}
+              labels={blockLabels}
+              renderExtraMenu={renderBlockExtraMenu}
+            />
+            <TiptapTableControls editor={editor} labels={tableLabels} />
+          </TiptapControlsBoundary>
+        )}
         {slashState && editor && (
           <div
             className="tiptap-slash-menu-anchor"
