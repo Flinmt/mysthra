@@ -333,6 +333,8 @@
     "tiptap_block_insert_below": "Inserir abaixo",
     "tiptap_block_duplicate": "Duplicar",
     "tiptap_block_delete": "Excluir",
+    "tiptap_block_transform": "Transformar em",
+    "tiptap_block_transform_back": "Voltar",
     "tiptap_heading_placeholder": "Título {{level}}",
     "tiptap_toggle_heading_placeholder": "Título expansível {{level}}",
     "tiptap_media_unavailable": "Esta mídia não está disponível",

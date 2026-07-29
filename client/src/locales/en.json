@@ -333,6 +333,8 @@
     "tiptap_block_insert_below": "Insert below",
     "tiptap_block_duplicate": "Duplicate",
     "tiptap_block_delete": "Delete",
+    "tiptap_block_transform": "Turn into",
+    "tiptap_block_transform_back": "Back",
     "tiptap_heading_placeholder": "Heading {{level}}",
     "tiptap_toggle_heading_placeholder": "Toggle heading {{level}}",
     "tiptap_media_unavailable": "This media is unavailable",

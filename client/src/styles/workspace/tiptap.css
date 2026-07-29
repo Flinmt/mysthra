@@ -362,6 +362,11 @@
   box-shadow: 0 10px 24px var(--tiptap-menu-shadow);
 }
 
+.tiptap-block-menu {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
 .tiptap-block-menu-title {
   display: block;
   padding: 5px 7px 6px;
@@ -401,6 +406,10 @@
 .tiptap-block-menu button.is-danger,
 .tiptap-table-axis-menu button.is-danger {
   color: var(--danger-color, #d97872);
+}
+
+.tiptap-block-menu-chevron {
+  margin-left: auto;
 }
 
 .tiptap-block-menu button:disabled,

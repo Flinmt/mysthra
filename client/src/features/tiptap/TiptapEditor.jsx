@@ -166,7 +166,19 @@ export default function TiptapEditor({
     insertAbove: t('workspace.tiptap_block_insert_above', 'Inserir acima'),
     insertBelow: t('workspace.tiptap_block_insert_below', 'Inserir abaixo'),
     duplicate: t('workspace.tiptap_block_duplicate', 'Duplicar'),
-    delete: t('workspace.tiptap_block_delete', 'Excluir')
+    delete: t('workspace.tiptap_block_delete', 'Excluir'),
+    transform: t('workspace.tiptap_block_transform', 'Transformar em'),
+    transformBack: t('workspace.tiptap_block_transform_back', 'Voltar'),
+    transformTypes: {
+      paragraph: t('workspace.tiptap_command_text', 'Texto'),
+      'heading-1': t('workspace.tiptap_command_heading', { level: 1 }),
+      'heading-2': t('workspace.tiptap_command_heading', { level: 2 }),
+      'heading-3': t('workspace.tiptap_command_heading', { level: 3 }),
+      bulletList: t('workspace.tiptap_command_list', 'Lista'),
+      orderedList: t('workspace.tiptap_command_ordered_list', 'Lista numerada'),
+      blockquote: t('workspace.tiptap_command_quote', 'Citação'),
+      callout: t('workspace.tiptap_command_callout', 'Destaque')
+    }
   }), [t])
   const tableLabels = useMemo(() => ({
     row: t('workspace.tiptap_table_row', 'Linha'),
