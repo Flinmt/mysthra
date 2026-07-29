@@ -20,6 +20,7 @@ const {
   moveDocument,
   duplicateDocument
 } = require("./tree");
+const soundtracks = require("./soundtracks");
 
 module.exports = {
   ...worlds,
@@ -28,6 +29,7 @@ module.exports = {
   ...users,
   ...collaboration,
   ...themePresets,
+  ...soundtracks,
   getFileTree,
   getVisibleFileTree,
   getDocumentAccess,

@@ -2,9 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   GripVertical,
+  Heading1,
+  Heading2,
+  Heading3,
+  Info,
+  List,
+  ListOrdered,
+  Pilcrow,
   Plus,
+  Quote,
   Trash2
 } from 'lucide-react'
 import {
@@ -18,6 +28,12 @@ import {
   rootBlockPositionFromPointer,
   selectRootBlock
 } from './tiptapBlocks'
+import {
+  BLOCK_TRANSFORM_OPTIONS,
+  canTransformRootBlock,
+  getBlockTransformId,
+  transformRootBlock
+} from './tiptapBlockTransforms'
 
 const BLOCK_MENU_WIDTH = 184
 
@@ -29,11 +45,22 @@ function containsTarget(container, target) {
   return target instanceof Node && Boolean(container?.contains(target))
 }
 
-function BlockMenuAction({ children, danger = false, onClick }) {
+const TRANSFORM_ICONS = {
+  paragraph: Pilcrow,
+  'heading-1': Heading1,
+  'heading-2': Heading2,
+  'heading-3': Heading3,
+  bulletList: List,
+  orderedList: ListOrdered,
+  blockquote: Quote,
+  callout: Info
+}
+
+function BlockMenuAction({ active = false, children, danger = false, onClick }) {
   return (
     <button
       type="button"
-      className={danger ? 'is-danger' : ''}
+      className={`${danger ? 'is-danger' : ''}${active ? ' is-active' : ''}`.trim()}
       role="menuitem"
       onMouseDown={event => event.preventDefault()}
       onClick={onClick}
@@ -54,6 +81,7 @@ export default function TiptapBlockControls({
   const [lockedPosition, setLockedPosition] = useState(null)
   const [layout, setLayout] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [transformMenuOpen, setTransformMenuOpen] = useState(false)
   const [dragState, setDragState] = useState(null)
   const layerRef = useRef(null)
   const dragStateRef = useRef(null)
@@ -109,7 +137,9 @@ export default function TiptapBlockControls({
       8,
       window.innerWidth - BLOCK_MENU_WIDTH - 8
     )
-    const menuHeight = info.node.type.name === 'table' ? 250 : 148
+    const menuHeight = transformMenuOpen
+      ? 258
+      : info.node.type.name === 'table' ? 250 : 178
     setLayout({
       block: info,
       grip: { left: gripLeft, top },
@@ -120,7 +150,7 @@ export default function TiptapBlockControls({
       },
       rect
     })
-  }, [editor])
+  }, [editor, transformMenuOpen])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return undefined
@@ -190,10 +220,15 @@ export default function TiptapBlockControls({
     const close = event => {
       if (layerRef.current?.contains(event.target)) return
       setMenuOpen(false)
+      setTransformMenuOpen(false)
       setLockedPosition(null)
     }
     const closeOnEscape = event => {
       if (event.key !== 'Escape') return
+      if (transformMenuOpen) {
+        setTransformMenuOpen(false)
+        return
+      }
       setMenuOpen(false)
       setLockedPosition(null)
       editor.view.focus()
@@ -204,7 +239,7 @@ export default function TiptapBlockControls({
       document.removeEventListener('pointerdown', close)
       document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [editor, menuOpen])
+  }, [editor, menuOpen, transformMenuOpen])
 
   useEffect(() => {
     if (!isDragging) return undefined
@@ -246,6 +281,7 @@ export default function TiptapBlockControls({
       updateDragState(null)
       setHoveredPosition(null)
       setPointerInsideEditor(false)
+      setTransformMenuOpen(false)
       setLockedPosition(null)
       window.setTimeout(() => {
         didDragRef.current = false
@@ -255,6 +291,7 @@ export default function TiptapBlockControls({
       updateDragState(null)
       setHoveredPosition(null)
       setPointerInsideEditor(false)
+      setTransformMenuOpen(false)
       setLockedPosition(null)
       window.setTimeout(() => {
         didDragRef.current = false
@@ -276,6 +313,7 @@ export default function TiptapBlockControls({
   const run = callback => {
     callback()
     setMenuOpen(false)
+    setTransformMenuOpen(false)
     setHoveredPosition(null)
     setPointerInsideEditor(false)
     setLockedPosition(null)
@@ -284,6 +322,7 @@ export default function TiptapBlockControls({
   const insert = side => {
     if (!insertRootParagraph(editor, layout.block.position, side)) return
     setMenuOpen(false)
+    setTransformMenuOpen(false)
     setHoveredPosition(null)
     setPointerInsideEditor(false)
     setLockedPosition(null)
@@ -352,6 +391,7 @@ export default function TiptapBlockControls({
           selectRootBlock(editor, layout.block.position)
           setLockedPosition(opening ? layout.block.position : null)
           setMenuOpen(opening)
+          setTransformMenuOpen(false)
         }}
         onDragStart={event => {
           didDragRef.current = true
@@ -361,6 +401,7 @@ export default function TiptapBlockControls({
             String(layout.block.position)
           )
           setMenuOpen(false)
+          setTransformMenuOpen(false)
           setLockedPosition(layout.block.position)
           updateDragState({
             sourcePosition: layout.block.position,
@@ -379,27 +420,64 @@ export default function TiptapBlockControls({
           aria-label={labels.actions}
           onPointerEnter={cancelHoverExit}
         >
-          {extraMenu}
-          {extraMenu && <div className="tiptap-block-menu-separator" />}
-          <BlockMenuAction onClick={() => insert('before')}>
-            <ArrowUpToLine size={13} />
-            {labels.insertAbove}
-          </BlockMenuAction>
-          <BlockMenuAction onClick={() => insert('after')}>
-            <ArrowDownToLine size={13} />
-            {labels.insertBelow}
-          </BlockMenuAction>
-          <BlockMenuAction onClick={() => run(() => duplicateRootBlock(editor, layout.block.position))}>
-            <Copy size={13} />
-            {labels.duplicate}
-          </BlockMenuAction>
-          <BlockMenuAction
-            danger
-            onClick={() => run(() => deleteRootBlock(editor, layout.block.position))}
-          >
-            <Trash2 size={13} />
-            {labels.delete}
-          </BlockMenuAction>
+          {transformMenuOpen ? (
+            <>
+              <BlockMenuAction onClick={() => setTransformMenuOpen(false)}>
+                <ChevronLeft size={13} />
+                {labels.transformBack}
+              </BlockMenuAction>
+              <div className="tiptap-block-menu-separator" />
+              {BLOCK_TRANSFORM_OPTIONS.map(option => {
+                const Icon = TRANSFORM_ICONS[option.id]
+                return (
+                  <BlockMenuAction
+                    key={option.id}
+                    active={getBlockTransformId(layout.block.node) === option.id}
+                    onClick={() => run(() => {
+                      transformRootBlock(editor, layout.block.position, option.id)
+                    })}
+                  >
+                    <Icon size={13} />
+                    {labels.transformTypes?.[option.id] || option.id}
+                  </BlockMenuAction>
+                )
+              })}
+            </>
+          ) : (
+            <>
+              {extraMenu}
+              {extraMenu && <div className="tiptap-block-menu-separator" />}
+              {canTransformRootBlock(layout.block.node) && (
+                <>
+                  <BlockMenuAction onClick={() => setTransformMenuOpen(true)}>
+                    <Pilcrow size={13} />
+                    {labels.transform}
+                    <ChevronRight className="tiptap-block-menu-chevron" size={12} />
+                  </BlockMenuAction>
+                  <div className="tiptap-block-menu-separator" />
+                </>
+              )}
+              <BlockMenuAction onClick={() => insert('before')}>
+                <ArrowUpToLine size={13} />
+                {labels.insertAbove}
+              </BlockMenuAction>
+              <BlockMenuAction onClick={() => insert('after')}>
+                <ArrowDownToLine size={13} />
+                {labels.insertBelow}
+              </BlockMenuAction>
+              <BlockMenuAction onClick={() => run(() => duplicateRootBlock(editor, layout.block.position))}>
+                <Copy size={13} />
+                {labels.duplicate}
+              </BlockMenuAction>
+              <BlockMenuAction
+                danger
+                onClick={() => run(() => deleteRootBlock(editor, layout.block.position))}
+              >
+                <Trash2 size={13} />
+                {labels.delete}
+              </BlockMenuAction>
+            </>
+          )}
         </div>
       )}
       {dragState?.indicator && (

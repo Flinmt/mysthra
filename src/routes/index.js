@@ -27,6 +27,7 @@ const {
   renameDocument,
   moveDocument,
   duplicateDocument,
+  getDocumentSoundtrack,
   getWorldConfig,
   getWorldThumbnail,
   getWorldRole,
@@ -38,6 +39,7 @@ const {
   updateWorldMemberRole,
   removeWorldMember,
   saveWorldThumbnail,
+  setDocumentSoundtrack,
   setHomePage,
   listThemePresets,
   createThemePreset,
@@ -465,6 +467,39 @@ async function router(request, response) {
       parseJsonBody,
       requireWorldMemberOrAdmin
     })) return;
+
+    const soundtrackMatch = pathname.match(
+      /^\/api\/worlds\/[^\/]+\/documents\/([^\/]+)\/soundtrack$/
+    );
+    if (soundtrackMatch) {
+      const worldId = getWorldIdFromPath(request.url);
+      if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+      const documentUid = decodeURIComponent(soundtrackMatch[1]);
+
+      try {
+        if (request.method === "GET") {
+          if ((currentUser || !isPublicGet) && !(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
+          const result = await getDocumentSoundtrack(
+            worldId,
+            documentUid,
+            getDocumentRequestUser(currentUser, isPublicGet)
+          );
+          return sendJson(response, 200, result);
+        }
+
+        if (request.method === "PUT") {
+          if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
+          const body = await parseJsonBody(request);
+          const result = await setDocumentSoundtrack(worldId, documentUid, body, currentUser);
+          return sendJson(response, 200, result);
+        }
+
+        return sendJson(response, 405, { error: "Method not allowed" });
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
 
     if (pathname.match(/^\/api\/worlds\/[^\/]+\/documents$/)) {
       const worldId = getWorldIdFromPath(request.url);

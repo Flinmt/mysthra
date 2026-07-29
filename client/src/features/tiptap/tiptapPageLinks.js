@@ -1,4 +1,5 @@
 import Link from '@tiptap/extension-link'
+import { getMarkRange } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { isInternalPageLink } from '../../workspace/utils'
 
@@ -61,6 +62,57 @@ export function insertPageLink(editor, { href = '', label = '' } = {}) {
       marks: [{ type: 'link', attrs: { href } }]
     })
     .run()
+}
+
+export function deletePageLinkAtSelection(editor, key) {
+  if (
+    !editor?.isEditable ||
+    (key !== 'Backspace' && key !== 'Delete') ||
+    !(editor.state.selection instanceof TextSelection)
+  ) {
+    return false
+  }
+
+  const { doc, selection } = editor.state
+  const linkMark = editor.schema.marks.link
+  if (!linkMark) return false
+
+  if (selection.empty) {
+    const adjacentNode = key === 'Backspace'
+      ? selection.$from.nodeBefore
+      : selection.$from.nodeAfter
+    const mark = adjacentNode?.marks.find(candidate =>
+      candidate.type === linkMark && isInternalPageLink(candidate.attrs.href)
+    )
+    if (!mark) return false
+
+    const range = getMarkRange(selection.$from, linkMark, { href: mark.attrs.href })
+    if (!range) return false
+    editor.view.dispatch(editor.state.tr.delete(range.from, range.to).scrollIntoView())
+    return true
+  }
+
+  let deleteFrom = selection.from
+  let deleteTo = selection.to
+  let foundLink = false
+  doc.nodesBetween(selection.from, selection.to, (node, position) => {
+    if (!node.isText) return
+    const mark = node.marks.find(candidate =>
+      candidate.type === linkMark && isInternalPageLink(candidate.attrs.href)
+    )
+    if (!mark) return
+
+    const probePosition = Math.max(selection.from, position)
+    const range = getMarkRange(doc.resolve(probePosition), linkMark, { href: mark.attrs.href })
+    if (!range) return
+    foundLink = true
+    deleteFrom = Math.min(deleteFrom, range.from)
+    deleteTo = Math.max(deleteTo, range.to)
+  })
+
+  if (!foundLink) return false
+  editor.view.dispatch(editor.state.tr.delete(deleteFrom, deleteTo).scrollIntoView())
+  return true
 }
 
 export function getInternalPageLinkHref(target) {

@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useMemo, useState } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Extension, Node } from '@tiptap/core'
@@ -21,12 +21,21 @@ import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { insertAssetMedia, TiptapAssetAudio, TiptapAssetImage } from './tiptapMedia'
 import {
   canInsertPageLink,
+  deletePageLinkAtSelection,
   getInternalPageLinkHref,
   insertPageLink,
   isPageLinkShortcut,
   shouldNavigatePageLink,
   TiptapPageLink
 } from './tiptapPageLinks'
+import TiptapPageSuggestionPopover from './TiptapPageSuggestionPopover'
+import { getPageSuggestionPopoverPosition } from './tiptapPageSuggestionPosition'
+import {
+  buildPageSuggestionTargets,
+  getPageSuggestion,
+  refreshPageSuggestions,
+  TiptapPageSuggestions
+} from './tiptapPageSuggestions'
 import {
   TiptapTableBlockMenu,
   TiptapTableControls
@@ -110,7 +119,18 @@ export default function TiptapEditor({
   } = collaboration
   const [slashState, setSlashState] = useState(null)
   const [pageLinkSearch, setPageLinkSearch] = useState({ isOpen: false, selectedText: '' })
+  const [pageSuggestionPopover, setPageSuggestionPopover] = useState(null)
+  const pageSuggestionOpenTimerRef = useRef(null)
+  const pageSuggestionCloseTimerRef = useRef(null)
   const commands = useMemo(() => createTiptapCommands(t), [t])
+  const pageSuggestionTargets = useMemo(
+    () => buildPageSuggestionTargets(documentTree, documentUid),
+    [documentTree, documentUid]
+  )
+  const visiblePageSuggestionTargets = useMemo(
+    () => editable && !collaboration.readOnly ? pageSuggestionTargets : [],
+    [collaboration.readOnly, editable, pageSuggestionTargets]
+  )
   const pageLinkLabels = useMemo(() => ({
     insertPageLink: t('workspace.insert_page_link'),
     searchTabsAssetsPlaceholder: t('workspace.tiptap_page_link_search_placeholder'),
@@ -123,6 +143,21 @@ export default function TiptapEditor({
     tabTypeMap: t('workspace.tab_type_map'),
     tabTypeBoard: t('workspace.tab_type_board')
   }), [t])
+  const pageSuggestionLabels = useMemo(() => ({
+    suggestionLabel: t('workspace.tiptap_page_suggestion_label'),
+    resultLabel: t('workspace.tiptap_page_suggestion_result'),
+    multiplePages: t('workspace.tiptap_page_suggestion_multiple'),
+    choosePage: t('workspace.tiptap_page_suggestion_choose'),
+    createLink: t('workspace.tiptap_page_suggestion_create_link'),
+    close: t('common.close'),
+    tabTypes: {
+      wiki: t('workspace.tab_type_notion'),
+      tiptap: t('workspace.tab_type_notion'),
+      markdown: t('workspace.tab_type_markdown'),
+      map: t('workspace.tab_type_map'),
+      board: t('workspace.tab_type_board')
+    }
+  }), [t])
   const blockLabels = useMemo(() => ({
     add: t('workspace.tiptap_block_add', 'Adicionar bloco'),
     addHint: t('workspace.tiptap_block_add_hint', 'Clique para adicionar abaixo; Alt+clique para adicionar acima'),
@@ -131,7 +166,19 @@ export default function TiptapEditor({
     insertAbove: t('workspace.tiptap_block_insert_above', 'Inserir acima'),
     insertBelow: t('workspace.tiptap_block_insert_below', 'Inserir abaixo'),
     duplicate: t('workspace.tiptap_block_duplicate', 'Duplicar'),
-    delete: t('workspace.tiptap_block_delete', 'Excluir')
+    delete: t('workspace.tiptap_block_delete', 'Excluir'),
+    transform: t('workspace.tiptap_block_transform', 'Transformar em'),
+    transformBack: t('workspace.tiptap_block_transform_back', 'Voltar'),
+    transformTypes: {
+      paragraph: t('workspace.tiptap_command_text', 'Texto'),
+      'heading-1': t('workspace.tiptap_command_heading', { level: 1 }),
+      'heading-2': t('workspace.tiptap_command_heading', { level: 2 }),
+      'heading-3': t('workspace.tiptap_command_heading', { level: 3 }),
+      bulletList: t('workspace.tiptap_command_list', 'Lista'),
+      orderedList: t('workspace.tiptap_command_ordered_list', 'Lista numerada'),
+      blockquote: t('workspace.tiptap_command_quote', 'Citação'),
+      callout: t('workspace.tiptap_command_callout', 'Destaque')
+    }
   }), [t])
   const tableLabels = useMemo(() => ({
     row: t('workspace.tiptap_table_row', 'Linha'),
@@ -200,6 +247,11 @@ export default function TiptapEditor({
     Strike,
     Underline,
     TiptapPageLink,
+    TiptapPageSuggestions.configure({
+      targets: visiblePageSuggestionTargets,
+      label: pageSuggestionLabels.suggestionLabel,
+      debounceMs: 250
+    }),
     HorizontalRule,
     TiptapAssetImage.configure({
       resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }, documentUid),
@@ -223,7 +275,14 @@ export default function TiptapEditor({
       name: 'tiptapYjsCollaboration',
       addProseMirrorPlugins: () => [ySyncPlugin(collaboration.fragment), yUndoPlugin()]
     })] : [])
-  ], [collaboration.fragment, documentUid, t, worldId])
+  ], [
+    collaboration.fragment,
+    documentUid,
+    pageSuggestionLabels.suggestionLabel,
+    t,
+    visiblePageSuggestionTargets,
+    worldId
+  ])
   const editor = useEditor({
     extensions,
     content: collaboration.doc ? undefined : content,
@@ -235,8 +294,13 @@ export default function TiptapEditor({
   }, [collaboration.readOnly, editable, editor])
 
   useEffect(() => {
+    refreshPageSuggestions(editor, visiblePageSuggestionTargets)
+  }, [editor, visiblePageSuggestionTargets])
+
+  useEffect(() => {
     if (editor?.isEditable) return
     setPageLinkSearch(current => current.isOpen ? { isOpen: false, selectedText: '' } : current)
+    setPageSuggestionPopover(null)
   }, [editor, editor?.isEditable])
 
   useEffect(() => {
@@ -260,6 +324,48 @@ export default function TiptapEditor({
   ])
 
   const closeSlashMenu = useCallback(() => setSlashState(null), [])
+  const clearPageSuggestionTimers = useCallback(() => {
+    window.clearTimeout(pageSuggestionOpenTimerRef.current)
+    window.clearTimeout(pageSuggestionCloseTimerRef.current)
+  }, [])
+  const closePageSuggestion = useCallback(() => {
+    clearPageSuggestionTimers()
+    setPageSuggestionPopover(null)
+  }, [clearPageSuggestionTimers])
+  const keepPageSuggestionOpen = useCallback(() => {
+    window.clearTimeout(pageSuggestionCloseTimerRef.current)
+  }, [])
+  const schedulePageSuggestionClose = useCallback(() => {
+    window.clearTimeout(pageSuggestionCloseTimerRef.current)
+    pageSuggestionCloseTimerRef.current = window.setTimeout(() => {
+      setPageSuggestionPopover(null)
+    }, 160)
+  }, [])
+  const openPageSuggestion = useCallback((target, immediate = false) => {
+    if (!editor?.isEditable || !(target instanceof Element)) return
+    const id = target.getAttribute('data-page-suggestion-id')
+    const suggestion = getPageSuggestion(editor, id)
+    if (!suggestion) return
+    const show = () => {
+      const rect = target.getBoundingClientRect()
+      const position = getPageSuggestionPopoverPosition(rect, {
+        width: window.innerWidth,
+        height: window.innerHeight
+      })
+      setPageSuggestionPopover(current => ({
+        isOpen: true,
+        id,
+        suggestion,
+        selectedTabUid: current?.id === id
+          ? current.selectedTabUid
+          : suggestion.candidates[0]?.tabUid,
+        position
+      }))
+    }
+    clearPageSuggestionTimers()
+    if (immediate) show()
+    else pageSuggestionOpenTimerRef.current = window.setTimeout(show, 350)
+  }, [clearPageSuggestionTimers, editor])
   const closePageLinkSearch = useCallback(() => {
     setPageLinkSearch({ isOpen: false, selectedText: '' })
     window.requestAnimationFrame(() => editor?.commands.focus())
@@ -268,6 +374,18 @@ export default function TiptapEditor({
     if (!editor) return
     insertPageLink(editor, item)
   }, [editor])
+  const handleCreateSuggestedPageLink = useCallback((candidate) => {
+    if (!editor || !pageSuggestionPopover) return
+    const current = getPageSuggestion(editor, pageSuggestionPopover.id)
+    const target = current?.candidates.find(item => item.tabUid === candidate.tabUid)
+    if (!current || !target) {
+      closePageSuggestion()
+      return
+    }
+    editor.commands.setTextSelection({ from: current.from, to: current.to })
+    insertPageLink(editor, { href: target.href })
+    closePageSuggestion()
+  }, [closePageSuggestion, editor, pageSuggestionPopover])
   const updateSlashMenu = useCallback(() => {
     if (!editor) return
     const { $from } = editor.state.selection
@@ -313,6 +431,19 @@ export default function TiptapEditor({
     return () => window.removeEventListener('resize', updateSlashMenu)
   }, [slashState, updateSlashMenu])
 
+  useEffect(() => {
+    if (!pageSuggestionPopover) return undefined
+    const close = () => closePageSuggestion()
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [closePageSuggestion, pageSuggestionPopover])
+
+  useEffect(() => () => clearPageSuggestionTimers(), [clearPageSuggestionTimers])
+
   const executeSlashCommand = useCallback((item) => {
     if (!editor || !slashState) return
     const chain = editor.chain().focus().deleteRange(slashState.range)
@@ -349,6 +480,19 @@ export default function TiptapEditor({
 
   const handleEditorKeyDown = useCallback((event) => {
     if (!editor?.view.dom.contains(event.target)) return
+    const suggestionTarget = event.target instanceof Element
+      ? event.target.closest('[data-page-suggestion-id]')
+      : null
+    if (suggestionTarget && (event.key === 'Enter' || (event.key === ' ' && !event.ctrlKey))) {
+      event.preventDefault()
+      openPageSuggestion(suggestionTarget, true)
+      return
+    }
+    if (event.key === 'Escape' && pageSuggestionPopover) {
+      event.preventDefault()
+      closePageSuggestion()
+      return
+    }
     if (isPageLinkShortcut(event) && canInsertPageLink(editor)) {
       event.preventDefault()
       event.stopPropagation()
@@ -356,6 +500,13 @@ export default function TiptapEditor({
       const selectedText = from === to ? '' : editor.state.doc.textBetween(from, to, ' ')
       closeSlashMenu()
       setPageLinkSearch({ isOpen: true, selectedText })
+      return
+    }
+    if (
+      (event.key === 'Backspace' || event.key === 'Delete') &&
+      deletePageLinkAtSelection(editor, event.key)
+    ) {
+      event.preventDefault()
       return
     }
     const selectionFrom = editor?.state.selection.$from
@@ -395,17 +546,58 @@ export default function TiptapEditor({
       event.preventDefault()
       executeSlashCommand(slashState.items[slashState.selectedIndex])
     }
-  }, [closeSlashMenu, editor, executeSlashCommand, slashState])
+  }, [
+    closePageSuggestion,
+    closeSlashMenu,
+    editor,
+    executeSlashCommand,
+    openPageSuggestion,
+    pageSuggestionPopover,
+    slashState
+  ])
 
   const handleEditorClick = useCallback((event) => {
     if (!editor?.view.dom.contains(event.target)) return
+    const suggestionTarget = event.target instanceof Element
+      ? event.target.closest('[data-page-suggestion-id]')
+      : null
+    if (suggestionTarget) {
+      event.preventDefault()
+      openPageSuggestion(suggestionTarget, true)
+      return
+    }
     const href = getInternalPageLinkHref(event.target)
     if (!href) return
 
     event.preventDefault()
     if (!shouldNavigatePageLink(editor, event)) return
     onNavigateToPageLink?.(href)
-  }, [editor, onNavigateToPageLink])
+  }, [editor, onNavigateToPageLink, openPageSuggestion])
+  const handleEditorPointerOver = useCallback((event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-page-suggestion-id]')
+      : null
+    if (!target || !editor?.view.dom.contains(target)) return
+    if (event.relatedTarget instanceof window.Node && target.contains(event.relatedTarget)) return
+    openPageSuggestion(target)
+  }, [editor, openPageSuggestion])
+  const handleEditorPointerOut = useCallback((event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-page-suggestion-id]')
+      : null
+    if (!target) return
+    if (event.relatedTarget instanceof Element && (
+      target.contains(event.relatedTarget)
+      || event.relatedTarget.closest('.tiptap-page-suggestion-popover')
+    )) return
+    schedulePageSuggestionClose()
+  }, [schedulePageSuggestionClose])
+  const handleEditorFocus = useCallback((event) => {
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-page-suggestion-id]')
+      : null
+    if (target) openPageSuggestion(target, true)
+  }, [openPageSuggestion])
 
   const renderBlockExtraMenu = useCallback(({ block, run }) => (
     block.node.type.name === 'table'
@@ -426,7 +618,14 @@ export default function TiptapEditor({
   )
 
   return (
-    <div className="tiptap-editor-shell" onClickCapture={handleEditorClick} onKeyDownCapture={handleEditorKeyDown}>
+    <div
+      className="tiptap-editor-shell"
+      onClickCapture={handleEditorClick}
+      onFocusCapture={handleEditorFocus}
+      onKeyDownCapture={handleEditorKeyDown}
+      onPointerOut={handleEditorPointerOut}
+      onPointerOver={handleEditorPointerOver}
+    >
       <div className="tiptap-editor">
         <EditorContent editor={editor} />
         {pageLinkSearch.isOpen && editor && (
@@ -437,6 +636,23 @@ export default function TiptapEditor({
             labels={pageLinkLabels}
             onInsertPageLink={handleInsertPageLink}
             onClose={closePageLinkSearch}
+          />
+        )}
+        {pageSuggestionPopover?.isOpen && (
+          <TiptapPageSuggestionPopover
+            suggestion={pageSuggestionPopover.suggestion}
+            selectedTabUid={pageSuggestionPopover.selectedTabUid}
+            position={pageSuggestionPopover.position}
+            labels={pageSuggestionLabels}
+            onSelect={selectedTabUid => {
+              setPageSuggestionPopover(current => current
+                ? { ...current, selectedTabUid }
+                : current)
+            }}
+            onCreateLink={handleCreateSuggestedPageLink}
+            onClose={closePageSuggestion}
+            onPointerEnter={keepPageSuggestionOpen}
+            onPointerLeave={schedulePageSuggestionClose}
           />
         )}
         {contextualControlsReady && (

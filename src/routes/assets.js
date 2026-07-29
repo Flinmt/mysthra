@@ -12,6 +12,7 @@ const {
   getDocumentAccess,
   hasDocumentAccessLevel,
   isAssetReferencedByTab,
+  isDocumentSoundtrackAsset,
   listAssets,
   listTrash,
   listWorldMembers,
@@ -166,10 +167,13 @@ async function broadcastAssetResult(worldId, result) {
   await broadcastWorldAssetUpdate(worldId, { revision: result?.revision });
 }
 
-async function hasDocumentAssetContext(worldId, tabUid, currentUser, asset) {
+async function hasDocumentAssetContext(worldId, tabUid, documentUid, currentUser, asset) {
+  const requestUser = currentUser || { userId: "visitor", username: "Visitor", isVisitor: true };
+  if (documentUid && await isDocumentSoundtrackAsset(worldId, documentUid, requestUser, asset)) {
+    return true;
+  }
   if (!tabUid) return false;
   const room = await resolveTabRoom({ type: "tab", worldId, tabUid });
-  const requestUser = currentUser || { userId: "visitor", username: "Visitor", isVisitor: true };
   const access = await getDocumentAccess(worldId, room.path, requestUser);
   if (!hasDocumentAccessLevel(access, "read")) return false;
   const metadataPaths = [
@@ -181,19 +185,26 @@ async function hasDocumentAssetContext(worldId, tabUid, currentUser, asset) {
   return isAssetReferencedByTab(worldId, tabUid, asset);
 }
 
-async function getAuthorizedAsset(worldId, reference, currentUser, tabUid, thumbnailSize = null) {
-  const options = { actor: currentUser };
+async function getAuthorizedAsset(worldId, reference, currentUser, contextOptions = {}) {
+  const { tabUid, documentUid, thumbnailSize = null } = contextOptions;
+  const assetOptions = { actor: currentUser };
   try {
     return thumbnailSize === null
-      ? await getAssetFile(worldId, reference, options)
-      : await getAssetThumbnail(worldId, reference, thumbnailSize, options);
+      ? await getAssetFile(worldId, reference, assetOptions)
+      : await getAssetThumbnail(worldId, reference, thumbnailSize, assetOptions);
   } catch (error) {
-    if (error.code !== "FORBIDDEN" || !tabUid) throw error;
+    if (error.code !== "FORBIDDEN" || (!tabUid && !documentUid)) throw error;
     const candidate = await getAssetFile(worldId, reference, {
       actor: currentUser,
       allowDocumentContext: true
     });
-    if (!(await hasDocumentAssetContext(worldId, tabUid, currentUser, candidate))) throw error;
+    if (!(await hasDocumentAssetContext(
+      worldId,
+      tabUid,
+      documentUid,
+      currentUser,
+      candidate
+    ))) throw error;
     return thumbnailSize === null
       ? candidate
       : getAssetThumbnail(worldId, reference, thumbnailSize, {
@@ -246,8 +257,11 @@ async function handleAssetRoute({
         worldId,
         getAssetReference(query.get("id"), query.get("path")),
         currentUser,
-        query.get("tabUid"),
-        query.get("size") || 320
+        {
+          tabUid: query.get("tabUid"),
+          documentUid: query.get("documentUid"),
+          thumbnailSize: query.get("size") || 320
+        }
       );
       await serveAssetFile(request, response, asset);
       return true;
@@ -258,7 +272,10 @@ async function handleAssetRoute({
         worldId,
         getAssetReference(query.get("id"), query.get("path")),
         currentUser,
-        query.get("tabUid")
+        {
+          tabUid: query.get("tabUid"),
+          documentUid: query.get("documentUid")
+        }
       );
       await serveAssetFile(request, response, asset);
       return true;

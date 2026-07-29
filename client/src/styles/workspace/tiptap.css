@@ -362,6 +362,11 @@
   box-shadow: 0 10px 24px var(--tiptap-menu-shadow);
 }
 
+.tiptap-block-menu {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
 .tiptap-block-menu-title {
   display: block;
   padding: 5px 7px 6px;
@@ -401,6 +406,10 @@
 .tiptap-block-menu button.is-danger,
 .tiptap-table-axis-menu button.is-danger {
   color: var(--danger-color, #d97872);
+}
+
+.tiptap-block-menu-chevron {
+  margin-left: auto;
 }
 
 .tiptap-block-menu button:disabled,
@@ -705,9 +714,9 @@
 .tiptap-editor .ProseMirror s { opacity: .72; }
 
 .tiptap-editor .ProseMirror .tiptap-page-link {
-  color: var(--arcane-color);
+  color: var(--accent-color);
   text-decoration-line: underline;
-  text-decoration-color: transparent;
+  text-decoration-color: color-mix(in srgb, var(--accent-color) 55%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   cursor: text;
@@ -716,13 +725,165 @@
 
 .tiptap-editor .ProseMirror .tiptap-page-link:hover,
 .tiptap-editor .ProseMirror .tiptap-page-link:focus-visible {
-  color: var(--arcane-hover);
+  color: var(--accent-hover);
   text-decoration-color: currentColor;
   outline: none;
 }
 
 .tiptap-editor .ProseMirror[contenteditable="false"] .tiptap-page-link {
   cursor: pointer;
+}
+
+.tiptap-editor .ProseMirror .tiptap-page-suggestion {
+  padding: 0 1px;
+  background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+  border-radius: 2px;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, var(--accent-color) 52%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: background 120ms ease, text-decoration-color 120ms ease;
+}
+
+.tiptap-editor .ProseMirror .tiptap-page-suggestion:hover,
+.tiptap-editor .ProseMirror .tiptap-page-suggestion:focus-visible {
+  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+  text-decoration-color: var(--accent-color);
+  outline: none;
+}
+
+.tiptap-page-suggestion-popover {
+  position: fixed;
+  z-index: 130;
+  max-height: min(360px, calc(100vh - 16px));
+  padding: 5px;
+  overflow-y: auto;
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-surface);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 5px;
+  box-shadow: 0 12px 28px var(--tiptap-menu-shadow);
+}
+
+.tiptap-page-suggestion-popover-header {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 3px 3px 6px;
+  color: var(--tiptap-menu-muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tiptap-page-suggestion-popover-header > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tiptap-page-suggestion-popover-header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--tiptap-menu-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.tiptap-page-suggestion-popover-header button:hover {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+}
+
+.tiptap-page-suggestion-candidates {
+  display: grid;
+  gap: 2px;
+  max-height: 126px;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--tiptap-menu-border);
+}
+
+.tiptap-page-suggestion-candidates button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  gap: 7px;
+  padding: 4px 7px;
+  color: var(--tiptap-menu-muted);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tiptap-page-suggestion-candidates button:hover,
+.tiptap-page-suggestion-candidates button.is-selected {
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-hover);
+}
+
+.tiptap-page-suggestion-candidates button.is-selected {
+  background: var(--tiptap-menu-selected);
+  box-shadow: inset 2px 0 var(--tiptap-menu-accent);
+}
+
+.tiptap-page-suggestion-candidates button > span {
+  display: grid;
+  min-width: 0;
+}
+
+.tiptap-page-suggestion-candidates strong {
+  overflow: hidden;
+  color: var(--tiptap-menu-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tiptap-page-suggestion-candidates small {
+  overflow: hidden;
+  color: var(--tiptap-menu-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tiptap-page-suggestion-create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 28px;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--tiptap-menu-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--tiptap-menu-selected);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tiptap-page-suggestion-create:hover {
+  color: var(--tiptap-menu-accent-hover);
+  background: var(--tiptap-menu-hover);
 }
 
 .tiptap-editor .ProseMirror .tiptap-active-block.is-empty::before {

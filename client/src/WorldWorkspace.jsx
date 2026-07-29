@@ -10,6 +10,12 @@ import TiptapEditor from './features/tiptap/TiptapEditor';
 import TabTypeSelector from './workspace/TabTypeSelector';
 import DeleteItemDialog from './workspace/DeleteItemDialog';
 import DocumentIconPicker from './workspace/DocumentIconPicker';
+import { DocumentSoundtrackDialog, DocumentSoundtrackPlayer } from './workspace/DocumentSoundtrack';
+import {
+  DEFAULT_DOCUMENT_SOUNDTRACK_VOLUME,
+  loadDocumentSoundtrack,
+  saveDocumentSoundtrack
+} from './workspace/documentSoundtrack';
 import WorkspaceToastRegion from './workspace/WorkspaceToasts';
 import { enqueueWorkspaceToast } from './workspace/workspaceToastUtils';
 import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, WorkspaceBootScreen, WorkspaceSidebar, WorkspaceTabRow, WorkspaceTopbar } from './workspace/WorkspaceShell';
@@ -618,6 +624,20 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [assetDeletePrompt, setAssetDeletePrompt] = useState({ isOpen: false, node: null });
   const [documentIconPicker, setDocumentIconPicker] = useState({ isOpen: false });
   const [documentIconSaving, setDocumentIconSaving] = useState(false);
+  const [loadedDocumentSoundtrack, setLoadedDocumentSoundtrack] = useState({
+    documentUid: '',
+    soundtrack: null
+  });
+  const documentSoundtrack = loadedDocumentSoundtrack.documentUid === selectedContainer?.uid
+    ? loadedDocumentSoundtrack.soundtrack
+    : null;
+  const [soundtrackDialog, setSoundtrackDialog] = useState({
+    isOpen: false,
+    asset: null,
+    volume: DEFAULT_DOCUMENT_SOUNDTRACK_VOLUME,
+    busy: false,
+    error: ''
+  });
   const [renamingPath, setRenamingPath] = useState(null);
   const [, setAssetRenamingPath] = useState(null);
   const [renamingTab, setRenamingTab] = useState({ path: '', value: '' });
@@ -722,6 +742,32 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
       setAssetLoading(false);
     }
   }, [addToast, t, worldId]);
+
+  useEffect(() => {
+    const documentUid = selectedContainer?.uid;
+    if (!documentUid) {
+      setLoadedDocumentSoundtrack({ documentUid: '', soundtrack: null });
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    loadDocumentSoundtrack(worldId, documentUid, controller.signal)
+      .then(result => setLoadedDocumentSoundtrack({
+        documentUid,
+        soundtrack: result.soundtrack
+      }))
+      .catch(error => {
+        if (error.name !== 'AbortError') {
+          setLoadedDocumentSoundtrack({ documentUid, soundtrack: null });
+        }
+      });
+    return () => controller.abort();
+  }, [
+    selectedContainer?.metadata?.soundtrack?.assetId,
+    selectedContainer?.metadata?.soundtrack?.defaultVolume,
+    selectedContainer?.uid,
+    worldId
+  ]);
 
   const handleWorldPresenceStateless = useCallback(({ payload }) => {
     try {
@@ -1898,6 +1944,107 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setAssetExplorer({ isOpen: false, initialFolderPath: '', mode: 'manage', mediaFilter: null, onInsert: null });
   }, []);
 
+  const openDocumentSoundtrackDialog = useCallback(() => {
+    if (!selectedContainer) return;
+    setSoundtrackDialog({
+      isOpen: true,
+      asset: documentSoundtrack
+        ? {
+            id: documentSoundtrack.assetId,
+            name: documentSoundtrack.name,
+            mediaType: 'audio',
+            unavailable: documentSoundtrack.unavailable
+          }
+        : null,
+      volume: documentSoundtrack?.defaultVolume ?? DEFAULT_DOCUMENT_SOUNDTRACK_VOLUME,
+      busy: false,
+      error: ''
+    });
+  }, [documentSoundtrack, selectedContainer]);
+
+  const chooseDocumentSoundtrack = useCallback(() => {
+    setSoundtrackDialog(previous => ({ ...previous, isOpen: false, error: '' }));
+    openNotionMediaPicker('audio', asset => {
+      setSoundtrackDialog(previous => ({
+        ...previous,
+        isOpen: true,
+        asset,
+        error: ''
+      }));
+    });
+  }, [openNotionMediaPicker]);
+
+  const commitDocumentSoundtrack = useCallback(async () => {
+    if (!selectedContainer?.uid || !soundtrackDialog.asset) return;
+    setSoundtrackDialog(previous => ({ ...previous, busy: true, error: '' }));
+    try {
+      const result = await saveDocumentSoundtrack(worldId, selectedContainer.uid, {
+        assetId: soundtrackDialog.asset.id,
+        defaultVolume: soundtrackDialog.volume
+      });
+      setLoadedDocumentSoundtrack({
+        documentUid: selectedContainer.uid,
+        soundtrack: result.soundtrack
+      });
+      setSelectedContainer(previous => previous ? {
+        ...previous,
+        metadata: {
+          ...previous.metadata,
+          soundtrack: result.soundtrack
+            ? {
+                assetId: result.soundtrack.assetId,
+                defaultVolume: result.soundtrack.defaultVolume
+              }
+            : null
+        }
+      } : previous);
+      setSoundtrackDialog(previous => ({ ...previous, isOpen: false, busy: false }));
+      addToast(t('workspace.soundtrack_saved'), 'success');
+    } catch (error) {
+      setSoundtrackDialog(previous => ({
+        ...previous,
+        busy: false,
+        error: error.message || t('workspace.soundtrack_save_error')
+      }));
+    }
+  }, [
+    addToast,
+    selectedContainer?.uid,
+    soundtrackDialog.asset,
+    soundtrackDialog.volume,
+    t,
+    worldId
+  ]);
+
+  const removeDocumentSoundtrack = useCallback(async () => {
+    if (!selectedContainer?.uid) return;
+    setSoundtrackDialog(previous => ({ ...previous, busy: true, error: '' }));
+    try {
+      await saveDocumentSoundtrack(worldId, selectedContainer.uid, { assetId: null });
+      setLoadedDocumentSoundtrack({
+        documentUid: selectedContainer.uid,
+        soundtrack: null
+      });
+      setSelectedContainer(previous => previous ? {
+        ...previous,
+        metadata: { ...previous.metadata, soundtrack: null }
+      } : previous);
+      setSoundtrackDialog(previous => ({
+        ...previous,
+        isOpen: false,
+        asset: null,
+        busy: false
+      }));
+      addToast(t('workspace.soundtrack_removed'), 'success');
+    } catch (error) {
+      setSoundtrackDialog(previous => ({
+        ...previous,
+        busy: false,
+        error: error.message || t('workspace.soundtrack_save_error')
+      }));
+    }
+  }, [addToast, selectedContainer?.uid, t, worldId]);
+
   const commitPageTitleRename = async () => {
     if (!selectedContainer) return;
     if (skipTitleRenameRef.current) {
@@ -2419,6 +2566,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
               )}
               {canWriteSelectedContainer && !isDocumentLocked && (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorldActionsMenu(false);
+                      openDocumentSoundtrackDialog();
+                    }}
+                  >
+                    <Music size={14} />
+                    <span>{t('workspace.document_soundtrack')}</span>
+                  </button>
                   {visibleActiveTab && documentCoverPath && (
                     <button
                       type="button"
@@ -3403,6 +3560,58 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
           }}
           onClose={closeAssetExplorer}
           addToast={addToast}
+        />
+      )}
+
+      {!isVisitor && (
+        <DocumentSoundtrackDialog
+          isOpen={soundtrackDialog.isOpen}
+          asset={soundtrackDialog.asset}
+          volume={soundtrackDialog.volume}
+          busy={soundtrackDialog.busy}
+          error={soundtrackDialog.error}
+          labels={{
+            title: t('workspace.soundtrack_title'),
+            description: t('workspace.soundtrack_description'),
+            close: t('common.close'),
+            noTrack: t('workspace.soundtrack_no_track'),
+            unavailable: t('workspace.soundtrack_unavailable'),
+            chooseTrack: t('workspace.soundtrack_choose'),
+            changeTrack: t('workspace.soundtrack_change'),
+            defaultVolume: t('workspace.soundtrack_default_volume'),
+            volumeHint: t('workspace.soundtrack_volume_hint'),
+            remove: t('workspace.soundtrack_remove'),
+            cancel: t('common.cancel'),
+            save: t('common.save'),
+            saving: t('workspace.soundtrack_saving')
+          }}
+          onChoose={chooseDocumentSoundtrack}
+          onVolumeChange={volume => setSoundtrackDialog(previous => ({ ...previous, volume }))}
+          onRemove={removeDocumentSoundtrack}
+          onSave={commitDocumentSoundtrack}
+          onClose={() => {
+            if (!soundtrackDialog.busy) {
+              setSoundtrackDialog(previous => ({ ...previous, isOpen: false, error: '' }));
+            }
+          }}
+        />
+      )}
+
+      {selectedContainer && documentSoundtrack && (
+        <DocumentSoundtrackPlayer
+          worldId={worldId}
+          documentUid={selectedContainer.uid}
+          documentName={selectedContainer.name}
+          userScope={currentUser?.userId || 'visitor'}
+          soundtrack={documentSoundtrack}
+          labels={{
+            player: t('workspace.soundtrack_player'),
+            play: t('workspace.soundtrack_play'),
+            pause: t('workspace.soundtrack_pause'),
+            volume: t('workspace.soundtrack_personal_volume'),
+            unavailable: t('workspace.soundtrack_unavailable'),
+            autoplayBlocked: t('workspace.soundtrack_autoplay_blocked')
+          }}
         />
       )}
 

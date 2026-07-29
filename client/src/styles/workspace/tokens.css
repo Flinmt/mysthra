@@ -5,6 +5,8 @@
 .workspace-container .context-menu,
 .workspace-container .editor-world-actions-menu,
 .workspace-container .workspace-toast,
+.workspace-container .document-soundtrack-dialog,
+.workspace-container .document-soundtrack-player,
 .workspace-container .duplicate-modal,
 .workspace-container .delete-item-dialog,
 .workspace-container .document-icon-picker {
