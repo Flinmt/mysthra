@@ -1,13 +1,21 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { FileText, Image, Music2, Search } from 'lucide-react'
 import { createInternalPageLink, getTabsForNode, pathParent } from './utils'
 
-function getDocumentPathLabel(node, pathByUid) {
+function normalizeSearchValue(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+}
+
+function getDocumentPathLabel(node, documentsByPath) {
   const names = []
   let current = node
   while (current) {
     names.unshift(current.name)
     const parentPath = pathParent(current.path)
-    current = parentPath ? pathByUid.get(parentPath) : null
+    current = parentPath ? documentsByPath.get(parentPath) : null
   }
   return names.join(' > ')
 }
@@ -38,10 +46,11 @@ function buildTabResults(documentTree = [], labels = {}) {
       tabs.push({
         id: `tab:${tab.uid}`,
         kind: 'tab',
-        title: document.name,
-        subtitle: `${labels.resultTypeTab || 'Tab'} · ${tab.name} · ${tabType}`,
+        title: tab.name,
+        subtitle: `${labels.resultTypeTab || 'Tab'} · ${tabType}`,
         context: pathLabel,
-        searchText: `${tab.name} ${tabType} ${document.name} ${pathLabel}`.toLowerCase(),
+        searchTitle: normalizeSearchValue(tab.name),
+        searchText: normalizeSearchValue(`${tab.name} ${tabType} ${document.name} ${pathLabel}`),
         document,
         tab,
         href: createInternalPageLink({ documentUid: document.uid, tabUid: tab.uid })
@@ -71,7 +80,8 @@ function buildAssetResults(assetTree = [], supportedAssets = ['image', 'audio'],
         title: node.name || node.path,
         subtitle: label,
         context: folderPath || pathParent(node.path),
-        searchText: `${node.name || ''} ${node.path || ''} ${label}`.toLowerCase(),
+        searchTitle: normalizeSearchValue(node.name || node.path),
+        searchText: normalizeSearchValue(`${node.name || ''} ${node.path || ''} ${label}`),
         asset: node
       })
     }
@@ -114,19 +124,41 @@ export default function WorkspaceInsertSearch({
   labels = {}
 }) {
   const inputRef = useRef(null)
+  const activeResultRef = useRef(null)
+  const resultsId = useId()
   const [query, setQuery] = useState('')
-  const [hoveredId, setHoveredId] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const allItems = useMemo(() => {
     const tabResults = mode === 'asset' ? [] : buildTabResults(documentTree, labels)
     const assetResults = mode === 'page-link' ? [] : buildAssetResults(assetTree, supportedAssets, labels)
     return [...tabResults, ...assetResults]
   }, [assetTree, documentTree, labels, mode, supportedAssets])
   const results = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
+    const normalized = normalizeSearchValue(query.trim())
     if (!normalized) return []
-    return allItems.filter(item => item.searchText.includes(normalized)).slice(0, 12)
+    return allItems
+      .filter(item => item.searchText.includes(normalized))
+      .sort((left, right) => {
+        const score = item => (
+          item.searchTitle === normalized
+            ? 0
+            : item.searchTitle.startsWith(normalized)
+              ? 1
+              : item.searchTitle.includes(normalized) ? 2 : 3
+        )
+        return score(left) - score(right)
+          || left.title.localeCompare(right.title)
+          || left.context.localeCompare(right.context)
+      })
+      .slice(0, 12)
   }, [allItems, query])
-  const hoveredItem = results.find(item => item.id === hoveredId) || results[0] || null
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [query])
+  const selectedItem = results[selectedIndex] || results[0] || null
+  useEffect(() => {
+    activeResultRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [selectedIndex])
   const hasQuery = query.trim().length > 0
   const style = position
     ? { top: position.y, left: position.x }
@@ -144,44 +176,84 @@ export default function WorkspaceInsertSearch({
   return (
     <div className="workspace-insert-search-backdrop" onMouseDown={onClose}>
       <div
-        className={`workspace-insert-search glass-panel${position ? ' is-positioned' : ''}`}
+        className={`workspace-insert-search glass-panel is-${mode}${position ? ' is-positioned' : ''}`}
         style={style}
         onMouseDown={event => event.stopPropagation()}
+        role="dialog"
+        aria-label={labels.insertPageLink || labels.searchTabsAssetsPlaceholder || 'Search'}
       >
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Escape') onClose?.()
-            if (event.key === 'Enter' && results[0]) selectItem(results[0])
-          }}
-          placeholder={labels.searchTabsAssetsPlaceholder || 'Search tabs or assets...'}
-          autoFocus
-        />
+        <div className="workspace-insert-search-field">
+          <Search size={13} aria-hidden="true" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                onClose?.()
+                return
+              }
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault()
+                if (results.length === 0) return
+                const delta = event.key === 'ArrowDown' ? 1 : -1
+                setSelectedIndex(current => (current + delta + results.length) % results.length)
+                return
+              }
+              if (event.key === 'Enter' && selectedItem) {
+                event.preventDefault()
+                selectItem(selectedItem)
+              }
+            }}
+            placeholder={labels.searchTabsAssetsPlaceholder || 'Search tabs or assets...'}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={hasQuery}
+            aria-controls={resultsId}
+            aria-activedescendant={selectedItem ? `${resultsId}-${selectedItem.id}` : undefined}
+            autoFocus
+          />
+          {mode === 'page-link' && <kbd>Esc</kbd>}
+        </div>
 
-        {hasQuery && (
+        {!hasQuery && mode === 'page-link' ? (
+          <div className="workspace-insert-empty">{labels.searchHint || 'Type to search'}</div>
+        ) : hasQuery ? (
           <div className="workspace-insert-results-shell">
-            <div className="workspace-insert-results">
+            <div className="workspace-insert-results" id={resultsId} role="listbox">
               {results.length === 0 ? (
                 <div className="workspace-insert-empty">{labels.noSearchResults || 'No results found'}</div>
-              ) : results.map(item => (
+              ) : results.map((item, index) => (
                 <button
                   key={item.id}
+                  id={`${resultsId}-${item.id}`}
+                  ref={index === selectedIndex ? activeResultRef : null}
                   type="button"
-                  className="workspace-insert-result"
-                  onMouseEnter={() => setHoveredId(item.id)}
+                  className={`workspace-insert-result${index === selectedIndex ? ' is-selected' : ''}`}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  onMouseEnter={() => setSelectedIndex(index)}
                   onClick={() => selectItem(item)}
                 >
-                  <strong>{item.title}</strong>
-                  <span>{item.subtitle}</span>
-                  <small>{item.context}</small>
+                  <span className="workspace-insert-result-icon" aria-hidden="true">
+                    {item.kind === 'tab'
+                      ? <FileText />
+                      : item.assetKind === 'audio' ? <Music2 /> : <Image />}
+                  </span>
+                  <span className="workspace-insert-result-copy">
+                    <span className="workspace-insert-result-line">
+                      <strong>{item.title}</strong>
+                      <span>{item.subtitle}</span>
+                    </span>
+                    <small>{item.context}</small>
+                  </span>
                 </button>
               ))}
             </div>
-            {results.length > 0 && <SearchPreview item={hoveredItem} labels={labels} getAssetUrl={getAssetUrl} />}
+            {results.length > 0 && mode !== 'page-link' && <SearchPreview item={selectedItem} labels={labels} getAssetUrl={getAssetUrl} />}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
