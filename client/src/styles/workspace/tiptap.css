@@ -705,9 +705,9 @@
 .tiptap-editor .ProseMirror s { opacity: .72; }
 
 .tiptap-editor .ProseMirror .tiptap-page-link {
-  color: var(--arcane-color);
+  color: var(--accent-color);
   text-decoration-line: underline;
-  text-decoration-color: transparent;
+  text-decoration-color: color-mix(in srgb, var(--accent-color) 55%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   cursor: text;
@@ -716,7 +716,7 @@
 
 .tiptap-editor .ProseMirror .tiptap-page-link:hover,
 .tiptap-editor .ProseMirror .tiptap-page-link:focus-visible {
-  color: var(--arcane-hover);
+  color: var(--accent-hover);
   text-decoration-color: currentColor;
   outline: none;
 }
