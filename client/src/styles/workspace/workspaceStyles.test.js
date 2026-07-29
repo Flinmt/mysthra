@@ -27,6 +27,7 @@ describe('workspace style boundaries', () => {
       'tab-type-selector.css',
       'tiptap.css',
       'asset-explorer.css',
+      'soundtrack.css',
       'map.css',
       'board.css',
       'overlays.css',
