@@ -307,20 +307,23 @@
 
 .world-dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 13px;
 }
 
 .world-dashboard-card {
+  --world-card-background: #151c20;
+  --world-card-surface: #1d2529;
+  --world-card-accent: var(--app-copper);
+  --world-card-secondary: #3b6474;
   position: relative;
   min-width: 0;
-  aspect-ratio: 16 / 10;
-  min-height: 210px;
-  max-height: 248px;
+  height: 168px;
+  min-height: 168px;
   overflow: visible;
-  border: 1px solid var(--app-border);
+  border: 1px solid color-mix(in srgb, var(--world-card-accent) 24%, var(--app-border));
   border-radius: 8px;
-  background: var(--app-surface);
+  background: var(--world-card-background);
   transform: translateY(0);
   transition:
     transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
@@ -330,18 +333,19 @@
 
 .world-dashboard-create-card {
   width: 100%;
-  min-height: 210px;
-  max-height: 248px;
-  aspect-ratio: 16 / 10;
+  height: 168px;
+  min-height: 168px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 10px;
   border: 1px dashed rgba(185, 111, 61, 0.48);
   border-radius: 8px;
   color: var(--app-muted);
-  background: rgba(24, 28, 29, 0.54);
+  background:
+    radial-gradient(circle at 22% 24%, rgba(185, 111, 61, 0.1), transparent 34%),
+    linear-gradient(120deg, rgba(24, 28, 29, 0.88), rgba(17, 20, 21, 0.72));
   cursor: pointer;
   transform: translateY(0);
   transition:
@@ -383,9 +387,12 @@
 
 .world-dashboard-card:hover,
 .world-dashboard-card:focus-within {
-  border-color: rgba(185, 111, 61, 0.62);
-  box-shadow: 0 15px 34px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(185, 111, 61, 0.08);
-  transform: translateY(-6px) scale(1.012);
+  border-color: color-mix(in srgb, var(--world-card-accent) 72%, white 6%);
+  box-shadow:
+    0 15px 34px rgba(0, 0, 0, 0.32),
+    0 0 0 1px color-mix(in srgb, var(--world-card-accent) 22%, transparent),
+    0 0 24px color-mix(in srgb, var(--world-card-accent) 9%, transparent);
+  transform: translateY(-5px) scale(1.006);
 }
 
 .world-dashboard-card-open {
@@ -403,7 +410,10 @@
   cursor: pointer;
 }
 
-.world-dashboard-card-open:focus-visible { outline: 3px solid var(--app-focus); outline-offset: 2px; }
+.world-dashboard-card-open:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--world-card-accent) 48%, transparent);
+  outline-offset: 2px;
+}
 
 .world-dashboard-card-media,
 .world-dashboard-card-shade {
@@ -413,8 +423,9 @@
 
 .world-dashboard-card-media {
   background:
-    linear-gradient(145deg, rgba(185, 111, 61, 0.12), transparent 48%),
-    #202526;
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--world-card-accent) 32%, transparent), transparent 44%),
+    radial-gradient(circle at 82% 22%, color-mix(in srgb, var(--world-card-secondary) 28%, transparent), transparent 48%),
+    linear-gradient(128deg, var(--world-card-surface), var(--world-card-background));
   background-position: center;
   background-size: cover;
   transform-origin: center;
@@ -432,7 +443,7 @@
 
 .world-dashboard-card:hover .world-dashboard-card-media,
 .world-dashboard-card:focus-within .world-dashboard-card-media {
-  transform: translateY(-1%);
+  transform: scale(1.035);
   opacity: 1;
 }
 
@@ -442,7 +453,9 @@
 }
 
 .world-dashboard-card-shade {
-  background: linear-gradient(to top, rgba(12, 14, 14, 0.98) 0%, rgba(12, 14, 14, 0.75) 38%, rgba(12, 14, 14, 0.08) 72%);
+  background:
+    linear-gradient(90deg, rgba(8, 10, 10, 0.26), transparent 60%),
+    linear-gradient(to top, rgba(8, 10, 10, 0.98) 0%, rgba(8, 10, 10, 0.72) 42%, rgba(8, 10, 10, 0.08) 78%);
   opacity: 0.96;
   transition: opacity 0.3s ease;
 }
@@ -456,7 +469,7 @@
   min-width: 0;
   display: grid;
   gap: 5px;
-  padding: 17px;
+  padding: 15px 17px;
   transform: translateY(0);
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -479,21 +492,27 @@
   font-size: 0.76rem;
   line-height: 1.35;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
 }
 
 .world-dashboard-card-meta {
   min-width: 0;
   gap: 9px;
-  color: #c0c1bb;
+  color: rgba(241, 237, 231, 0.76);
   font-size: 0.65rem;
   font-weight: 700;
 }
 
 .world-dashboard-card-meta > span { display: inline-flex; align-items: center; gap: 5px; }
 .world-dashboard-theme { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.world-dashboard-theme i { width: 7px; min-width: 7px; height: 7px; border-radius: 50%; }
+.world-dashboard-theme i {
+  width: 7px;
+  min-width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--world-card-accent) 62%, transparent);
+}
 
 .world-dashboard-card-menu {
   position: absolute;
@@ -504,9 +523,16 @@
 
 .world-dashboard-card-menu > .world-dashboard-icon-button {
   color: #f1ede7;
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: color-mix(in srgb, var(--world-card-accent) 28%, rgba(255, 255, 255, 0.18));
   background: rgba(12, 14, 14, 0.78);
   backdrop-filter: blur(8px);
+}
+
+.world-dashboard-card-menu > .world-dashboard-icon-button:hover,
+.world-dashboard-card-menu > .world-dashboard-icon-button:focus-visible,
+.world-dashboard-card-menu > .world-dashboard-icon-button[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--world-card-accent) 72%, white 6%);
+  background: rgba(12, 14, 14, 0.92);
 }
 
 .world-dashboard-action-menu {
@@ -569,6 +595,10 @@
 
 @keyframes world-dashboard-spin { to { transform: rotate(360deg); } }
 
+@media (max-width: 1180px) {
+  .world-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 960px) {
   .world-dashboard-header {
     grid-template-columns: 1fr;
@@ -590,7 +620,10 @@
   .world-dashboard-language { margin-left: auto; }
   .world-dashboard-grid { grid-template-columns: 1fr; }
   .world-dashboard-card,
-  .world-dashboard-create-card { min-height: 205px; max-height: 235px; }
+  .world-dashboard-create-card {
+    height: 150px;
+    min-height: 150px;
+  }
 }
 
 @media (max-width: 420px) {
@@ -605,16 +638,16 @@
   .world-dashboard-create-card,
   .world-dashboard-card-media,
   .world-dashboard-card-shade,
-  .world-dashboard-card-content { transition-duration: 0.18s; }
+  .world-dashboard-card-content { transition: none; }
 
   .world-dashboard-card:hover,
   .world-dashboard-card:focus-within,
   .world-dashboard-create-card:hover,
-  .world-dashboard-create-card:focus-visible { transform: translateY(-3px); }
+  .world-dashboard-create-card:focus-visible { transform: none; }
 
   .world-dashboard-card:hover .world-dashboard-card-media,
-  .world-dashboard-card:focus-within .world-dashboard-card-media { transform: translateY(-0.5%); }
+  .world-dashboard-card:focus-within .world-dashboard-card-media { transform: none; }
 
   .world-dashboard-card:hover .world-dashboard-card-content,
-  .world-dashboard-card:focus-within .world-dashboard-card-content { transform: translateY(-1px); }
+  .world-dashboard-card:focus-within .world-dashboard-card-content { transform: none; }
 }

@@ -353,6 +353,8 @@
     "tiptap_command_divider": "Divider",
     "tiptap_command_table": "Table",
     "tiptap_command_media": "Insert media",
+    "tiptap_page_link_search_placeholder": "Search tabs...",
+    "tiptap_page_link_search_hint": "Type to search for a tab by name or path.",
     "tiptap_callout_customize": "Customize callout",
     "tiptap_callout_color": "Color",
     "tiptap_callout_icon": "Icon",

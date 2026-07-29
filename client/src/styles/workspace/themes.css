@@ -32,10 +32,6 @@
 }
 
 .workspace-container .duplicate-modal-icon,
-.workspace-container .workspace-insert-result span {
-  color: var(--arcane-color);
-}
-
 .workspace-container .duplicate-modal-icon,
 .workspace-container .delete-modal-icon {
   border-color: var(--workspace-theme-accent-border);
@@ -53,7 +49,7 @@
   box-shadow: 0 0 0 3px var(--workspace-theme-accent-soft);
 }
 
-.workspace-container .glass-panel,
+.workspace-container .glass-panel:not(.workspace-insert-search),
 .workspace-container .context-menu,
 .workspace-container .editor-world-actions-menu,
 .workspace-container .duplicate-modal,

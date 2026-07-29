@@ -20,6 +20,14 @@ import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { insertAssetMedia, TiptapAssetAudio, TiptapAssetImage } from './tiptapMedia'
 import {
+  canInsertPageLink,
+  getInternalPageLinkHref,
+  insertPageLink,
+  isPageLinkShortcut,
+  shouldNavigatePageLink,
+  TiptapPageLink
+} from './tiptapPageLinks'
+import {
   TiptapTableBlockMenu,
   TiptapTableControls
 } from './TiptapTableUi'
@@ -32,6 +40,7 @@ import {
 } from './tiptapTables'
 import { useTiptapDocument } from './useTiptapDocument'
 import { getAssetFileUrl } from '../assets/assetApi'
+import WorkspaceInsertSearch from '../../workspace/WorkspaceInsertSearch'
 import {
   TiptapBlockquote,
   TiptapBulletList,
@@ -86,6 +95,8 @@ export default function TiptapEditor({
   collaborationRoom,
   currentUser,
   isVisitor = false,
+  documentTree = [],
+  onNavigateToPageLink,
   onRequestMedia,
   onVisitorCountChange,
   onCollaborationSaveState
@@ -98,7 +109,20 @@ export default function TiptapEditor({
     setAwarenessField
   } = collaboration
   const [slashState, setSlashState] = useState(null)
+  const [pageLinkSearch, setPageLinkSearch] = useState({ isOpen: false, selectedText: '' })
   const commands = useMemo(() => createTiptapCommands(t), [t])
+  const pageLinkLabels = useMemo(() => ({
+    insertPageLink: t('workspace.insert_page_link'),
+    searchTabsAssetsPlaceholder: t('workspace.tiptap_page_link_search_placeholder'),
+    searchHint: t('workspace.tiptap_page_link_search_hint'),
+    noSearchResults: t('workspace.no_search_results'),
+    resultTypeTab: t('workspace.result_type_tab'),
+    previewPath: t('workspace.preview_path'),
+    tabTypeNotion: t('workspace.tab_type_notion'),
+    tabTypeMarkdown: t('workspace.tab_type_markdown'),
+    tabTypeMap: t('workspace.tab_type_map'),
+    tabTypeBoard: t('workspace.tab_type_board')
+  }), [t])
   const blockLabels = useMemo(() => ({
     add: t('workspace.tiptap_block_add', 'Adicionar bloco'),
     addHint: t('workspace.tiptap_block_add_hint', 'Clique para adicionar abaixo; Alt+clique para adicionar acima'),
@@ -175,6 +199,7 @@ export default function TiptapEditor({
     Italic,
     Strike,
     Underline,
+    TiptapPageLink,
     HorizontalRule,
     TiptapAssetImage.configure({
       resolveAssetUrl: assetId => getAssetFileUrl(worldId, { id: assetId }, documentUid),
@@ -210,6 +235,11 @@ export default function TiptapEditor({
   }, [collaboration.readOnly, editable, editor])
 
   useEffect(() => {
+    if (editor?.isEditable) return
+    setPageLinkSearch(current => current.isOpen ? { isOpen: false, selectedText: '' } : current)
+  }, [editor, editor?.isEditable])
+
+  useEffect(() => {
     onCollaborationSaveState?.({ status: collaboration.saveStatus, dirty: collaboration.dirty })
   }, [collaboration.dirty, collaboration.saveStatus, onCollaborationSaveState])
 
@@ -230,6 +260,14 @@ export default function TiptapEditor({
   ])
 
   const closeSlashMenu = useCallback(() => setSlashState(null), [])
+  const closePageLinkSearch = useCallback(() => {
+    setPageLinkSearch({ isOpen: false, selectedText: '' })
+    window.requestAnimationFrame(() => editor?.commands.focus())
+  }, [editor])
+  const handleInsertPageLink = useCallback((item) => {
+    if (!editor) return
+    insertPageLink(editor, item)
+  }, [editor])
   const updateSlashMenu = useCallback(() => {
     if (!editor) return
     const { $from } = editor.state.selection
@@ -310,6 +348,16 @@ export default function TiptapEditor({
   }, [closeSlashMenu, editor, onRequestMedia, slashState])
 
   const handleEditorKeyDown = useCallback((event) => {
+    if (!editor?.view.dom.contains(event.target)) return
+    if (isPageLinkShortcut(event) && canInsertPageLink(editor)) {
+      event.preventDefault()
+      event.stopPropagation()
+      const { from, to } = editor.state.selection
+      const selectedText = from === to ? '' : editor.state.doc.textBetween(from, to, ' ')
+      closeSlashMenu()
+      setPageLinkSearch({ isOpen: true, selectedText })
+      return
+    }
     const selectionFrom = editor?.state.selection.$from
     const currentBlock = selectionFrom?.parent
     const isToggleHeadingTitle = (
@@ -349,6 +397,16 @@ export default function TiptapEditor({
     }
   }, [closeSlashMenu, editor, executeSlashCommand, slashState])
 
+  const handleEditorClick = useCallback((event) => {
+    if (!editor?.view.dom.contains(event.target)) return
+    const href = getInternalPageLinkHref(event.target)
+    if (!href) return
+
+    event.preventDefault()
+    if (!shouldNavigatePageLink(editor, event)) return
+    onNavigateToPageLink?.(href)
+  }, [editor, onNavigateToPageLink])
+
   const renderBlockExtraMenu = useCallback(({ block, run }) => (
     block.node.type.name === 'table'
       ? (
@@ -368,9 +426,19 @@ export default function TiptapEditor({
   )
 
   return (
-    <div className="tiptap-editor-shell" onKeyDownCapture={handleEditorKeyDown}>
+    <div className="tiptap-editor-shell" onClickCapture={handleEditorClick} onKeyDownCapture={handleEditorKeyDown}>
       <div className="tiptap-editor">
         <EditorContent editor={editor} />
+        {pageLinkSearch.isOpen && editor && (
+          <WorkspaceInsertSearch
+            documentTree={documentTree}
+            mode="page-link"
+            selectedText={pageLinkSearch.selectedText}
+            labels={pageLinkLabels}
+            onInsertPageLink={handleInsertPageLink}
+            onClose={closePageLinkSearch}
+          />
+        )}
         {contextualControlsReady && (
           <TiptapControlsBoundary>
             <TiptapBlockControls

@@ -704,6 +704,27 @@
 .tiptap-editor .ProseMirror u { text-decoration-color: var(--arcane-color); }
 .tiptap-editor .ProseMirror s { opacity: .72; }
 
+.tiptap-editor .ProseMirror .tiptap-page-link {
+  color: var(--arcane-color);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: text;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.tiptap-editor .ProseMirror .tiptap-page-link:hover,
+.tiptap-editor .ProseMirror .tiptap-page-link:focus-visible {
+  color: var(--arcane-hover);
+  text-decoration-color: currentColor;
+  outline: none;
+}
+
+.tiptap-editor .ProseMirror[contenteditable="false"] .tiptap-page-link {
+  cursor: pointer;
+}
+
 .tiptap-editor .ProseMirror .tiptap-active-block.is-empty::before {
   display: block;
   color: var(--workspace-editor-muted, var(--text-secondary));

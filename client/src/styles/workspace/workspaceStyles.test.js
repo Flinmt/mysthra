@@ -54,9 +54,35 @@ describe('workspace style boundaries', () => {
     expect(document).toContain('height: 148px')
   })
 
+  it('matches the page link search density and palette distribution to the navigator', () => {
+    const editors = fs.readFileSync(path.join(import.meta.dirname, 'editors.css'), 'utf8')
+    const themes = fs.readFileSync(path.join(import.meta.dirname, 'themes.css'), 'utf8')
+
+    expect(editors).toContain('--insert-bg: color-mix(in srgb, var(--world-theme-background) 28%, var(--workspace-shell-surface))')
+    expect(editors).toContain('.workspace-container .workspace-insert-search.is-page-link')
+    expect(editors).toContain('width: min(430px, calc(100vw - 24px))')
+    expect(editors).toContain('.workspace-insert-search-field')
+    expect(editors).toContain('height: 32px')
+    expect(editors).toContain('box-shadow: inset 2px 0 0 var(--insert-accent)')
+    expect(editors).not.toContain('linear-gradient(#181622fa,#090b11fa)')
+    expect(themes).toContain('.workspace-container .glass-panel:not(.workspace-insert-search)')
+    expect(themes).not.toContain('.workspace-container .workspace-insert-result span')
+  })
+
   it('keeps palette ownership centralized and free from the legacy purple theme', () => {
     expect(workspaceStyles).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe|5d34d0|a855f7|7c3aed|00f0ff)/i)
     expect(fs.readFileSync(path.join(import.meta.dirname, 'themes.css'), 'utf8')).not.toContain('[data-world-theme=')
+  })
+
+  it('keeps world selection cards in a compact landscape format', () => {
+    const dashboard = fs.readFileSync(path.join(sourceRoot, 'styles/world-dashboard.css'), 'utf8')
+
+    expect(dashboard).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
+    expect(dashboard).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(dashboard).toContain('height: 168px')
+    expect(dashboard).toContain('height: 150px')
+    expect(dashboard).toContain('var(--world-card-accent)')
+    expect(dashboard).not.toContain('aspect-ratio: 16 / 10')
   })
 
   it('matches the asset explorer density and palette distribution to the navigator', () => {

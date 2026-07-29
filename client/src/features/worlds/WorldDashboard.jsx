@@ -54,9 +54,15 @@ function WorldCard({ world, canEdit, canDelete, onOpen, onEdit, onDelete }) {
   const thumbnail = world.thumbnail?.filename
     ? `url(/api/worlds/${encodeURIComponent(world.id)}/thumbnail?v=${world.thumbnail.updatedAt || 0})`
     : undefined
+  const cardStyle = {
+    '--world-card-background': colors.background,
+    '--world-card-surface': colors.surface,
+    '--world-card-accent': colors.accent,
+    '--world-card-secondary': colors.secondaryAccent
+  }
 
   return (
-    <article className="world-dashboard-card">
+    <article className="world-dashboard-card" style={cardStyle}>
       <button type="button" className="world-dashboard-card-open" onClick={() => onOpen(world)} aria-label={t('dashboard.open_world', { name })}>
         <span className={`world-dashboard-card-media ${thumbnail ? 'has-thumbnail' : ''}`} style={thumbnail ? { backgroundImage: thumbnail } : undefined} />
         <span className="world-dashboard-card-shade" />

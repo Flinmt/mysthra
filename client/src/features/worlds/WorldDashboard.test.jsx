@@ -88,7 +88,12 @@ describe('WorldDashboard', () => {
     const customWorld = {
       ...worlds[0],
       customTheme: {
-        colors: { accent: '#123456' },
+        colors: {
+          background: '#101820',
+          surface: '#24303a',
+          accent: '#123456',
+          secondaryAccent: '#abcdef'
+        },
         preset: { id: 'preset-1', name: 'Moonlit Archive' }
       }
     }
@@ -96,8 +101,13 @@ describe('WorldDashboard', () => {
     renderDashboard({ filteredWorlds: [customWorld] })
 
     const themeLabel = screen.getByText('Moonlit Archive')
+    const card = screen.getByRole('button', { name: 'Open world Ember Archive' }).closest('article')
     expect(themeLabel).toBeTruthy()
     expect(themeLabel.querySelector('i').style.backgroundColor).toBe('rgb(18, 52, 86)')
+    expect(card.style.getPropertyValue('--world-card-background')).toBe('#101820')
+    expect(card.style.getPropertyValue('--world-card-surface')).toBe('#24303a')
+    expect(card.style.getPropertyValue('--world-card-accent')).toBe('#123456')
+    expect(card.style.getPropertyValue('--world-card-secondary')).toBe('#abcdef')
   })
 
   it('labels manually customized colors without reusing the base theme name', () => {
