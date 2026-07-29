@@ -59,6 +59,17 @@ describe('workspace style boundaries', () => {
     expect(fs.readFileSync(path.join(import.meta.dirname, 'themes.css'), 'utf8')).not.toContain('[data-world-theme=')
   })
 
+  it('keeps world selection cards in a compact landscape format', () => {
+    const dashboard = fs.readFileSync(path.join(sourceRoot, 'styles/world-dashboard.css'), 'utf8')
+
+    expect(dashboard).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
+    expect(dashboard).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(dashboard).toContain('height: 168px')
+    expect(dashboard).toContain('height: 150px')
+    expect(dashboard).toContain('var(--world-card-accent)')
+    expect(dashboard).not.toContain('aspect-ratio: 16 / 10')
+  })
+
   it('matches the asset explorer density and palette distribution to the navigator', () => {
     const explorer = fs.readFileSync(path.join(import.meta.dirname, 'asset-explorer.css'), 'utf8')
 
