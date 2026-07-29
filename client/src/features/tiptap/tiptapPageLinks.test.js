@@ -9,6 +9,7 @@ import { createInternalPageLink } from '../../workspace/utils'
 import { TiptapCodeBlock } from './tiptapNodes'
 import {
   canInsertPageLink,
+  deletePageLinkAtSelection,
   getInternalPageLinkHref,
   insertPageLink,
   isPageLinkShortcut,
@@ -136,6 +137,61 @@ describe('Tiptap internal page links', () => {
     })
   })
 
+  it('deletes the complete page link with Backspace or Delete', () => {
+    const href = createInternalPageLink({ documentUid: 'doc-1', tabUid: 'tab-1' })
+    const linkMark = [{ type: 'link', attrs: { href } }]
+    const backward = createEditor({
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Before ' },
+          { type: 'text', text: 'Linked page', marks: linkMark },
+          { type: 'text', text: ' after' }
+        ]
+      }]
+    })
+    backward.commands.setTextSelection(19)
+
+    expect(deletePageLinkAtSelection(backward, 'Backspace')).toBe(true)
+    expect(backward.getText()).toBe('Before  after')
+
+    const forward = createEditor({
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Before ' },
+          { type: 'text', text: 'Linked page', marks: linkMark },
+          { type: 'text', text: ' after' }
+        ]
+      }]
+    })
+    forward.commands.setTextSelection(8)
+
+    expect(deletePageLinkAtSelection(forward, 'Delete')).toBe(true)
+    expect(forward.getText()).toBe('Before  after')
+  })
+
+  it('expands a partial link selection before deleting it', () => {
+    const href = createInternalPageLink({ documentUid: 'doc-1', tabUid: 'tab-1' })
+    const editor = createEditor({
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'A ' },
+          { type: 'text', text: 'Linked page', marks: [{ type: 'link', attrs: { href } }] },
+          { type: 'text', text: ' remains' }
+        ]
+      }]
+    })
+    editor.commands.setTextSelection({ from: 5, to: 8 })
+
+    expect(deletePageLinkAtSelection(editor, 'Backspace')).toBe(true)
+    expect(editor.getText()).toBe('A  remains')
+  })
+
   it('rejects read-only editors, code blocks and external URLs', () => {
     const readOnly = createEditor({ type: 'doc', content: [paragraph('Read only')] }, false)
     const code = createEditor({
@@ -147,6 +203,7 @@ describe('Tiptap internal page links', () => {
     expect(canInsertPageLink(readOnly)).toBe(false)
     expect(canInsertPageLink(code)).toBe(false)
     expect(insertPageLink(code, { href: 'https://example.com', label: 'External' })).toBe(false)
+    expect(deletePageLinkAtSelection(readOnly, 'Backspace')).toBe(false)
   })
 
   it('resolves only internal anchors from clicked content', () => {
