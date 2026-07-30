@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getAssetFileUrl,
+  getDocumentAssetFileUrl,
   getAssetThumbnailUrl,
   runAssetAction
 } from './assetApi'
@@ -17,6 +18,8 @@ describe('asset explorer API', () => {
       .toBe('/api/worlds/my%20world/assets/thumbnail?id=asset-1&size=160')
     expect(getAssetFileUrl('my world', { id: 'asset-1' }, 'tab-1'))
       .toBe('/api/worlds/my%20world/assets/file?id=asset-1&tabUid=tab-1')
+    expect(getDocumentAssetFileUrl('my world', { id: 'asset-1' }, 'document-1'))
+      .toBe('/api/worlds/my%20world/assets/file?id=asset-1&documentUid=document-1')
   })
 
   it('sends batch operations with a stable target folder id', async () => {

@@ -526,13 +526,11 @@ test("document metadata changes do not move physical paths", async () => {
   const result = await updateDocumentMetadata(worldName, document.path, {
     icon: "Castle",
     order: 2,
-    coverAssetPath: "covers/places.webp",
     coverPositionY: 38
   });
   assert.equal(result.metadata.name, "Places");
   assert.equal(result.metadata.icon, "Castle");
   assert.equal(result.metadata.order, 2);
-  assert.equal(result.metadata.coverAssetPath, "covers/places.webp");
   assert.equal(result.metadata.coverPositionY, 38);
 
   const tab = await createDocument(worldName, `${document.path}/Overview`, "", {
@@ -562,6 +560,13 @@ test("document metadata updates reject structural fields", async () => {
       type: "tab",
       contentType: "map",
       ownerUserId: "admin"
+    }),
+    { code: "INVALID_DOCUMENT_METADATA" }
+  );
+  await assert.rejects(
+    () => updateDocumentMetadata(worldName, document.path, {
+      coverAssetId: "forged",
+      coverAssetPath: "legacy/cover.png"
     }),
     { code: "INVALID_DOCUMENT_METADATA" }
   );

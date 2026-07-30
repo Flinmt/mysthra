@@ -21,6 +21,7 @@ const {
   duplicateDocument
 } = require("./tree");
 const soundtracks = require("./soundtracks");
+const documentCovers = require("./documentCovers");
 
 module.exports = {
   ...worlds,
@@ -30,6 +31,7 @@ module.exports = {
   ...collaboration,
   ...themePresets,
   ...soundtracks,
+  ...documentCovers,
   getFileTree,
   getVisibleFileTree,
   getDocumentAccess,

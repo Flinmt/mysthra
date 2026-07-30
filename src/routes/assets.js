@@ -12,6 +12,7 @@ const {
   getDocumentAccess,
   hasDocumentAccessLevel,
   isAssetReferencedByTab,
+  isDocumentCoverAsset,
   isDocumentSoundtrackAsset,
   listAssets,
   listTrash,
@@ -169,17 +170,16 @@ async function broadcastAssetResult(worldId, result) {
 
 async function hasDocumentAssetContext(worldId, tabUid, documentUid, currentUser, asset) {
   const requestUser = currentUser || { userId: "visitor", username: "Visitor", isVisitor: true };
-  if (documentUid && await isDocumentSoundtrackAsset(worldId, documentUid, requestUser, asset)) {
-    return true;
+  if (documentUid) {
+    if (await isDocumentCoverAsset(worldId, documentUid, requestUser, asset)) return true;
+    if (await isDocumentSoundtrackAsset(worldId, documentUid, requestUser, asset)) return true;
   }
   if (!tabUid) return false;
   const room = await resolveTabRoom({ type: "tab", worldId, tabUid });
   const access = await getDocumentAccess(worldId, room.path, requestUser);
   if (!hasDocumentAccessLevel(access, "read")) return false;
   const metadataPaths = [
-    room.metadata?.coverAssetPath,
-    room.metadata?.mapBackgroundAssetPath,
-    room.parentMetadata?.coverAssetPath
+    room.metadata?.mapBackgroundAssetPath
   ].filter(Boolean);
   if (asset?.path && metadataPaths.includes(asset.path)) return true;
   return isAssetReferencedByTab(worldId, tabUid, asset);
