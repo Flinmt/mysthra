@@ -22,6 +22,8 @@ import { AssetContextMenu, AssetPreviewDialog, DocumentChrome, WorkspaceBody, Wo
 import { DocumentPermissionsDialog } from './features/world/WorldAccessDialogs';
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog';
 import AssetExplorer from './features/assets/AssetExplorer';
+import { getDocumentAssetFileUrl } from './features/assets/assetApi';
+import { saveDocumentCover } from './workspace/documentCover';
 import { DEFAULT_WORLD_THEME, getWorldTheme, getWorldThemeShellStyle, getWorldThemeStyle } from './worldThemes';
 import {
   clampCoverPosition,
@@ -48,7 +50,6 @@ import {
   normalizeCoverArea,
   orderTreeWithHome,
   pathParent,
-  prepareAssetUpload,
   shouldOpenFirstTabDraft
 } from './workspace/utils';
 
@@ -604,7 +605,6 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const [toasts, setToasts] = useState([]);
   const nextToastIdRef = useRef(0);
   const [saveStatus, setSaveStatus] = useState('saved');
-  const coverFileInputRef = useRef(null);
   const documentIconButtonRef = useRef(null);
   
   // Modals/UI State
@@ -653,7 +653,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const selectedContainerPathRef = useRef('');
   const skipTitleRenameRef = useRef(false);
   const initialSharedSelectionRef = useRef(false);
-  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverSaving, setCoverSaving] = useState(false);
+  const [coverAssetErrorKey, setCoverAssetErrorKey] = useState('');
   const closeSidebarDrawer = useCallback(() => setIsSidebarDrawerOpen(false), []);
   const toggleSidebar = useCallback(() => {
     if (isSidebarMobile) setIsSidebarDrawerOpen(prev => !prev);
@@ -2074,72 +2075,42 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     }
   };
 
-  const handleCoverUpload = async (event) => {
-    const [file] = Array.from(event.target.files || []);
-    event.target.value = '';
-    if (!file || isVisitor || !selectedContainer || !canWriteSelectedContainer || isDocumentLocked) return;
+  const applyDocumentCover = async (asset) => {
+    if (
+      !asset?.id
+      || asset.mediaType !== 'image'
+      || isVisitor
+      || !selectedContainer
+      || !canWriteSelectedContainer
+      || isDocumentLocked
+    ) return;
 
-    setCoverUploading(true);
+    setCoverSaving(true);
     try {
-      const prepared = await prepareAssetUpload(file);
-      if (!prepared.contentType.startsWith('image/')) {
-        addToast(t('workspace.asset_unsupported'), 'error');
-        return;
-      }
-
-      const query = new URLSearchParams({
-        path: '',
-        filename: prepared.filename
-      });
-      const uploadRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/assets/upload?${query.toString()}`, {
-        method: 'POST',
-        headers: { 'Content-Type': prepared.contentType },
-        body: prepared.blob
-      });
-
-      if (!uploadRes.ok) {
-        addToast(t('workspace.asset_upload_failed', { name: file.name }), 'error');
-        return;
-      }
-
-      const uploaded = await uploadRes.json();
-      const metadataRes = await fetch(`/api/worlds/${encodeURIComponent(worldId)}/documents/metadata`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: selectedContainer.path,
-          metadata: {
-            coverAssetPath: uploaded.path,
-            coverPositionX: 50,
-            coverPositionY: 50,
-            coverCrop: null,
-            coverZoom: 1,
-            coverCroppedArea: null
-          }
-        })
-      });
-
-      if (!metadataRes.ok) {
-        addToast(t('common.error'), 'error');
-        return;
-      }
-
-      updateSelectedContainerMetadata({
-        coverAssetPath: uploaded.path,
-        coverPositionX: 50,
-        coverPositionY: 50,
-        coverCrop: null,
-        coverZoom: 1,
-        coverCroppedArea: null
+      const result = await saveDocumentCover(worldId, selectedContainer.uid, asset.id);
+      updateSelectedContainerMetadata(result.metadata);
+      setCoverAssetErrorKey('');
+      setCoverReposition({
+        isEditing: false,
+        x: 50,
+        y: 50,
+        initialX: 50,
+        initialY: 50,
+        isDragging: false,
+        dragStart: null
       });
       await fetchTree();
-      await fetchAssets();
       addToast(t('common.saved'), 'success');
-    } catch {
-      addToast(t('workspace.asset_unsupported'), 'error');
+    } catch (error) {
+      addToast(error.message || t('common.error'), 'error');
     } finally {
-      setCoverUploading(false);
+      setCoverSaving(false);
     }
+  };
+
+  const openDocumentCoverPicker = () => {
+    if (coverSaving) return;
+    openNotionMediaPicker('image', applyDocumentCover);
   };
 
   const updateActiveTabMetadata = (metadata) => {
@@ -2232,12 +2203,36 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const removeCover = async () => {
-    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
-    const metadata = { coverAssetPath: null, coverPositionX: 50, coverPositionY: 50, coverCrop: null, coverZoom: 1, coverCroppedArea: null };
-    updateSelectedContainerMetadata(metadata);
-    setCoverReposition({ isEditing: false, x: 50, y: 50, initialX: 50, initialY: 50, isDragging: false, dragStart: null });
-    const saved = await saveSelectedContainerMetadata(metadata);
-    if (saved) addToast(t('common.saved'), 'success');
+    if (
+      isVisitor
+      || !selectedContainer
+      || !documentCoverAssetId
+      || !canWriteSelectedContainer
+      || isDocumentLocked
+      || coverSaving
+    ) return;
+
+    setCoverSaving(true);
+    try {
+      const result = await saveDocumentCover(worldId, selectedContainer.uid, null);
+      updateSelectedContainerMetadata(result.metadata);
+      setCoverAssetErrorKey('');
+      setCoverReposition({
+        isEditing: false,
+        x: 50,
+        y: 50,
+        initialX: 50,
+        initialY: 50,
+        isDragging: false,
+        dragStart: null
+      });
+      await fetchTree();
+      addToast(t('common.saved'), 'success');
+    } catch (error) {
+      addToast(error.message || t('common.error'), 'error');
+    } finally {
+      setCoverSaving(false);
+    }
   };
 
   const getCurrentCoverPosition = () => {
@@ -2261,7 +2256,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   };
 
   const startCoverReposition = () => {
-    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
+    if (isVisitor || !selectedContainer || !documentCoverAssetId || !canWriteSelectedContainer || isDocumentLocked) return;
     const position = getCurrentCoverPosition();
     setCoverReposition({
       isEditing: true,
@@ -2287,7 +2282,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, []);
 
   const saveCoverReposition = async () => {
-    if (isVisitor || !selectedContainer || !documentCoverPath || !canWriteSelectedContainer || isDocumentLocked) return;
+    if (isVisitor || !selectedContainer || !documentCoverAssetId || !canWriteSelectedContainer || isDocumentLocked) return;
     const metadata = {
       coverPositionX: coverReposition.x,
       coverPositionY: coverReposition.y,
@@ -2365,15 +2360,21 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const isMapTab = visibleActiveTab?.contentType === 'map';
   const isBoardTab = visibleActiveTab?.contentType === 'board';
   const isCanvasTab = isMapTab || isBoardTab;
-  const hasDocumentCoverMetadata = Object.prototype.hasOwnProperty.call(selectedContainer?.metadata || {}, 'coverAssetPath');
-  const legacyCoverTab = selectedTabs.find(tab => tab.metadata?.coverAssetPath);
-  const documentCoverMetadata = hasDocumentCoverMetadata
-    ? selectedContainer?.metadata
-    : legacyCoverTab?.metadata || selectedContainer?.metadata;
-  const documentCoverPath = documentCoverMetadata?.coverAssetPath || null;
+  const documentCoverMetadata = selectedContainer?.metadata;
+  const documentCoverAssetId = String(documentCoverMetadata?.coverAssetId || '').trim() || null;
   const isCoverHiddenOnActiveTab = visibleActiveTab?.metadata?.documentCoverHidden ?? isCanvasTab;
   const isWideContentOnActiveTab = visibleActiveTab?.metadata?.wideContent === true;
-  const activeCoverPath = visibleActiveTab && !isCoverHiddenOnActiveTab ? documentCoverPath : null;
+  const activeCoverAssetId = visibleActiveTab && !isCoverHiddenOnActiveTab ? documentCoverAssetId : null;
+  const activeCoverAssetUrl = activeCoverAssetId
+    ? getDocumentAssetFileUrl(worldId, { id: activeCoverAssetId }, selectedContainer?.uid)
+    : '';
+  const activeCoverAssetKey = activeCoverAssetId
+    ? `${selectedContainer?.uid}:${activeCoverAssetId}`
+    : '';
+  const hasVisibleCover = Boolean(
+    activeCoverAssetId
+    && activeCoverAssetKey !== coverAssetErrorKey
+  );
   const hasInlineCoverPosition = documentCoverMetadata?.coverPositionX !== undefined || documentCoverMetadata?.coverPositionY !== undefined;
   const coverPositionX = coverReposition.isEditing
     ? coverReposition.x
@@ -2382,7 +2383,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     ? coverReposition.y
     : hasInlineCoverPosition ? clampCoverPosition(documentCoverMetadata?.coverPositionY) : undefined;
   const coverBackgroundVars = getCoverBackgroundVars(documentCoverMetadata?.coverCroppedArea, coverPositionX, coverPositionY);
-  const coverActionLabel = documentCoverPath ? t('workspace.change_cover') : t('workspace.add_cover');
+  const coverActionLabel = documentCoverAssetId ? t('workspace.change_cover') : t('workspace.add_cover');
   const isMarkdownTab = visibleActiveTab?.contentType === 'markdown';
   const canManageMembers = Boolean(worldData?.canManageMembers);
   const canManageDocumentPermissions = hasDocumentAccess(selectedContainer?.metadata?.currentUserAccess, 'admin');
@@ -2467,7 +2468,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   ]);
 
   const toggleActiveTabCoverVisibility = async () => {
-    if (!activeTab || !documentCoverPath || !canWriteActiveTab) return;
+    if (!activeTab || !documentCoverAssetId || !canWriteActiveTab) return;
     const wasHidden = isCoverHiddenOnActiveTab;
     const metadata = { documentCoverHidden: !wasHidden };
     updateActiveTabMetadata(metadata);
@@ -2576,7 +2577,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     <Music size={14} />
                     <span>{t('workspace.document_soundtrack')}</span>
                   </button>
-                  {visibleActiveTab && documentCoverPath && (
+                  {visibleActiveTab && documentCoverAssetId && (
                     <button
                       type="button"
                       onClick={() => {
@@ -2592,16 +2593,16 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                     type="button"
                     onClick={() => {
                       setWorldActionsMenu(false);
-                      coverFileInputRef.current?.click();
+                      openDocumentCoverPicker();
                     }}
-                    disabled={coverUploading}
+                    disabled={coverSaving}
                   >
                     <Image size={14} />
-                    <span>{coverUploading ? t('common.uploading') : coverActionLabel}</span>
+                    <span>{coverSaving ? t('common.saving') : coverActionLabel}</span>
                   </button>
-                  {documentCoverPath && (
+                  {documentCoverAssetId && (
                     <>
-                      {activeCoverPath && (
+                      {hasVisibleCover && (
                         <button
                           type="button"
                           onClick={() => {
@@ -2822,22 +2823,24 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         {selectedContainer ? (
           <div className="document-workspace editor-page-shell">
             <div className="document-content editor-page-scroll">
-              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${isWideContentOnActiveTab ? 'is-wide-content' : ''} ${activeCoverPath ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
-                {!isVisitor && selectedContainer && canWriteSelectedContainer && !isDocumentLocked && (
-                  <input
-                    ref={coverFileInputRef}
-                    type="file"
-                    accept="image/*,.gif"
-                    onChange={handleCoverUpload}
+              <article className={`editor-page ${isCanvasTab ? 'is-map-page' : 'is-wiki-page'} ${isWideContentOnActiveTab ? 'is-wide-content' : ''} ${hasVisibleCover ? 'has-cover' : ''} ${coverReposition.isEditing ? 'is-cover-repositioning' : ''}`}>
+                {activeCoverAssetId && (
+                  <img
+                    src={activeCoverAssetUrl}
+                    alt=""
                     hidden
+                    onLoad={() => {
+                      if (coverAssetErrorKey === activeCoverAssetKey) setCoverAssetErrorKey('');
+                    }}
+                    onError={() => setCoverAssetErrorKey(activeCoverAssetKey)}
                   />
                 )}
-                {activeCoverPath && (
+                {hasVisibleCover && (
                   <div
                     ref={coverRef}
                     className={`editor-page-cover has-image ${coverReposition.isEditing ? 'is-repositioning' : ''} ${coverReposition.isDragging ? 'is-dragging' : ''}`}
                     style={{
-                      '--editor-cover-image': `url("${getAssetUrl(activeCoverPath)}")`,
+                      '--editor-cover-image': `url("${activeCoverAssetUrl}")`,
                       ...coverBackgroundVars
                     }}
                     onPointerDown={beginCoverDrag}

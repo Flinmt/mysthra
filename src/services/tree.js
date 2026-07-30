@@ -29,7 +29,6 @@ const UPDATABLE_DOCUMENT_METADATA_FIELDS = new Set([
   "permissions",
   "locked",
   "order",
-  "coverAssetPath",
   "coverPositionX",
   "coverPositionY",
   "coverCrop",

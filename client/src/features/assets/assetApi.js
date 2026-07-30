@@ -19,6 +19,16 @@ export function getAssetFileUrl(worldId, item, tabUid = '') {
   return `${worldAssetsUrl(worldId, '/file')}?${appendTabContext(query, tabUid)}`
 }
 
+export function getDocumentAssetFileUrl(worldId, item, documentUid = '') {
+  const query = item?.id
+    ? `id=${encodeURIComponent(item.id)}`
+    : `path=${encodeURIComponent(item?.path || '')}`
+  const documentContext = documentUid
+    ? `${query}&documentUid=${encodeURIComponent(documentUid)}`
+    : query
+  return `${worldAssetsUrl(worldId, '/file')}?${documentContext}`
+}
+
 export function getAssetThumbnailUrl(worldId, item, size = 320, tabUid = '') {
   const reference = item?.id
     ? `id=${encodeURIComponent(item.id)}`

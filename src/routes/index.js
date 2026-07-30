@@ -27,6 +27,7 @@ const {
   renameDocument,
   moveDocument,
   duplicateDocument,
+  setDocumentCover,
   getDocumentSoundtrack,
   getWorldConfig,
   getWorldThumbnail,
@@ -467,6 +468,28 @@ async function router(request, response) {
       parseJsonBody,
       requireWorldMemberOrAdmin
     })) return;
+
+    const coverMatch = pathname.match(
+      /^\/api\/worlds\/[^\/]+\/documents\/([^\/]+)\/cover$/
+    );
+    if (coverMatch) {
+      const worldId = getWorldIdFromPath(request.url);
+      if (!worldId) return sendJson(response, 400, { error: "Missing world id" });
+      const documentUid = decodeURIComponent(coverMatch[1]);
+
+      try {
+        if (request.method !== "PUT") {
+          return sendJson(response, 405, { error: "Method not allowed" });
+        }
+        if (!(await requireWorldMemberOrAdmin(response, worldId, currentUser))) return;
+        const body = await parseJsonBody(request);
+        const result = await setDocumentCover(worldId, documentUid, body, currentUser);
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        return sendJson(response, statusCode, { error: getErrorMessage(error, statusCode) });
+      }
+    }
 
     const soundtrackMatch = pathname.match(
       /^\/api\/worlds\/[^\/]+\/documents\/([^\/]+)\/soundtrack$/
