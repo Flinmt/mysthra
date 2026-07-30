@@ -4,6 +4,7 @@ import { Edit2, Folder, FileText, ChevronRight, ChevronDown, Plus, Sword, Swords
 import { useTranslation } from 'react-i18next';
 import MapEditor from './features/map/MapEditor';
 import BoardEditor from './features/board/BoardEditor';
+import RoninSheetEditor from './features/sheets/RoninSheetEditor';
 import { useCollaborationRoom } from './hooks/useCollaborationRoom';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import TiptapEditor from './features/tiptap/TiptapEditor';
@@ -202,6 +203,7 @@ function getTabTypeIcon(contentType) {
   if (contentType === 'map') return Map;
   if (contentType === 'board') return Shapes;
   if (contentType === 'markdown') return FilePenLine;
+  if (contentType === 'sheet') return ScrollText;
   return FileText;
 }
 
@@ -209,7 +211,8 @@ function skipsFileContentLoad(contentType) {
   return contentType === 'wiki'
     || contentType === 'tiptap'
     || contentType === 'map'
-    || contentType === 'board';
+    || contentType === 'board'
+    || contentType === 'sheet';
 }
 
 function getUniqueTabName(tabs, baseName) {
@@ -921,7 +924,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   }, [activeTab, fileContent, isDirty, isVisitor, saveDocument]);
 
   useEffect(() => {
-    if (!isVisitor && (activeTab?.contentType === 'map' || activeTab?.contentType === 'board')) {
+    if (!isVisitor && (activeTab?.contentType === 'map' || activeTab?.contentType === 'board' || activeTab?.contentType === 'sheet')) {
       fetchAssets();
     }
   }, [activeTab?.contentType, fetchAssets, isVisitor]);
@@ -1221,7 +1224,10 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     });
   };
 
-  const handleInitializeTabDraft = async (contentType) => {
+  const handleInitializeTabDraft = async (selection) => {
+    const contentType = typeof selection === 'string' ? selection : selection?.contentType;
+    const sheetType = typeof selection === 'object' ? selection?.sheetType : undefined;
+    if (!contentType) return;
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
     if (selectedContainer.metadata?.locked === true) return;
     if (!tabDraft.isOpen || tabDraft.isCreating) return;
@@ -1247,7 +1253,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             type: 'tab',
             contentType,
             name: tabName,
-            ...((contentType === 'map' || contentType === 'board') ? { documentCoverHidden: true } : {})
+            ...(sheetType ? { sheetType } : {}),
+            ...(contentType === 'sheet' ? { wideContent: true } : {}),
+            ...((contentType === 'map' || contentType === 'board' || contentType === 'sheet') ? { documentCoverHidden: true } : {})
           }
         })
       });
@@ -1262,7 +1270,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
             type: 'tab',
             contentType,
             name: tabName,
-            ...((contentType === 'map' || contentType === 'board') ? { documentCoverHidden: true } : {})
+            ...(sheetType ? { sheetType } : {}),
+            ...(contentType === 'sheet' ? { wideContent: true } : {}),
+            ...((contentType === 'map' || contentType === 'board' || contentType === 'sheet') ? { documentCoverHidden: true } : {})
           }
         };
 
@@ -1273,7 +1283,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         setContentLoading(false);
         setIsDirty(false);
         setSaveStatus('saved');
-        if (contentType === 'map' || contentType === 'board') await fetchAssets();
+        if (contentType === 'map' || contentType === 'board' || contentType === 'sheet') await fetchAssets();
         setTabDraft({ isOpen: false, name: '', isCreating: false });
         addToast(t('common.created'), 'success');
       } else {
@@ -2359,11 +2369,12 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const visibleActiveTab = tabDraft.isOpen ? null : activeTab;
   const isMapTab = visibleActiveTab?.contentType === 'map';
   const isBoardTab = visibleActiveTab?.contentType === 'board';
+  const isSheetTab = visibleActiveTab?.contentType === 'sheet';
   const isCanvasTab = isMapTab || isBoardTab;
   const documentCoverMetadata = selectedContainer?.metadata;
   const documentCoverAssetId = String(documentCoverMetadata?.coverAssetId || '').trim() || null;
   const isCoverHiddenOnActiveTab = visibleActiveTab?.metadata?.documentCoverHidden ?? isCanvasTab;
-  const isWideContentOnActiveTab = visibleActiveTab?.metadata?.wideContent === true;
+  const isWideContentOnActiveTab = visibleActiveTab?.metadata?.wideContent ?? isSheetTab;
   const activeCoverAssetId = visibleActiveTab && !isCoverHiddenOnActiveTab ? documentCoverAssetId : null;
   const activeCoverAssetUrl = activeCoverAssetId
     ? getDocumentAssetFileUrl(worldId, { id: activeCoverAssetId }, selectedContainer?.uid)
@@ -2880,6 +2891,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         description: t('workspace.tab_type_selector_hint'),
                         stableGroup: t('workspace.tab_type_stable_group'),
                         experimentalGroup: t('workspace.tab_type_experimental_group'),
+                        sheetsGroup: t('workspace.tab_type_sheets_group'),
                         experimental: t('workspace.experimental'),
                         notion: t('workspace.tab_type_notion'),
                         notionHint: t('workspace.tab_type_notion_hint'),
@@ -2889,6 +2901,8 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                         mapHint: t('workspace.tab_type_map_hint'),
                         board: t('workspace.tab_type_board'),
                         boardHint: t('workspace.tab_type_board_hint'),
+                        roninSheet: t('workspace.tab_type_ronin_sheet'),
+                        roninSheetHint: t('workspace.tab_type_ronin_sheet_hint'),
                         creating: t('workspace.creating_tab')
                       }}
                     />
@@ -3021,6 +3035,18 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           onlineUsers: t('workspace.online_users')
                         }}
                       />
+                      ) : activeTab.contentType === 'sheet' ? (
+                      <RoninSheetEditor
+                        key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
+                        collaborationRoom={(currentUser || isVisitor) && activeTab.uid ? `world:${worldId}:tab:${activeTab.uid}` : ''}
+                        currentUser={currentUser}
+                        isVisitor={isVisitor}
+                        locked={!canWriteActiveTab}
+                        assetImages={assetImages}
+                        getAssetUrl={getAssetUrl}
+                        onRequestMedia={openNotionMediaPicker}
+                        onCollaborationSaveState={handleCollaborationSaveState}
+                      />
                       ) : activeTab.contentType === 'markdown' ? (
                       <MarkdownHtmlEditor
                         key={`${activeTab.path}:${canWriteActiveTab ? 'unlocked' : 'locked'}`}
@@ -3064,6 +3090,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
                           tabTypeMarkdown: t('workspace.tab_type_markdown'),
                           tabTypeMap: t('workspace.tab_type_map'),
                           tabTypeBoard: t('workspace.tab_type_board'),
+                          tabTypeSheet: t('workspace.tab_type_ronin_sheet'),
                           cancel: t('common.cancel')
                         }}
                         onCollaborationSaveState={handleCollaborationSaveState}

@@ -4,7 +4,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { createInternalPageLink, pathParent } from '../../workspace/utils'
 
 export const pageSuggestionPluginKey = new PluginKey('tiptapPageSuggestions')
-const PAGE_SUGGESTION_CONTENT_TYPES = new Set(['wiki', 'tiptap', 'markdown', 'map', 'board'])
+const PAGE_SUGGESTION_CONTENT_TYPES = new Set(['wiki', 'tiptap', 'markdown', 'map', 'board', 'sheet'])
 
 function normalizePageText(value = '') {
   return String(value)

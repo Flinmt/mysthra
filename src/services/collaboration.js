@@ -14,7 +14,7 @@ const { isGlobalAdmin } = require("../utils/roles");
 const { getPathByUid, indexWorld } = require("./indexer");
 
 const COLLABORATION_PATH = "/collaboration";
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board", "sheet"]);
 
 let activeCollaborationServer = null;
 const tabAssetReferences = new Map();
@@ -197,6 +197,14 @@ function prepareCollaborationDocumentTypes(document, room) {
     document.getMap("boardCanvas");
     document.getMap("boardSettings");
     document.getArray("boardItems");
+  } else if (room.metadata?.contentType === "sheet") {
+    document.getMap("sheetMeta");
+    document.getMap("roninCharacter");
+    document.getMap("roninVirtues");
+    document.getMap("roninClans");
+    document.getArray("roninAllies");
+    document.getArray("roninEnemies");
+    document.getMap("roninVillains");
   } else if (["markdown", "wiki"].includes(room.metadata?.contentType)) {
     document.getText("markdown");
   }

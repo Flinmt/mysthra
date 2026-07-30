@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldOpenFirstTabDraft } from './utils'
+import { isCollaborativeContentType, shouldOpenFirstTabDraft } from './utils'
 
 describe('first tab draft eligibility', () => {
   const writableEmptyDocument = {
@@ -26,5 +26,12 @@ describe('first tab draft eligibility', () => {
     ['locked document', { locked: true }]
   ])('stays closed when %s', (_scenario, override) => {
     expect(shouldOpenFirstTabDraft({ ...writableEmptyDocument, ...override })).toBe(false)
+  })
+})
+
+describe('collaborative content types', () => {
+  it('treats character sheets as collaborative documents', () => {
+    expect(isCollaborativeContentType('sheet')).toBe(true)
+    expect(isCollaborativeContentType('plain')).toBe(false)
   })
 })
