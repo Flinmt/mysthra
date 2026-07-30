@@ -39,7 +39,7 @@ export function shouldOpenFirstTabDraft({
 }
 
 export function isCollaborativeContentType(contentType) {
-  return contentType === 'wiki' || contentType === 'tiptap' || contentType === 'map' || contentType === 'markdown' || contentType === 'board';
+  return contentType === 'wiki' || contentType === 'tiptap' || contentType === 'map' || contentType === 'markdown' || contentType === 'board' || contentType === 'sheet';
 }
 
 export function isRootContainer(node) {

@@ -486,6 +486,33 @@ test("document tree supports collaborative board tabs", async () => {
   );
 });
 
+test("document tree supports collaborative Ronin sheet tabs", async () => {
+  const worldName = "core-tree-sheet-tabs";
+  await resetWorld(worldName);
+  await ensureWorldStructure(worldName);
+
+  const container = await createDocument(worldName, "Characters", "", {
+    type: "container"
+  });
+  const sheet = await createDocument(worldName, `${container.path}/Ronin`, "", {
+    type: "tab",
+    contentType: "sheet",
+    sheetType: "ronin"
+  });
+
+  const tree = await getFileTree(worldName);
+  const storedSheet = tree[0].children[0];
+  assert.equal(storedSheet.contentType, "sheet");
+  assert.equal(storedSheet.metadata.sheetType, "ronin");
+  assert.equal(storedSheet.metadata.documentCoverHidden, true);
+  assert.equal(storedSheet.metadata.wideContent, true);
+
+  await assert.rejects(
+    () => readDocument(worldName, sheet.path),
+    { code: "DOCUMENT_NOT_FOUND" }
+  );
+});
+
 test("document creation stores accented tab names in metadata", async () => {
   const worldName = "core-tree-accented-tabs";
   const tabName = "Introdução";

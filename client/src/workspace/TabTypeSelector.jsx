@@ -1,5 +1,5 @@
 import { forwardRef, useId } from 'react'
-import { FilePenLine, FileText, Map, Shapes } from 'lucide-react'
+import { FilePenLine, FileText, Map, ScrollText, Shapes } from 'lucide-react'
 
 const STABLE_TAB_TYPES = [
   { id: 'wiki', icon: FileText, labelKey: 'notion', hintKey: 'notionHint' }
@@ -9,6 +9,17 @@ const EXPERIMENTAL_TAB_TYPES = [
   { id: 'markdown', icon: FilePenLine, labelKey: 'markdown', hintKey: 'markdownHint' },
   { id: 'map', icon: Map, labelKey: 'map', hintKey: 'mapHint' },
   { id: 'board', icon: Shapes, labelKey: 'board', hintKey: 'boardHint' }
+]
+
+const SHEET_TAB_TYPES = [
+  {
+    id: 'sheet-ronin',
+    contentType: 'sheet',
+    sheetType: 'ronin',
+    icon: ScrollText,
+    labelKey: 'roninSheet',
+    hintKey: 'roninSheetHint'
+  }
 ]
 
 function TabTypeButton({ type, labels, disabled, onSelect, buttonRef, experimental = false }) {
@@ -21,7 +32,10 @@ function TabTypeButton({ type, labels, disabled, onSelect, buttonRef, experiment
       type="button"
       className={experimental ? 'tab-type-option is-experimental' : 'tab-type-option'}
       data-tab-type={type.id}
-      onClick={() => onSelect(type.id)}
+      onClick={() => onSelect({
+        contentType: type.contentType || type.id,
+        ...(type.sheetType ? { sheetType: type.sheetType } : {})
+      })}
       disabled={disabled}
       aria-describedby={hintId}
     >
@@ -72,6 +86,22 @@ const TabTypeSelector = forwardRef(function TabTypeSelector({ labels, creating =
           aria-label={labels.experimentalGroup}
         >
           {EXPERIMENTAL_TAB_TYPES.map(type => (
+            <TabTypeButton
+              key={type.id}
+              type={type}
+              labels={typeLabels}
+              disabled={creating}
+              onSelect={onSelect}
+              experimental
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="tab-type-sheets">
+        <span className="tab-type-section-label">{labels.sheetsGroup}</span>
+        <div className="tab-type-sheet-grid" role="group" aria-label={labels.sheetsGroup}>
+          {SHEET_TAB_TYPES.map(type => (
             <TabTypeButton
               key={type.id}
               type={type}

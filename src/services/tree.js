@@ -11,7 +11,7 @@ const {
 const { updateIndex, removeFromIndex } = require("./indexer");
 
 const FILE_BACKED_TAB_CONTENT_TYPES = new Set(["markdown"]);
-const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board"]);
+const COLLABORATIVE_TAB_CONTENT_TYPES = new Set(["wiki", "tiptap", "map", "markdown", "board", "sheet"]);
 function getTabContentType(metadata = {}) {
   return metadata.contentType || (metadata.type === "tab" ? "wiki" : null);
 }
@@ -324,8 +324,11 @@ async function createDocument(worldName, docPath, content, metadata = {}) {
     order: order ?? 0,
     type: metadata.type || currentMeta.type || "container",
     contentType,
-    ...(metadata.type === "tab" && (contentType === "map" || contentType === "board") && metadata.documentCoverHidden === undefined
+    ...(metadata.type === "tab" && (contentType === "map" || contentType === "board" || contentType === "sheet") && metadata.documentCoverHidden === undefined
       ? { documentCoverHidden: true }
+      : {}),
+    ...(metadata.type === "tab" && contentType === "sheet" && metadata.wideContent === undefined
+      ? { wideContent: true }
       : {})
   };
   await writeDocumentMetadata(pagesDir, safePath, nextMeta);

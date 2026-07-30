@@ -141,7 +141,8 @@ export default function TiptapEditor({
     tabTypeNotion: t('workspace.tab_type_notion'),
     tabTypeMarkdown: t('workspace.tab_type_markdown'),
     tabTypeMap: t('workspace.tab_type_map'),
-    tabTypeBoard: t('workspace.tab_type_board')
+    tabTypeBoard: t('workspace.tab_type_board'),
+    tabTypeSheet: t('workspace.tab_type_ronin_sheet')
   }), [t])
   const pageSuggestionLabels = useMemo(() => ({
     suggestionLabel: t('workspace.tiptap_page_suggestion_label'),
@@ -155,7 +156,8 @@ export default function TiptapEditor({
       tiptap: t('workspace.tab_type_notion'),
       markdown: t('workspace.tab_type_markdown'),
       map: t('workspace.tab_type_map'),
-      board: t('workspace.tab_type_board')
+      board: t('workspace.tab_type_board'),
+      sheet: t('workspace.tab_type_ronin_sheet')
     }
   }), [t])
   const blockLabels = useMemo(() => ({

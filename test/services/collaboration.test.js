@@ -71,6 +71,11 @@ test("resolveTabRoom accepts collaborative tab content types only", async () => 
     type: "tab",
     contentType: "board"
   });
+  const sheetTab = await createDocument(worldName, "Ronin Sheet", "", {
+    type: "tab",
+    contentType: "sheet",
+    sheetType: "ronin"
+  });
   const invalidTab = await createDocument(worldName, "Secret Tab", "", {
     type: "tab",
     contentType: "secret"
@@ -81,6 +86,7 @@ test("resolveTabRoom accepts collaborative tab content types only", async () => 
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: mapTab.uid })).tabUid, mapTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: markdownTab.uid })).tabUid, markdownTab.uid);
   assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: boardTab.uid })).tabUid, boardTab.uid);
+  assert.equal((await resolveTabRoom({ type: "tab", worldId: worldName, tabUid: sheetTab.uid })).tabUid, sheetTab.uid);
 
   await assert.rejects(
     () => resolveTabRoom({ type: "tab", worldId: worldName, tabUid: invalidTab.uid }),
@@ -123,6 +129,7 @@ test("collaboration asset references are indexed across supported editor types",
   const tiptapTab = await createDocument(worldName, "Notion", "", { type: "tab", contentType: "tiptap" });
   const boardTab = await createDocument(worldName, "Board", "", { type: "tab", contentType: "board" });
   const markdownTab = await createDocument(worldName, "Markdown", "", { type: "tab", contentType: "markdown" });
+  const sheetTab = await createDocument(worldName, "Ronin", "", { type: "tab", contentType: "sheet", sheetType: "ronin" });
   const yjsRoot = path.join(getDataRoot(), "worlds", worldName, "yjs");
   await fs.mkdir(yjsRoot, { recursive: true });
 
@@ -140,14 +147,24 @@ test("collaboration asset references are indexed across supported editor types",
   markdownDocument.getText("markdown").insert(0, "![Map]({{asset:maps/world.webp}})");
   await fs.writeFile(path.join(yjsRoot, `${markdownTab.uid}.bin`), Buffer.from(Y.encodeStateAsUpdate(markdownDocument)));
 
+  const sheetDocument = new Y.Doc();
+  sheetDocument.getMap("roninCharacter").set("assetPath", "characters/ronin.webp");
+  const ally = new Y.Map();
+  ally.set("assetPath", "characters/ally.webp");
+  sheetDocument.getArray("roninAllies").push([ally]);
+  await fs.writeFile(path.join(yjsRoot, `${sheetTab.uid}.bin`), Buffer.from(Y.encodeStateAsUpdate(sheetDocument)));
+
   assert.equal(await isAssetReferencedByTab(worldName, tiptapTab.uid, { id: "image-id" }), true);
   assert.equal(await isAssetReferencedByTab(worldName, boardTab.uid, { path: "boards/image.webp" }), true);
   assert.equal(await isAssetReferencedByTab(worldName, markdownTab.uid, { path: "maps/world.webp" }), true);
   assert.equal(await isAssetReferencedByTab(worldName, markdownTab.uid, { path: "maps/private.webp" }), false);
+  assert.equal(await isAssetReferencedByTab(worldName, sheetTab.uid, { path: "characters/ronin.webp" }), true);
+  assert.equal(await isAssetReferencedByTab(worldName, sheetTab.uid, { path: "characters/ally.webp" }), true);
 
   tiptapDocument.destroy();
   boardDocument.destroy();
   markdownDocument.destroy();
+  sheetDocument.destroy();
 });
 
 function createLocalWebSocketPolyfill(server, cookie = "") {
@@ -216,13 +233,14 @@ async function waitFor(assertion, timeoutMs = 2500) {
   throw lastError;
 }
 
-test("hocuspocus providers sync and persist tab state", async () => {
+test("hocuspocus providers sync and persist Ronin sheet state", async () => {
   const worldName = `collab-runtime-${Date.now()}`;
   createdWorlds.add(worldName);
   await createWorld({ name: worldName });
-  const tab = await createDocument(worldName, "Runtime Wiki", "", {
+  const tab = await createDocument(worldName, "Runtime Ronin", "", {
     type: "tab",
-    contentType: "wiki"
+    contentType: "sheet",
+    sheetType: "ronin"
   });
 
   const token = generateSessionToken({ userId: "root", username: "admin", globalRole: "root" });
@@ -246,8 +264,8 @@ test("hocuspocus providers sync and persist tab state", async () => {
     WebSocketPolyfill,
     onAuthenticated: ({ scope }) => authenticatedScopes.push(scope)
   });
-  const firstItems = firstDoc.getArray("runtimeItems");
-  const secondItems = secondDoc.getArray("runtimeItems");
+  const firstItems = firstDoc.getArray("roninAllies");
+  const secondItems = secondDoc.getArray("roninAllies");
 
   try {
     await waitFor(() => assert.equal(authenticatedScopes.filter(scope => scope === "read-write").length, 2));
@@ -270,7 +288,7 @@ test("hocuspocus providers sync and persist tab state", async () => {
       WebSocketPolyfill
     });
     try {
-      await waitFor(() => assert.deepEqual(reloadDoc.getArray("runtimeItems").toArray(), ["synced"]));
+      await waitFor(() => assert.deepEqual(reloadDoc.getArray("roninAllies").toArray(), ["synced"]));
     } finally {
       reloadProvider.destroy();
       reloadDoc.destroy();

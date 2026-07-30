@@ -30,6 +30,7 @@ describe('workspace style boundaries', () => {
       'soundtrack.css',
       'map.css',
       'board.css',
+      'sheet.css',
       'overlays.css',
       'themes.css',
       'permissions.css',
@@ -84,6 +85,19 @@ describe('workspace style boundaries', () => {
     expect(dashboard).toContain('height: 150px')
     expect(dashboard).toContain('var(--world-card-accent)')
     expect(dashboard).not.toContain('aspect-ratio: 16 / 10')
+  })
+
+  it('keeps the Ronin sheet compact and owned by the selected world theme', () => {
+    const sheet = fs.readFileSync(path.join(import.meta.dirname, 'sheet.css'), 'utf8')
+
+    expect(sheet).toContain('.ronin-sheet')
+    expect(sheet).toContain('var(--workspace-theme-accent-border)')
+    expect(sheet).toContain('var(--accent-color)')
+    expect(sheet).toContain('var(--text-primary)')
+    expect(sheet).toContain('border-radius: 6px')
+    expect(sheet).toContain('max-height: min(56vh, 560px)')
+    expect(sheet).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))')
+    expect(sheet).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe|294A75|151C20|0B0D11)/i)
   })
 
   it('matches the asset explorer density and palette distribution to the navigator', () => {

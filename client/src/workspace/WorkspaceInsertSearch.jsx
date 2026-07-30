@@ -25,6 +25,7 @@ function getTabTypeLabel(contentType, labels = {}) {
   if (contentType === 'markdown') return labels.tabTypeMarkdown || 'Markdown/HTML'
   if (contentType === 'map') return labels.tabTypeMap || 'Map'
   if (contentType === 'board') return labels.tabTypeBoard || 'Board'
+  if (contentType === 'sheet') return labels.tabTypeSheet || 'Character sheet'
   return labels.tabTypeNotion || 'Notion'
 }
 
