@@ -378,7 +378,8 @@ export default function MapEditor({
     roomName: collaborationRoom,
     currentUser,
     isVisitor,
-    locked
+    locked,
+    sessionCache: true
   });
   const {
     doc: collaborationDoc,

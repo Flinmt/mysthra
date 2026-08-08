@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import * as Y from 'yjs';
+import { useCollaborationSessionCache } from './collaborationSessionCache';
 
 export function getCollaborationUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -30,8 +31,10 @@ export function useCollaborationRoom({
   currentUser = null,
   isVisitor = false,
   locked = false,
-  onStateless
+  onStateless,
+  sessionCache = false
 }) {
+  const cache = useCollaborationSessionCache();
   const identity = useMemo(
     () => currentUser || (isVisitor ? { userId: 'visitor', username: 'Visitor' } : null),
     [currentUser, isVisitor]
@@ -68,11 +71,10 @@ export function useCollaborationRoom({
       return undefined;
     }
 
-    const doc = new Y.Doc();
-    const provider = new HocuspocusProvider({
-      url: getCollaborationUrl(),
-      name: roomName,
-      document: doc
+    const cachedEntry = sessionCache && cache ? cache.acquire(roomName, user) : null;
+    const doc = cachedEntry?.doc || new Y.Doc();
+    const provider = cachedEntry?.provider || new HocuspocusProvider({
+      url: getCollaborationUrl(), name: roomName, document: doc
     });
     const getStates = () => Array.from(provider.awareness?.getStates?.().entries?.() || [])
       .map(([clientId, state]) => ({ clientId, ...state }));
@@ -134,13 +136,14 @@ export function useCollaborationRoom({
     const handleSynced = () => setSaved();
     const handleStateless = ({ payload }) => onStatelessRef.current?.({ payload });
 
-    setConnectionState({
+    setConnectionState(cachedEntry?.state || {
       status: 'connecting',
       readOnly: false,
       authenticated: false,
       synced: false,
       saveStatus: 'saving',
-      dirty: true
+      dirty: true,
+      hydrated: false
     });
     setCollaboration({ doc, provider });
     provider.awareness.setLocalStateField('user', user);
@@ -151,6 +154,13 @@ export function useCollaborationRoom({
     provider.on('synced', handleSynced);
     provider.on('awarenessChange', updateAwareness);
     provider.on('stateless', handleStateless);
+    const handleCachedState = state => {
+      setConnectionState(state);
+      setAwarenessStates(state.awarenessStates || []);
+    };
+    if (cachedEntry) {
+      cachedEntry.listeners.add(handleCachedState);
+    }
     updateAwareness();
 
     return () => {
@@ -161,10 +171,15 @@ export function useCollaborationRoom({
       provider.off('synced', handleSynced);
       provider.off('awarenessChange', updateAwareness);
       provider.off('stateless', handleStateless);
-      provider.destroy();
-      doc.destroy();
+      if (cachedEntry) {
+        cachedEntry.listeners.delete(handleCachedState);
+        cache.release(roomName);
+      } else {
+        provider.destroy();
+        doc.destroy();
+      }
     };
-  }, [identity, roomName, user]);
+  }, [cache, identity, roomName, sessionCache, user]);
 
   const setAwarenessField = useCallback((key, value) => {
     collaboration?.provider.awareness?.setLocalStateField(key, value);
@@ -190,6 +205,7 @@ export function useCollaborationRoom({
     readOnly: Boolean(locked || connectionState.readOnly),
     authenticated: connectionState.authenticated,
     synced: connectionState.synced,
+    hydrated: Boolean(connectionState.hydrated || connectionState.synced),
     saveStatus: connectionState.saveStatus,
     dirty: connectionState.dirty,
     awarenessStates,

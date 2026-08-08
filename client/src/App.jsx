@@ -7,6 +7,8 @@ import Login from './features/auth/Login'
 import WorldDashboard from './features/worlds/WorldDashboard'
 import WorldDialog from './features/worlds/WorldDialog'
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog'
+import { CollaborationSessionCacheProvider } from './hooks/collaborationSessionCache'
+import { getCollaborationUrl } from './hooks/useCollaborationRoom'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -47,12 +49,17 @@ function App() {
           const isVisitor = new URLSearchParams(window.location.search).get('view') === 'true';
           if (isAuthenticated || isVisitor) {
             return (
-              <WorldWorkspace
-                params={params}
-                isVisitor={isVisitor && !isAuthenticated}
-                currentUser={currentUser}
-                languageSwitcher={<LanguageSwitcher variant="workspace" />}
-              />
+              <CollaborationSessionCacheProvider
+                cacheKey={`${params.id}:${currentUser?.userId || (isVisitor ? 'visitor' : '')}`}
+                url={getCollaborationUrl()}
+              >
+                <WorldWorkspace
+                  params={params}
+                  isVisitor={isVisitor && !isAuthenticated}
+                  currentUser={currentUser}
+                  languageSwitcher={<LanguageSwitcher variant="workspace" />}
+                />
+              </CollaborationSessionCacheProvider>
             );
           }
           return <Login languageSwitcher={<LanguageSwitcher />} onLogin={(user) => { setIsAuthenticated(true); setCurrentUser(user); }} />;

@@ -461,7 +461,8 @@ export default function BoardEditor({
     roomName: collaborationRoom,
     currentUser,
     isVisitor,
-    locked
+    locked,
+    sessionCache: true
   })
   const {
     doc: collaborationDoc,

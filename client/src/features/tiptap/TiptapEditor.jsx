@@ -616,7 +616,7 @@ export default function TiptapEditor({
   const contextualControlsReady = Boolean(
     editor &&
     editor.state.doc.childCount > 0 &&
-    (!collaborationRoom || collaboration.synced)
+    (!collaborationRoom || collaboration.synced || collaboration.hydrated)
   )
 
   return (

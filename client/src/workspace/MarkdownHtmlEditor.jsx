@@ -142,7 +142,8 @@ export default function MarkdownHtmlEditor({
     roomName: collaborationRoom,
     currentUser,
     isVisitor,
-    locked
+    locked,
+    sessionCache: true
   })
   const {
     doc: collaborationDoc,
