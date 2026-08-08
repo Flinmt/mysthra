@@ -1,0 +1,20 @@
+services:
+  mysthra:
+    image: ${MYSTHRA_IMAGE:-ghcr.io/flinmt/mysthra:latest}
+    pull_policy: always
+    container_name: mysthra-app
+    restart: unless-stopped
+    ports:
+      - "${MYSTHRA_PORT:-3000}:3000"
+    volumes:
+      - mysthra-data:/app/data
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MASTER_PASSWORD: ${MASTER_PASSWORD:?Set MASTER_PASSWORD before starting Mysthra}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      MAX_JSON_BODY_SIZE: ${MAX_JSON_BODY_SIZE:-1mb}
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-50mb}
+
+volumes:
+  mysthra-data:

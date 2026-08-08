@@ -2,7 +2,7 @@
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/client
 COPY client/package*.json ./
-RUN npm install
+RUN npm ci
 COPY client/ ./
 RUN npm run build
 
@@ -12,7 +12,7 @@ WORKDIR /app
 
 # Copia as dependências do backend
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copia o código do servidor
 COPY . .
