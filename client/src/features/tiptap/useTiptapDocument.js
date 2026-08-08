@@ -4,8 +4,8 @@ import { useCollaborationRoom } from '../../hooks/useCollaborationRoom'
 export function useTiptapDocument({ roomName, currentUser, isVisitor = false, locked = false }) {
   const documentRef = useRef(null)
   const [status, setStatus] = useState('pending')
-  const collaboration = useCollaborationRoom({ roomName, currentUser, isVisitor, locked })
-  const { doc, provider, synced, readOnly, saveStatus, dirty, user, awarenessStates, setAwarenessField } = collaboration
+  const collaboration = useCollaborationRoom({ roomName, currentUser, isVisitor, locked, sessionCache: true })
+  const { doc, provider, synced, hydrated, readOnly, saveStatus, dirty, user, awarenessStates, setAwarenessField } = collaboration
 
   useEffect(() => {
     documentRef.current = doc
@@ -27,6 +27,7 @@ export function useTiptapDocument({ roomName, currentUser, isVisitor = false, lo
     user,
     readOnly,
     synced,
+    hydrated,
     saveStatus: status,
     dirty,
     awarenessStates,

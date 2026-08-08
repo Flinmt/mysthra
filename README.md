@@ -96,6 +96,51 @@ mysthra-data:/app/data
 
 Named volumes are recommended for Docker Desktop, WSL, and autostart setups because the container does not depend on a host folder being ready before it starts. If you need direct host access to the files, you can change the Compose mount to a bind mount such as `./data:/app/data`, but make sure that path is available before the container starts.
 
+### Stable Images And Updates
+
+Merges into `main` publish a production image through GitHub Actions with two tags:
+
+```text
+ghcr.io/flinmt/mysthra:latest
+ghcr.io/flinmt/mysthra:sha-<commit>
+```
+
+The `develop` branch does not update the production image. To start the stable image, create `.env` from the example, set a strong `MASTER_PASSWORD`, and run:
+
+```bash
+docker compose --env-file .env -f docker-compose.production.yml up -d
+```
+
+Update the running container after a new image is published:
+
+```bash
+./deploy/update-container.sh
+```
+
+The named `mysthra-data` volume is preserved when the container is recreated. To roll back, set a previously published commit tag in the server's `.env` so automatic updates stay pinned, then run the same update script:
+
+```env
+MYSTHRA_IMAGE=ghcr.io/flinmt/mysthra:sha-<previous-commit>
+```
+
+```bash
+./deploy/update-container.sh
+```
+
+Remove `MYSTHRA_IMAGE` from `.env` to follow `latest` again.
+
+For a private GHCR package, authenticate the Docker host once with a GitHub personal access token that has `read:packages` permission:
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u Flinmt --password-stdin
+```
+
+To check for updates automatically on Linux, add a cron entry with `crontab -e` (adjust the repository path):
+
+```cron
+*/10 * * * * /absolute/path/to/mysthra/deploy/update-container.sh >> /absolute/path/to/mysthra/deploy/update.log 2>&1
+```
+
 ---
 
 ## Local Development

@@ -6,6 +6,7 @@ import MapEditor from './features/map/MapEditor';
 import BoardEditor from './features/board/BoardEditor';
 import RoninSheetEditor from './features/sheets/RoninSheetEditor';
 import { useCollaborationRoom } from './hooks/useCollaborationRoom';
+import { useCollaborationSessionCache } from './hooks/collaborationSessionCache';
 import MarkdownHtmlEditor from './workspace/MarkdownHtmlEditor';
 import TiptapEditor from './features/tiptap/TiptapEditor';
 import TabTypeSelector from './workspace/TabTypeSelector';
@@ -213,6 +214,16 @@ function skipsFileContentLoad(contentType) {
     || contentType === 'map'
     || contentType === 'board'
     || contentType === 'sheet';
+}
+
+function getTabCollaborationRoom(worldId, tab) {
+  return worldId && tab?.uid ? `world:${worldId}:tab:${tab.uid}` : '';
+}
+
+function getDescendantTabs(node) {
+  if (!node) return [];
+  if (node.type === 'tab') return [node];
+  return (node.children || []).flatMap(getDescendantTabs);
 }
 
 function getUniqueTabName(tabs, baseName) {
@@ -569,6 +580,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const worldId = decodeURIComponent(params.id);
+  const collaborationCache = useCollaborationSessionCache();
   
   const [tree, setTree] = useState([]);
   const [selectedContainer, setSelectedContainer] = useState(null);
@@ -973,6 +985,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
+      if (tabNode.contentType === 'markdown' && collaborationCache?.hasHydrated(getTabCollaborationRoom(worldId, tabNode))) {
+        setActiveTab(tabNode);
+        setFileContent('');
+        setContentLoading(false);
+        setIsDirty(false);
+        setSaveStatus('saved');
+        return;
+      }
+
       setActiveTab(tabNode);
       setFileContent('');
       setContentLoading(true);
@@ -1027,7 +1048,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     return () => {
       isCancelled = true;
     };
-  }, [activeTab, addToast, selectedContainer, t, tree, worldId]);
+  }, [activeTab, addToast, collaborationCache, selectedContainer, t, tree, worldId]);
 
   const selectContainer = async (node) => {
     setSelectedContainer(node);
@@ -1051,6 +1072,14 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     setTabDraft({ isOpen: false, name: '', isCreating: false });
 
     if (skipsFileContentLoad(tabNode.contentType)) {
+      setActiveTab(tabNode);
+      setFileContent('');
+      setContentLoading(false);
+      setIsDirty(false);
+      setSaveStatus('saved');
+      return;
+    }
+    if (tabNode.contentType === 'markdown' && collaborationCache?.hasHydrated(getTabCollaborationRoom(worldId, tabNode))) {
       setActiveTab(tabNode);
       setFileContent('');
       setContentLoading(false);
@@ -1190,6 +1219,15 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         return;
       }
 
+      if (tabToOpen.contentType === 'markdown' && collaborationCache?.hasHydrated(getTabCollaborationRoom(worldId, tabToOpen))) {
+        setActiveTab(tabToOpen);
+        setFileContent('');
+        setContentLoading(false);
+        setIsDirty(false);
+        setSaveStatus('saved');
+        return;
+      }
+
       setActiveTab(tabToOpen);
       setFileContent('');
       setContentLoading(true);
@@ -1209,7 +1247,7 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
     };
 
     openInitialTab();
-  }, [addToast, selectedContainer, t, tree, worldData?.homePage, worldDataLoaded, worldId]);
+  }, [addToast, collaborationCache, selectedContainer, t, tree, worldData?.homePage, worldDataLoaded, worldId]);
 
   const openTabDraft = () => {
     if (isVisitor || !selectedContainer || !hasDocumentAccess(selectedContainer.metadata?.currentUserAccess, 'write')) return;
@@ -1484,6 +1522,9 @@ export default function WorldWorkspace({ params, isVisitor = false, currentUser 
         method: 'DELETE'
       });
       if (res.ok) {
+        getDescendantTabs(node).forEach(tab => {
+          collaborationCache?.invalidate(getTabCollaborationRoom(worldId, tab));
+        });
         if (node.type === 'tab') {
           if (activeTab?.path === node.path) {
             setActiveTab(null);

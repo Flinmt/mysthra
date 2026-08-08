@@ -315,19 +315,21 @@ export default function RoninSheetEditor({
     roomName: collaborationRoom,
     currentUser,
     isVisitor,
-    locked
+    locked,
+    sessionCache: true
   })
   const {
     doc,
     provider,
     readOnly: collaborationReadOnly,
     synced,
+    hydrated,
     saveStatus,
     dirty
   } = collaboration
   const readOnly = Boolean(isVisitor || locked || collaborationReadOnly)
   const [snapshot, setSnapshot] = useState(null)
-  const [hasHydrated, setHasHydrated] = useState(false)
+  const [hasHydrated, setHasHydrated] = useState(Boolean(hydrated))
   const [expandedVillains, setExpandedVillains] = useState(() => new Set())
   const [imageDialog, setImageDialog] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -351,8 +353,8 @@ export default function RoninSheetEditor({
   }, [doc])
 
   useEffect(() => {
-    if (synced) setHasHydrated(true)
-  }, [synced])
+    if (hydrated || synced) setHasHydrated(true)
+  }, [hydrated, synced])
 
   useEffect(() => {
     onCollaborationSaveState?.({ status: saveStatus, dirty })
