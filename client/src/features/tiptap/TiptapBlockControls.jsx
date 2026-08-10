@@ -19,12 +19,13 @@ import {
 } from 'lucide-react'
 import {
   autoScrollEditorDuringDrag,
+  createRootBlockDragPreview,
   deleteRootBlock,
   duplicateRootBlock,
+  getRootBlockDropSlot,
   getRootBlockInfo,
   insertRootParagraph,
   moveRootBlock,
-  rootBlockPositionFromPoint,
   rootBlockPositionFromPointer,
   selectRootBlock
 } from './tiptapBlocks'
@@ -96,6 +97,7 @@ export default function TiptapBlockControls({
   const dragStateRef = useRef(null)
   const didDragRef = useRef(false)
   const hoverExitTimerRef = useRef(null)
+  const dragPreviewRef = useRef(null)
   const activePosition = lockedPosition ?? (
     pointerInsideEditor ? hoveredPosition : selectedPosition
   )
@@ -111,6 +113,10 @@ export default function TiptapBlockControls({
     if (hoverExitTimerRef.current === null) return
     window.clearTimeout(hoverExitTimerRef.current)
     hoverExitTimerRef.current = null
+  }, [])
+  const clearDragPreview = useCallback(() => {
+    dragPreviewRef.current?.destroy()
+    dragPreviewRef.current = null
   }, [])
   const scheduleHoverExit = useCallback(() => {
     cancelHoverExit()
@@ -216,7 +222,10 @@ export default function TiptapBlockControls({
     scheduleHoverExit
   ])
 
-  useEffect(() => cancelHoverExit, [cancelHoverExit])
+  useEffect(() => () => {
+    cancelHoverExit()
+    clearDragPreview()
+  }, [cancelHoverExit, clearDragPreview])
 
   useEffect(() => {
     updateLayout(activePosition)
@@ -266,10 +275,15 @@ export default function TiptapBlockControls({
     const handleDragOver = event => {
       if (editor.isDestroyed) return
       autoScrollEditorDuringDrag(editor, event.clientY)
-      const target = rootBlockPositionFromPoint(editor, event.clientX, event.clientY)
       const currentDrag = dragStateRef.current
-      if (!currentDrag || !target) return
-      if (target.position === currentDrag.sourcePosition) {
+      if (!currentDrag) return
+      const slot = getRootBlockDropSlot(
+        editor,
+        event.clientX,
+        event.clientY,
+        currentDrag.sourcePosition
+      )
+      if (!slot) {
         updateDragState(current => ({
           ...current,
           targetPosition: null,
@@ -277,18 +291,14 @@ export default function TiptapBlockControls({
         }))
         return
       }
-      const targetDom = view.nodeDOM(target.position)
-      if (!(targetDom instanceof HTMLElement)) return
       event.preventDefault()
-      const rect = targetDom.getBoundingClientRect()
-      const after = event.clientY >= rect.top + rect.height / 2
       updateDragState(current => ({
         ...current,
-        targetPosition: after ? target.position + target.node.nodeSize : target.position,
+        targetPosition: slot.position,
         indicator: {
-          left: rect.left,
-          top: after ? rect.bottom : rect.top,
-          width: rect.width
+          left: slot.left,
+          top: slot.top,
+          width: slot.width
         }
       }))
     }
@@ -304,6 +314,7 @@ export default function TiptapBlockControls({
       setPointerInsideEditor(false)
       setTransformMenuOpen(false)
       setLockedPosition(null)
+      clearDragPreview()
       window.setTimeout(() => {
         didDragRef.current = false
       }, 0)
@@ -314,6 +325,7 @@ export default function TiptapBlockControls({
       setPointerInsideEditor(false)
       setTransformMenuOpen(false)
       setLockedPosition(null)
+      clearDragPreview()
       window.setTimeout(() => {
         didDragRef.current = false
       }, 0)
@@ -328,7 +340,7 @@ export default function TiptapBlockControls({
       document.removeEventListener('dragend', handleEnd)
       editorDom.removeEventListener('drop', handleDrop, true)
     }
-  }, [editor, isDragging, updateDragState])
+  }, [clearDragPreview, editor, isDragging, updateDragState])
 
   if (!layout || !editor?.isEditable) return null
   const run = callback => {
@@ -423,6 +435,14 @@ export default function TiptapBlockControls({
             'application/x-mysthra-block',
             String(layout.block.position)
           )
+          clearDragPreview()
+          const preview = createRootBlockDragPreview(editor, layout.block.position)
+          if (preview && typeof event.dataTransfer.setDragImage === 'function') {
+            dragPreviewRef.current = preview
+            event.dataTransfer.setDragImage(preview.element, preview.offsetX, preview.offsetY)
+          } else {
+            preview?.destroy()
+          }
           setMenuOpen(false)
           setTransformMenuOpen(false)
           setLockedPosition(layout.block.position)

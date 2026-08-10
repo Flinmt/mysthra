@@ -436,6 +436,30 @@
   pointer-events: none;
 }
 
+.tiptap-editor .tiptap-block-drag-preview.ProseMirror {
+  position: fixed;
+  top: -10000px;
+  left: -10000px;
+  z-index: 9999;
+  box-sizing: border-box;
+  max-height: 180px;
+  min-height: 38px;
+  padding: 10px 14px;
+  overflow: hidden;
+  color: var(--tiptap-menu-text);
+  background: color-mix(in srgb, var(--tiptap-context-surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--tiptap-menu-border));
+  border-radius: 7px;
+  box-shadow: 0 14px 34px var(--tiptap-menu-shadow);
+  opacity: .92;
+  pointer-events: none;
+}
+
+.tiptap-editor .tiptap-block-drag-preview.ProseMirror > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .tiptap-table-active-cell {
   position: fixed;
   z-index: 110;

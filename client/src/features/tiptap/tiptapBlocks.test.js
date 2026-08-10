@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   deleteRootBlock,
   duplicateRootBlock,
+  getRootBlockDropSlot,
   getRootBlockInfo,
   insertRootParagraph,
   moveRootBlock,
@@ -117,6 +118,41 @@ describe('Tiptap root blocks', () => {
     const lastPosition = editor.state.doc.child(0).nodeSize + editor.state.doc.child(1).nodeSize
     expect(deleteRootBlock(editor, lastPosition)).toBe(true)
     expect(editor.state.doc.content.content.map(node => node.textContent)).toEqual(['A', 'B'])
+  })
+
+  it('uses one canonical drop slot per boundary and hides no-op slots', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [paragraph('A'), paragraph('B'), paragraph('C')]
+    })
+    const positions = [
+      0,
+      editor.state.doc.child(0).nodeSize,
+      editor.state.doc.child(0).nodeSize + editor.state.doc.child(1).nodeSize
+    ]
+    positions.forEach((position, index) => {
+      editor.view.nodeDOM(position).getBoundingClientRect = () => ({
+        left: 40,
+        right: 340,
+        width: 300,
+        top: 10 + index * 40,
+        bottom: 40 + index * 40,
+        height: 30
+      })
+    })
+
+    const aboveBoundary = getRootBlockDropSlot(editor, 80, 48)
+    const belowBoundary = getRootBlockDropSlot(editor, 80, 52)
+    expect(aboveBoundary.position).toBe(positions[1])
+    expect(belowBoundary.position).toBe(positions[1])
+    expect(aboveBoundary.top).toBe(50)
+    expect(belowBoundary.top).toBe(50)
+
+    expect(getRootBlockDropSlot(editor, 80, 50, positions[0])).toBeNull()
+    expect(getRootBlockDropSlot(editor, 80, 88, positions[0])).toMatchObject({
+      position: positions[2],
+      top: 90
+    })
   })
 
   it('replaces the final deleted block with an empty paragraph', () => {

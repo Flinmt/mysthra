@@ -132,6 +132,48 @@ export function rootBlockPositionFromPoint(editor, clientX, clientY) {
   return getRootBlockInfo(editor.state, result.pos)
 }
 
+export function getRootBlockDropSlot(editor, clientX, clientY, sourcePosition = null) {
+  if (!editor || editor.isDestroyed || !editor.state.doc.childCount) return null
+  const blocks = []
+  editor.state.doc.forEach((node, position) => {
+    const dom = editor.view.nodeDOM(position)
+    if (!(dom instanceof HTMLElement)) return
+    blocks.push({ node, position, rect: dom.getBoundingClientRect() })
+  })
+  if (blocks.length === 0) return null
+
+  const minimumLeft = Math.min(...blocks.map(block => block.rect.left)) - 64
+  const maximumRight = Math.max(...blocks.map(block => block.rect.right))
+  if (clientX < minimumLeft || clientX > maximumRight) return null
+
+  const slots = blocks.map(block => ({
+    position: block.position,
+    top: block.rect.top,
+    left: block.rect.left,
+    width: block.rect.width
+  }))
+  const lastBlock = blocks.at(-1)
+  slots.push({
+    position: lastBlock.position + lastBlock.node.nodeSize,
+    top: lastBlock.rect.bottom,
+    left: lastBlock.rect.left,
+    width: lastBlock.rect.width
+  })
+
+  const slot = slots.reduce((closest, candidate) => (
+    Math.abs(candidate.top - clientY) < Math.abs(closest.top - clientY)
+      ? candidate
+      : closest
+  ))
+  if (sourcePosition !== null) {
+    const source = getRootBlockInfo(editor.state, sourcePosition)
+    if (!source) return null
+    const sourceEnd = source.position + source.node.nodeSize
+    if (slot.position === source.position || slot.position === sourceEnd) return null
+  }
+  return slot
+}
+
 export function rootBlockPositionFromPointer(editor, clientX, clientY) {
   const info = rootBlockPositionFromPoint(editor, clientX, clientY)
   const dom = info && editor.view.nodeDOM(info.position)
@@ -171,4 +213,41 @@ export function autoScrollEditorDuringDrag(editor, clientY) {
   const threshold = 48
   if (clientY < rect.top + threshold) target.scrollTop -= 14
   if (clientY > rect.bottom - threshold) target.scrollTop += 14
+}
+
+function sanitizeDragPreview(root) {
+  root.removeAttribute('contenteditable')
+  root.removeAttribute('draggable')
+  root.removeAttribute('id')
+  root.querySelectorAll('[contenteditable], [draggable], [id]').forEach(element => {
+    element.removeAttribute('contenteditable')
+    element.removeAttribute('draggable')
+    element.removeAttribute('id')
+  })
+}
+
+export function createRootBlockDragPreview(editor, blockPosition) {
+  if (!editor || editor.isDestroyed) return null
+  const source = editor.view.nodeDOM(blockPosition)
+  if (!(source instanceof HTMLElement)) return null
+
+  const sourceRect = source.getBoundingClientRect()
+  const preview = document.createElement('div')
+  const clone = source.cloneNode(true)
+  sanitizeDragPreview(clone)
+  preview.className = 'tiptap-block-drag-preview ProseMirror'
+  preview.setAttribute('aria-hidden', 'true')
+  preview.style.width = `${Math.min(560, Math.max(240, sourceRect.width || source.offsetWidth || 240))}px`
+  preview.append(clone)
+  const previewHost = source.closest('.tiptap-editor') || document.body
+  previewHost.append(preview)
+
+  return {
+    element: preview,
+    offsetX: 24,
+    offsetY: Math.min(20, Math.max(8, (sourceRect.height || source.offsetHeight || 24) / 2)),
+    destroy() {
+      preview.remove()
+    }
+  }
 }

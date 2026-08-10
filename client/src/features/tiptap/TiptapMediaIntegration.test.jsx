@@ -186,7 +186,8 @@ describe('Tiptap media picker integration', () => {
     })
     const dataTransfer = {
       effectAllowed: '',
-      setData: vi.fn()
+      setData: vi.fn(),
+      setDragImage: vi.fn()
     }
 
     fireEvent.dragStart(handle, { dataTransfer })
@@ -199,7 +200,13 @@ describe('Tiptap media picker integration', () => {
       'text/plain',
       expect.anything()
     )
+    expect(dataTransfer.setDragImage).toHaveBeenCalledWith(
+      expect.objectContaining({ className: expect.stringContaining('tiptap-block-drag-preview') }),
+      24,
+      expect.any(Number)
+    )
     fireEvent.dragEnd(handle, { dataTransfer })
+    expect(document.querySelector('.tiptap-block-drag-preview')).toBeNull()
   })
 
   it('inserts a 3 × 3 table with a header row directly from the slash menu', async () => {
