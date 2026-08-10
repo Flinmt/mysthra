@@ -48,6 +48,7 @@ import {
   TiptapTableNavigation
 } from './tiptapTables'
 import { useTiptapDocument } from './useTiptapDocument'
+import { useStableTiptapControls } from './useStableTiptapControls'
 import { getAssetFileUrl } from '../assets/assetApi'
 import WorkspaceInsertSearch from '../../workspace/WorkspaceInsertSearch'
 import {
@@ -291,6 +292,7 @@ export default function TiptapEditor({
     editable: editable && !collaboration.readOnly,
     onUpdate: collaboration.onUpdate
   }, [collaboration.doc])
+  const controlsSession = useStableTiptapControls(editor, collaboration.doc)
   useEffect(() => {
     editor?.setEditable(editable && !collaboration.readOnly)
   }, [collaboration.readOnly, editable, editor])
@@ -614,7 +616,8 @@ export default function TiptapEditor({
       : null
   ), [editor, tableLabels])
   const contextualControlsReady = Boolean(
-    editor &&
+    controlsSession?.editor === editor &&
+    !editor?.isDestroyed &&
     editor.state.doc.childCount > 0 &&
     (!collaborationRoom || collaboration.synced || collaboration.hydrated)
   )
@@ -658,13 +661,13 @@ export default function TiptapEditor({
           />
         )}
         {contextualControlsReady && (
-          <TiptapControlsBoundary>
+          <TiptapControlsBoundary key={controlsSession.id}>
             <TiptapBlockControls
-              editor={editor}
+              editor={controlsSession.editor}
               labels={blockLabels}
               renderExtraMenu={renderBlockExtraMenu}
             />
-            <TiptapTableControls editor={editor} labels={tableLabels} />
+            <TiptapTableControls editor={controlsSession.editor} labels={tableLabels} />
           </TiptapControlsBoundary>
         )}
         {slashState && editor && (

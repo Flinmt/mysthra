@@ -45,6 +45,15 @@ function containsTarget(container, target) {
   return target instanceof Node && Boolean(container?.contains(target))
 }
 
+function getActiveEditorView(editor) {
+  if (!editor || editor.isDestroyed) return null
+  try {
+    return editor.view || null
+  } catch {
+    return null
+  }
+}
+
 const TRANSFORM_ICONS = {
   paragraph: Pilcrow,
   'heading-1': Heading1,
@@ -122,8 +131,13 @@ export default function TiptapBlockControls({
       setLayout(null)
       return
     }
+    const view = getActiveEditorView(editor)
+    if (!view) {
+      setLayout(null)
+      return
+    }
     const info = getRootBlockInfo(editor.state, preferredPosition)
-    const dom = info && editor.view.nodeDOM(info.position)
+    const dom = info && view.nodeDOM(info.position)
     if (!info || !(dom instanceof HTMLElement)) {
       setLayout(null)
       return
@@ -153,13 +167,16 @@ export default function TiptapBlockControls({
   }, [editor, transformMenuOpen])
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed) return undefined
+    const view = getActiveEditorView(editor)
+    const editorDom = view?.dom
+    if (!view || !editorDom) return undefined
     const activateFromSelection = () => {
+      if (editor.isDestroyed) return
       const info = getRootBlockInfo(editor.state)
       setSelectedPosition(info?.position ?? null)
     }
     const activateFromPointer = event => {
-      if (menuOpen || isDragging) return
+      if (editor.isDestroyed || menuOpen || isDragging) return
       cancelHoverExit()
       setPointerInsideEditor(true)
       const info = rootBlockPositionFromPointer(
@@ -183,13 +200,13 @@ export default function TiptapBlockControls({
     activateFromSelection()
     editor.on('selectionUpdate', activateFromSelection)
     editor.on('transaction', activateFromSelection)
-    editor.view.dom.addEventListener('pointermove', activateFromPointer)
-    editor.view.dom.addEventListener('pointerleave', clearPointer)
+    editorDom.addEventListener('pointermove', activateFromPointer)
+    editorDom.addEventListener('pointerleave', clearPointer)
     return () => {
       editor.off('selectionUpdate', activateFromSelection)
       editor.off('transaction', activateFromSelection)
-      editor.view.dom.removeEventListener('pointermove', activateFromPointer)
-      editor.view.dom.removeEventListener('pointerleave', clearPointer)
+      editorDom.removeEventListener('pointermove', activateFromPointer)
+      editorDom.removeEventListener('pointerleave', clearPointer)
     }
   }, [
     cancelHoverExit,
@@ -231,7 +248,7 @@ export default function TiptapBlockControls({
       }
       setMenuOpen(false)
       setLockedPosition(null)
-      editor.view.focus()
+      getActiveEditorView(editor)?.focus()
     }
     document.addEventListener('pointerdown', close)
     document.addEventListener('keydown', closeOnEscape)
@@ -243,7 +260,11 @@ export default function TiptapBlockControls({
 
   useEffect(() => {
     if (!isDragging) return undefined
+    const view = getActiveEditorView(editor)
+    const editorDom = view?.dom
+    if (!view || !editorDom) return undefined
     const handleDragOver = event => {
+      if (editor.isDestroyed) return
       autoScrollEditorDuringDrag(editor, event.clientY)
       const target = rootBlockPositionFromPoint(editor, event.clientX, event.clientY)
       const currentDrag = dragStateRef.current
@@ -256,7 +277,7 @@ export default function TiptapBlockControls({
         }))
         return
       }
-      const targetDom = editor.view.nodeDOM(target.position)
+      const targetDom = view.nodeDOM(target.position)
       if (!(targetDom instanceof HTMLElement)) return
       event.preventDefault()
       const rect = targetDom.getBoundingClientRect()
@@ -300,17 +321,18 @@ export default function TiptapBlockControls({
     document.addEventListener('dragover', handleDragOver)
     document.addEventListener('drop', handleDrop)
     document.addEventListener('dragend', handleEnd)
-    editor.view.dom.addEventListener('drop', handleDrop, true)
+    editorDom.addEventListener('drop', handleDrop, true)
     return () => {
       document.removeEventListener('dragover', handleDragOver)
       document.removeEventListener('drop', handleDrop)
       document.removeEventListener('dragend', handleEnd)
-      editor.view.dom.removeEventListener('drop', handleDrop, true)
+      editorDom.removeEventListener('drop', handleDrop, true)
     }
   }, [editor, isDragging, updateDragState])
 
   if (!layout || !editor?.isEditable) return null
   const run = callback => {
+    if (editor.isDestroyed) return
     callback()
     setMenuOpen(false)
     setTransformMenuOpen(false)
@@ -320,6 +342,7 @@ export default function TiptapBlockControls({
     window.requestAnimationFrame(() => updateLayout(selectedPosition))
   }
   const insert = side => {
+    if (editor.isDestroyed) return
     if (!insertRootParagraph(editor, layout.block.position, side)) return
     setMenuOpen(false)
     setTransformMenuOpen(false)
@@ -337,7 +360,7 @@ export default function TiptapBlockControls({
     const nextTarget = event.relatedTarget
     if (
       containsTarget(layerRef.current, nextTarget) ||
-      containsTarget(editor.view.dom, nextTarget)
+      containsTarget(getActiveEditorView(editor)?.dom, nextTarget)
     ) {
       cancelHoverExit()
       return
