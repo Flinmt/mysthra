@@ -2,20 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  Bold,
   ChevronLeft,
   ChevronRight,
   Copy,
   GripVertical,
+  Highlighter,
   Heading1,
   Heading2,
   Heading3,
   Info,
+  Italic,
+  Link,
   List,
   ListOrdered,
+  Palette,
   Pilcrow,
   Plus,
   Quote,
-  Trash2
+  Strikethrough,
+  Trash2,
+  Underline
 } from 'lucide-react'
 import {
   autoScrollEditorDuringDrag,
@@ -40,6 +47,18 @@ import {
   getBlockTransformId,
   transformRootBlock
 } from './tiptapBlockTransforms'
+import {
+  getBlockFormattingState,
+  getBlockFormattingTargets,
+  setBlockHighlight,
+  setBlockLink,
+  setBlockTextColor,
+  toggleBlockMark,
+  unsetBlockHighlight,
+  unsetBlockLink,
+  unsetBlockTextColor
+} from './tiptapBlockFormatting'
+import { getThemeAccentTextColor, TEXT_COLOR_PALETTE } from './tiptapTextColors'
 
 const BLOCK_MENU_WIDTH = 184
 
@@ -71,11 +90,11 @@ const TRANSFORM_ICONS = {
   callout: Info
 }
 
-function BlockMenuAction({ active = false, children, danger = false, onClick }) {
+function BlockMenuAction({ active = false, children, danger = false, mixed = false, onClick }) {
   return (
     <button
       type="button"
-      className={`${danger ? 'is-danger' : ''}${active ? ' is-active' : ''}`.trim()}
+      className={`${danger ? 'is-danger' : ''}${active ? ' is-active' : ''}${mixed ? ' is-mixed' : ''}`.trim()}
       role="menuitem"
       onMouseDown={event => event.preventDefault()}
       onClick={onClick}
@@ -97,6 +116,9 @@ export default function TiptapBlockControls({
   const [layout, setLayout] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [transformMenuOpen, setTransformMenuOpen] = useState(false)
+  const [formatPanel, setFormatPanel] = useState('')
+  const [linkValue, setLinkValue] = useState('')
+  const [, setFormattingRevision] = useState(0)
   const [dragState, setDragState] = useState(null)
   const layerRef = useRef(null)
   const dragStateRef = useRef(null)
@@ -162,8 +184,10 @@ export default function TiptapBlockControls({
       8,
       window.innerWidth - BLOCK_MENU_WIDTH - 8
     )
-    const menuHeight = transformMenuOpen
-      ? 258
+    const menuHeight = formatPanel === 'format'
+      ? 330
+      : transformMenuOpen || formatPanel
+        ? 258
       : info.node.type.name === 'table' ? 250 : 178
     setLayout({
       block: info,
@@ -175,7 +199,7 @@ export default function TiptapBlockControls({
       },
       rect
     })
-  }, [editor, transformMenuOpen])
+  }, [editor, formatPanel, transformMenuOpen])
 
   useEffect(() => {
     const view = getActiveEditorView(editor)
@@ -185,6 +209,7 @@ export default function TiptapBlockControls({
       if (editor.isDestroyed) return
       const info = getRootBlockInfo(editor.state)
       setSelectedPosition(info?.position ?? null)
+      setFormattingRevision(current => current + 1)
     }
     const activateFromPointer = event => {
       if (editor.isDestroyed || menuOpen || isDragging) return
@@ -252,12 +277,17 @@ export default function TiptapBlockControls({
       if (layerRef.current?.contains(event.target)) return
       setMenuOpen(false)
       setTransformMenuOpen(false)
+      setFormatPanel('')
       setLockedPosition(null)
     }
     const closeOnEscape = event => {
       if (event.key !== 'Escape') return
       if (transformMenuOpen) {
         setTransformMenuOpen(false)
+        return
+      }
+      if (formatPanel) {
+        setFormatPanel(formatPanel === 'format' ? '' : 'format')
         return
       }
       setMenuOpen(false)
@@ -270,7 +300,7 @@ export default function TiptapBlockControls({
       document.removeEventListener('pointerdown', close)
       document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [editor, menuOpen, transformMenuOpen])
+  }, [editor, formatPanel, menuOpen, transformMenuOpen])
 
   useEffect(() => {
     if (!isDragging) return undefined
@@ -318,6 +348,7 @@ export default function TiptapBlockControls({
       setHoveredPosition(null)
       setPointerInsideEditor(false)
       setTransformMenuOpen(false)
+      setFormatPanel('')
       setLockedPosition(null)
       clearDragPreview()
       window.setTimeout(() => {
@@ -329,6 +360,7 @@ export default function TiptapBlockControls({
       setHoveredPosition(null)
       setPointerInsideEditor(false)
       setTransformMenuOpen(false)
+      setFormatPanel('')
       setLockedPosition(null)
       clearDragPreview()
       window.setTimeout(() => {
@@ -353,6 +385,7 @@ export default function TiptapBlockControls({
     callback()
     setMenuOpen(false)
     setTransformMenuOpen(false)
+    setFormatPanel('')
     setHoveredPosition(null)
     setPointerInsideEditor(false)
     setLockedPosition(null)
@@ -363,6 +396,7 @@ export default function TiptapBlockControls({
     if (!insertRootParagraph(editor, layout.block.position, side)) return
     setMenuOpen(false)
     setTransformMenuOpen(false)
+    setFormatPanel('')
     setHoveredPosition(null)
     setPointerInsideEditor(false)
     setLockedPosition(null)
@@ -372,6 +406,10 @@ export default function TiptapBlockControls({
     close: () => setMenuOpen(false),
     run
   })
+  const formattingTargets = getBlockFormattingTargets(editor, layout.block.position)
+  const formattingState = getBlockFormattingState(editor, formattingTargets)
+  const formattingColors = [getThemeAccentTextColor(editor.view.dom), ...TEXT_COLOR_PALETTE]
+    .filter((color, index, colors) => color && colors.indexOf(color) === index)
   const leaveControls = event => {
     if (menuOpen || isDragging) return
     const nextTarget = event.relatedTarget
@@ -429,10 +467,16 @@ export default function TiptapBlockControls({
           }
           const toggle = event.ctrlKey || event.metaKey
           const extend = event.shiftKey
-          selectRootBlockWithModifiers(editor, layout.block.position, { toggle, extend })
+          const selectedBlocks = getSelectedRootBlocks(editor)
+          const preserveGroup = !toggle && !extend && selectedBlocks.length > 1 &&
+            selectedBlocks.some(block => block.position === layout.block.position)
+          if (!preserveGroup) {
+            selectRootBlockWithModifiers(editor, layout.block.position, { toggle, extend })
+          }
           if (toggle || extend) {
             setMenuOpen(false)
             setTransformMenuOpen(false)
+            setFormatPanel('')
             setLockedPosition(layout.block.position)
             return
           }
@@ -441,6 +485,7 @@ export default function TiptapBlockControls({
           setLockedPosition(opening ? layout.block.position : null)
           setMenuOpen(opening)
           setTransformMenuOpen(false)
+          setFormatPanel('')
         }}
         onDragStart={event => {
           didDragRef.current = true
@@ -477,6 +522,7 @@ export default function TiptapBlockControls({
           }
           setMenuOpen(false)
           setTransformMenuOpen(false)
+          setFormatPanel('')
           setLockedPosition(layout.block.position)
           updateDragState({
             sourcePosition: layout.block.position,
@@ -497,7 +543,110 @@ export default function TiptapBlockControls({
           aria-label={labels.actions}
           onPointerEnter={cancelHoverExit}
         >
-          {transformMenuOpen ? (
+          {formatPanel ? (
+            <>
+              <BlockMenuAction onClick={() => setFormatPanel(formatPanel === 'format' ? '' : 'format')}>
+                <ChevronLeft size={13} />
+                {labels.formatBack}
+              </BlockMenuAction>
+              <div className="tiptap-block-menu-separator" />
+              {formatPanel === 'format' && (
+                <>
+                  {[
+                    ['bold', Bold],
+                    ['italic', Italic],
+                    ['underline', Underline],
+                    ['strike', Strikethrough]
+                  ].map(([name, Icon]) => (
+                    <BlockMenuAction
+                      key={name}
+                      active={formattingState[name].active}
+                      mixed={formattingState[name].mixed}
+                      onClick={() => toggleBlockMark(editor, formattingTargets, name)}
+                    >
+                      <Icon size={13} />
+                      {labels.formats?.[name] || name}
+                    </BlockMenuAction>
+                  ))}
+                  <BlockMenuAction active={formattingState.link.active} mixed={formattingState.link.mixed} onClick={() => {
+                    setLinkValue(formattingState.link.value || '')
+                    setFormatPanel('link')
+                  }}>
+                    <Link size={13} />
+                    {labels.formats?.link}
+                    <ChevronRight className="tiptap-block-menu-chevron" size={12} />
+                  </BlockMenuAction>
+                  <BlockMenuAction active={formattingState.color.active} mixed={formattingState.color.mixed} onClick={() => setFormatPanel('color')}>
+                    <Palette size={13} />
+                    {labels.formats?.color}
+                    <ChevronRight className="tiptap-block-menu-chevron" size={12} />
+                  </BlockMenuAction>
+                  <BlockMenuAction active={formattingState.highlight.active} mixed={formattingState.highlight.mixed} onClick={() => setFormatPanel('highlight')}>
+                    <Highlighter size={13} />
+                    {labels.formats?.highlight}
+                    <ChevronRight className="tiptap-block-menu-chevron" size={12} />
+                  </BlockMenuAction>
+                </>
+              )}
+              {formatPanel === 'link' && (
+                <form className="tiptap-block-format-link" onSubmit={event => {
+                  event.preventDefault()
+                  if (setBlockLink(editor, formattingTargets, linkValue)) setFormatPanel('format')
+                }}>
+                  <input
+                    autoFocus
+                    type="text"
+                    inputMode="url"
+                    value={linkValue}
+                    aria-label={labels.formats?.url}
+                    placeholder="https://example.com"
+                    onChange={event => setLinkValue(event.target.value)}
+                  />
+                  <button type="submit">{labels.formats?.apply}</button>
+                  {formattingState.link.active && (
+                    <button type="button" onClick={() => { unsetBlockLink(editor, formattingTargets); setFormatPanel('format') }}>
+                      {labels.formats?.remove}
+                    </button>
+                  )}
+                </form>
+              )}
+              {(formatPanel === 'color' || formatPanel === 'highlight') && (
+                <div className="tiptap-block-format-colors">
+                  <button type="button" className="tiptap-block-format-reset" onClick={() => {
+                    if (formatPanel === 'color') unsetBlockTextColor(editor, formattingTargets)
+                    else unsetBlockHighlight(editor, formattingTargets)
+                    setFormatPanel('format')
+                  }}>
+                    {labels.formats?.defaultColor}
+                  </button>
+                  <div className="tiptap-block-format-swatches">
+                    {formattingColors.map((color, index) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className="tiptap-block-format-swatch"
+                        style={{ '--block-format-color': color }}
+                        aria-label={index === 0 ? labels.formats?.themeColor : color}
+                        onClick={() => {
+                          if (formatPanel === 'color') setBlockTextColor(editor, formattingTargets, color)
+                          else setBlockHighlight(editor, formattingTargets, color)
+                          setFormatPanel('format')
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <label className="tiptap-block-format-custom">
+                    {labels.formats?.customColor}
+                    <input type="color" aria-label={labels.formats?.customColor} onChange={event => {
+                      if (formatPanel === 'color') setBlockTextColor(editor, formattingTargets, event.target.value)
+                      else setBlockHighlight(editor, formattingTargets, event.target.value)
+                      setFormatPanel('format')
+                    }} />
+                  </label>
+                </div>
+              )}
+            </>
+          ) : transformMenuOpen ? (
             <>
               <BlockMenuAction onClick={() => setTransformMenuOpen(false)}>
                 <ChevronLeft size={13} />
@@ -524,6 +673,16 @@ export default function TiptapBlockControls({
             <>
               {extraMenu}
               {extraMenu && <div className="tiptap-block-menu-separator" />}
+              {formattingState.hasText && (
+                <>
+                  <BlockMenuAction onClick={() => setFormatPanel('format')}>
+                    <Bold size={13} />
+                    {labels.formatLine}
+                    <ChevronRight className="tiptap-block-menu-chevron" size={12} />
+                  </BlockMenuAction>
+                  <div className="tiptap-block-menu-separator" />
+                </>
+              )}
               {canTransformRootBlock(layout.block.node) && (
                 <>
                   <BlockMenuAction onClick={() => setTransformMenuOpen(true)}>

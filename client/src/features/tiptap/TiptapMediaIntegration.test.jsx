@@ -16,6 +16,9 @@ vi.mock('react-i18next', () => ({
       'workspace.tiptap_block_insert_below': 'Inserir abaixo',
       'workspace.tiptap_block_duplicate': 'Duplicar',
       'workspace.tiptap_block_delete': 'Excluir',
+      'workspace.tiptap_block_format_line': 'Formatar linha',
+      'workspace.tiptap_block_format_back': 'Voltar',
+      'workspace.tiptap_format_bold': 'Negrito',
       'workspace.tiptap_heading_placeholder': 'Título',
       'workspace.tiptap_toggle_heading_placeholder': 'Título expansível',
       'workspace.tiptap_media_unavailable': 'Mídia indisponível',
@@ -218,6 +221,25 @@ describe('Tiptap media picker integration', () => {
     await user.click(screen.getByRole('button', { name: 'Adicionar bloco' }))
     expect(screen.queryByRole('listbox', { name: 'Comandos' })).toBeNull()
     expect(editor.querySelectorAll(':scope > p')).toHaveLength(4)
+  })
+
+  it('formats the complete block from the six-dot menu', async () => {
+    const user = userEvent.setup()
+    render(<TiptapEditor content="<p>Linha inteira</p>" editable worldId="world" />)
+
+    const editor = document.querySelector('.ProseMirror')
+    const paragraph = editor.querySelector('p')
+    await user.click(paragraph)
+    await user.click(await screen.findByRole('button', {
+      name: 'Abrir ações do bloco ou arrastar'
+    }))
+    await user.click(screen.getByRole('menuitem', { name: 'Formatar linha' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Negrito' }))
+
+    expect(paragraph.querySelector('strong')?.textContent).toBe('Linha inteira')
+
+    await user.click(screen.getByRole('menuitem', { name: 'Negrito' }))
+    expect(paragraph.querySelector('strong')).toBeNull()
   })
 
   it('uses an internal payload when dragging a block', async () => {
