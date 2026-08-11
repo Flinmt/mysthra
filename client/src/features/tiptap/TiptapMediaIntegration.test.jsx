@@ -16,6 +16,9 @@ vi.mock('react-i18next', () => ({
       'workspace.tiptap_block_insert_below': 'Inserir abaixo',
       'workspace.tiptap_block_duplicate': 'Duplicar',
       'workspace.tiptap_block_delete': 'Excluir',
+      'workspace.tiptap_block_format_line': 'Formatar linha',
+      'workspace.tiptap_block_format_back': 'Voltar',
+      'workspace.tiptap_format_bold': 'Negrito',
       'workspace.tiptap_heading_placeholder': 'Título',
       'workspace.tiptap_toggle_heading_placeholder': 'Título expansível',
       'workspace.tiptap_media_unavailable': 'Mídia indisponível',
@@ -87,6 +90,34 @@ describe('Tiptap media picker integration', () => {
     expect(screen.queryByRole('button', { name: /Abrir controles da linha/ })).toBeNull()
   })
 
+  it('starts block marquee selection from the editor outer margin', async () => {
+    render(
+      <section className="editor-page-body">
+        <TiptapEditor
+          content="<p>A</p><p>B</p><p>C</p>"
+          editable
+          worldId="world"
+        />
+      </section>
+    )
+    const editor = document.querySelector('.ProseMirror')
+    await waitFor(() => expect(editor?.children).toHaveLength(3))
+    Array.from(editor.children).forEach((block, index) => {
+      block.getBoundingClientRect = () => ({
+        left: 40, right: 340, width: 300,
+        top: 10 + index * 40, bottom: 40 + index * 40, height: 30
+      })
+    })
+
+    fireEvent.pointerDown(document.querySelector('.editor-page-body'), {
+      clientX: 0, clientY: 5
+    })
+    fireEvent.pointerMove(document, { clientX: 350, clientY: 75 })
+    fireEvent.pointerUp(document)
+
+    expect(editor.querySelectorAll('.tiptap-block-multi-selected')).toHaveLength(2)
+  })
+
   it('opens the image explorer from /image and inserts the confirmed asset', async () => {
     const user = userEvent.setup()
     const onRequestMedia = vi.fn()
@@ -121,6 +152,23 @@ describe('Tiptap media picker integration', () => {
     })
     fireEvent.load(editor.querySelector('.tiptap-media-image img'))
     expect(editor.querySelectorAll('p')).toHaveLength(1)
+  })
+
+  it('finds slash commands by aliases and multi-word queries', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<TiptapEditor content="<p></p>" editable worldId="world" />)
+    let editor = document.querySelector('.ProseMirror')
+
+    await user.click(editor)
+    await user.type(editor, '/H2')
+    expect(await screen.findByRole('option', { name: /Título 2/ })).not.toBeNull()
+
+    unmount()
+    render(<TiptapEditor content="<p></p>" editable worldId="world" />)
+    editor = document.querySelector('.ProseMirror')
+    await user.click(editor)
+    await user.type(editor, '/lista numerada')
+    expect(await screen.findByRole('option', { name: /Lista numerada/ })).not.toBeNull()
   })
 
   it('inserts a callout from the slash menu', async () => {
@@ -175,6 +223,25 @@ describe('Tiptap media picker integration', () => {
     expect(editor.querySelectorAll(':scope > p')).toHaveLength(4)
   })
 
+  it('formats the complete block from the six-dot menu', async () => {
+    const user = userEvent.setup()
+    render(<TiptapEditor content="<p>Linha inteira</p>" editable worldId="world" />)
+
+    const editor = document.querySelector('.ProseMirror')
+    const paragraph = editor.querySelector('p')
+    await user.click(paragraph)
+    await user.click(await screen.findByRole('button', {
+      name: 'Abrir ações do bloco ou arrastar'
+    }))
+    await user.click(screen.getByRole('menuitem', { name: 'Formatar linha' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Negrito' }))
+
+    expect(paragraph.querySelector('strong')?.textContent).toBe('Linha inteira')
+
+    await user.click(screen.getByRole('menuitem', { name: 'Negrito' }))
+    expect(paragraph.querySelector('strong')).toBeNull()
+  })
+
   it('uses an internal payload when dragging a block', async () => {
     const user = userEvent.setup()
     render(<TiptapEditor content="<p>Bloco</p>" editable worldId="world" />)
@@ -186,7 +253,8 @@ describe('Tiptap media picker integration', () => {
     })
     const dataTransfer = {
       effectAllowed: '',
-      setData: vi.fn()
+      setData: vi.fn(),
+      setDragImage: vi.fn()
     }
 
     fireEvent.dragStart(handle, { dataTransfer })
@@ -199,7 +267,13 @@ describe('Tiptap media picker integration', () => {
       'text/plain',
       expect.anything()
     )
+    expect(dataTransfer.setDragImage).toHaveBeenCalledWith(
+      expect.objectContaining({ className: expect.stringContaining('tiptap-block-drag-preview') }),
+      24,
+      expect.any(Number)
+    )
     fireEvent.dragEnd(handle, { dataTransfer })
+    expect(document.querySelector('.tiptap-block-drag-preview')).toBeNull()
   })
 
   it('inserts a 3 × 3 table with a header row directly from the slash menu', async () => {

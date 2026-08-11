@@ -69,6 +69,35 @@
   border-left: 2px solid var(--arcane-color);
 }
 
+.tiptap-editor .ProseMirror mark[data-highlight-color] {
+  padding: 1px 0;
+  color: inherit;
+  background: color-mix(in srgb, var(--tiptap-highlight-color) 34%, transparent);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.tiptap-editor .ProseMirror h1[data-highlight-line],
+.tiptap-editor .ProseMirror h2[data-highlight-line],
+.tiptap-editor .ProseMirror h3[data-highlight-line],
+.tiptap-editor .ProseMirror h4[data-highlight-line],
+.tiptap-editor .ProseMirror h5[data-highlight-line],
+.tiptap-editor .ProseMirror h6[data-highlight-line] {
+  width: calc(100% + 12px);
+  margin-left: -6px;
+  padding-right: 6px;
+  padding-left: 6px;
+  background: color-mix(in srgb, var(--tiptap-highlight-color) 28%, transparent);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.tiptap-editor .ProseMirror [data-highlight-line] mark[data-highlight-color] {
+  padding: 0;
+  background: transparent;
+}
+
 .tiptap-callout {
   --tiptap-callout-color: var(--tiptap-callout-info);
   position: relative;
@@ -349,6 +378,151 @@
   border-color: color-mix(in srgb, var(--accent-color) 42%, transparent);
 }
 
+.tiptap-editor .ProseMirror > .tiptap-block-multi-selected {
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-color) 72%, transparent);
+}
+
+.tiptap-block-marquee {
+  position: fixed;
+  z-index: 124;
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 58%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.tiptap-text-toolbar {
+  position: fixed;
+  z-index: 132;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  color: var(--tiptap-menu-text);
+  background: var(--tiptap-menu-surface);
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 7px;
+  box-shadow: 0 10px 28px var(--tiptap-menu-shadow);
+  transform: translateX(-50%);
+}
+
+.tiptap-text-toolbar[data-placement='above'] {
+  transform: translate(-50%, -100%);
+}
+
+.tiptap-text-toolbar button {
+  display: grid;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.tiptap-text-toolbar button:hover,
+.tiptap-text-toolbar button:focus-visible {
+  background: var(--tiptap-menu-hover);
+  outline: none;
+}
+
+.tiptap-text-toolbar button.is-active {
+  color: var(--tiptap-menu-accent);
+  background: var(--tiptap-menu-selected);
+}
+
+.tiptap-text-toolbar-link-editor {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tiptap-text-toolbar-link-editor input {
+  width: min(240px, calc(100vw - 150px));
+  height: 28px;
+  padding: 0 8px;
+  color: var(--tiptap-menu-text);
+  background: color-mix(in srgb, var(--tiptap-menu-surface) 82%, var(--theme-custom-bg));
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.tiptap-text-toolbar-link-editor input:focus {
+  border-color: var(--tiptap-menu-accent);
+}
+
+.tiptap-text-toolbar-link-editor input.is-invalid {
+  border-color: var(--tiptap-callout-danger);
+}
+
+.tiptap-text-color-editor {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.tiptap-text-toolbar .tiptap-text-color-swatch span {
+  width: 16px;
+  height: 16px;
+  background: var(--text-swatch-color);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 34%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 16%, transparent);
+}
+
+.tiptap-text-toolbar .tiptap-text-color-swatch.is-highlight span {
+  background: color-mix(in srgb, var(--text-swatch-color) 38%, transparent);
+  border-radius: 3px;
+}
+
+.tiptap-text-toolbar .tiptap-text-color-swatch.is-active span {
+  box-shadow: 0 0 0 2px var(--tiptap-menu-surface), 0 0 0 3px var(--tiptap-menu-accent);
+}
+
+.tiptap-text-color-custom {
+  position: relative;
+  display: grid;
+  width: 34px;
+  height: 28px;
+  border-radius: 4px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.tiptap-text-color-custom:hover,
+.tiptap-text-color-custom:focus-within {
+  background: var(--tiptap-menu-hover);
+}
+
+.tiptap-text-color-custom input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.tiptap-text-color-button {
+  position: relative;
+}
+
+.tiptap-text-color-button > span {
+  position: absolute;
+  right: 7px;
+  bottom: 3px;
+  left: 7px;
+  height: 3px;
+  background: var(--text-active-color, var(--text-primary));
+  border-radius: 2px;
+}
+
+.tiptap-text-color-button > span.is-mixed {
+  background: linear-gradient(90deg, #d97872, #d6bd63, #62b884, #62a8d8, #a889dc);
+}
+
 .tiptap-block-menu,
 .tiptap-table-axis-menu {
   position: fixed;
@@ -360,6 +534,74 @@
   border: 1px solid var(--tiptap-menu-border);
   border-radius: 5px;
   box-shadow: 0 10px 24px var(--tiptap-menu-shadow);
+}
+
+.tiptap-block-menu button.is-mixed::after {
+  width: 5px;
+  height: 5px;
+  margin-left: auto;
+  background: var(--tiptap-menu-accent);
+  border-radius: 50%;
+  content: '';
+}
+
+.tiptap-block-format-link,
+.tiptap-block-format-colors {
+  display: grid;
+  gap: 7px;
+  padding: 5px;
+}
+
+.tiptap-block-format-link input {
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--tiptap-menu-text);
+  background: color-mix(in srgb, var(--tiptap-menu-surface) 82%, var(--theme-custom-bg));
+  border: 1px solid var(--tiptap-menu-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.tiptap-block-format-link input:focus {
+  border-color: var(--tiptap-menu-accent);
+}
+
+.tiptap-block-format-link button,
+.tiptap-block-format-reset {
+  justify-content: center;
+}
+
+.tiptap-block-format-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.tiptap-block-menu .tiptap-block-format-swatch {
+  width: 100%;
+  height: 28px;
+  background: var(--block-format-color);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 28%, transparent);
+}
+
+.tiptap-block-format-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px;
+  color: var(--tiptap-menu-text);
+  font-size: 12px;
+}
+
+.tiptap-block-format-custom input {
+  width: 34px;
+  height: 24px;
+  padding: 1px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
 }
 
 .tiptap-block-menu {
@@ -434,6 +676,44 @@
   border-radius: 2px;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 24%, transparent);
   pointer-events: none;
+}
+
+.tiptap-editor .tiptap-block-drag-preview.ProseMirror {
+  position: fixed;
+  top: -10000px;
+  left: -10000px;
+  z-index: 9999;
+  box-sizing: border-box;
+  max-height: 180px;
+  min-height: 38px;
+  padding: 10px 14px;
+  overflow: hidden;
+  color: var(--tiptap-menu-text);
+  background: color-mix(in srgb, var(--tiptap-context-surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 34%, var(--tiptap-menu-border));
+  border-radius: 7px;
+  box-shadow: 0 14px 34px var(--tiptap-menu-shadow);
+  opacity: .92;
+  pointer-events: none;
+}
+
+.tiptap-editor .tiptap-block-drag-preview.ProseMirror > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.tiptap-block-drag-preview-count {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  min-width: 20px;
+  padding: 2px 6px;
+  color: var(--tiptap-menu-text);
+  background: var(--accent-color);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .tiptap-table-active-cell {
@@ -902,7 +1182,19 @@
 }
 
 .tiptap-editor .ProseMirror strong { color: var(--text-primary); }
-.tiptap-editor .ProseMirror hr { border: 0; border-top: 1px solid var(--workspace-theme-accent-border); }
+.tiptap-editor .ProseMirror hr {
+  height: 20px;
+  margin-block: 4px;
+  border: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 9px,
+    var(--workspace-theme-accent-border, var(--border-color, rgba(127, 127, 127, .45))) 9px,
+    var(--workspace-theme-accent-border, var(--border-color, rgba(127, 127, 127, .45))) 10px,
+    transparent 10px
+  );
+  cursor: default;
+}
 
 .tiptap-media-block {
   position: relative;

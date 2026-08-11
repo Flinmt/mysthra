@@ -7,16 +7,25 @@ import Bold from '@tiptap/extension-bold'
 import Italic from '@tiptap/extension-italic'
 import Strike from '@tiptap/extension-strike'
 import Underline from '@tiptap/extension-underline'
+import { Color, TextStyle } from '@tiptap/extension-text-style'
 import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror'
 import TiptapSlashMenu from './TiptapSlashMenu'
+import TiptapTextToolbar from './TiptapTextToolbar'
 import { TiptapCallout } from './TiptapCallout'
 import { TiptapBlockAwareness } from './tiptapBlockAwareness'
+import {
+  beginBlockMarqueeSelection,
+  TiptapBlockSelection
+} from './tiptapBlockSelection'
 import TiptapBlockControls from './TiptapBlockControls'
 import { createTiptapCommands } from './tiptapCommands'
+import { filterTiptapCommands } from './tiptapCommandSearch'
 import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
+import { TiptapTextHighlight } from './tiptapHighlights'
+import { getExternalLinkHref, TiptapExternalLinkPaste } from './tiptapExternalLinks'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { insertAssetMedia, TiptapAssetAudio, TiptapAssetImage } from './tiptapMedia'
 import {
@@ -48,6 +57,7 @@ import {
   TiptapTableNavigation
 } from './tiptapTables'
 import { useTiptapDocument } from './useTiptapDocument'
+import { useStableTiptapControls } from './useStableTiptapControls'
 import { getAssetFileUrl } from '../assets/assetApi'
 import WorkspaceInsertSearch from '../../workspace/WorkspaceInsertSearch'
 import {
@@ -171,6 +181,23 @@ export default function TiptapEditor({
     delete: t('workspace.tiptap_block_delete', 'Excluir'),
     transform: t('workspace.tiptap_block_transform', 'Transformar em'),
     transformBack: t('workspace.tiptap_block_transform_back', 'Voltar'),
+    formatLine: t('workspace.tiptap_block_format_line', 'Formatar linha'),
+    formatBack: t('workspace.tiptap_block_format_back', 'Voltar'),
+    formats: {
+      bold: t('workspace.tiptap_format_bold', 'Negrito'),
+      italic: t('workspace.tiptap_format_italic', 'Itálico'),
+      underline: t('workspace.tiptap_format_underline', 'Sublinhado'),
+      strike: t('workspace.tiptap_format_strike', 'Tachado'),
+      link: t('workspace.tiptap_format_link', 'Link'),
+      color: t('workspace.tiptap_format_color', 'Cor do texto'),
+      highlight: t('workspace.tiptap_format_highlight', 'Marca-texto'),
+      url: t('workspace.tiptap_format_url', 'URL do link'),
+      apply: t('workspace.tiptap_format_link_apply', 'Aplicar link'),
+      remove: t('workspace.tiptap_format_link_remove', 'Remover link'),
+      defaultColor: t('workspace.tiptap_format_color_default', 'Cor padrão'),
+      themeColor: t('workspace.tiptap_format_color_theme', 'Cor do tema'),
+      customColor: t('workspace.tiptap_format_color_custom', 'Cor personalizada')
+    },
     transformTypes: {
       paragraph: t('workspace.tiptap_command_text', 'Texto'),
       'heading-1': t('workspace.tiptap_command_heading', { level: 1 }),
@@ -248,7 +275,11 @@ export default function TiptapEditor({
     Italic,
     Strike,
     Underline,
+    TextStyle,
+    Color,
+    TiptapTextHighlight,
     TiptapPageLink,
+    TiptapExternalLinkPaste,
     TiptapPageSuggestions.configure({
       targets: visiblePageSuggestionTargets,
       label: pageSuggestionLabels.suggestionLabel,
@@ -273,6 +304,7 @@ export default function TiptapEditor({
       headingPlaceholder: level => t('workspace.tiptap_heading_placeholder', { level }),
       toggleHeadingPlaceholder: level => t('workspace.tiptap_toggle_heading_placeholder', { level })
     }),
+    TiptapBlockSelection,
     ...(collaboration.fragment ? [Extension.create({
       name: 'tiptapYjsCollaboration',
       addProseMirrorPlugins: () => [ySyncPlugin(collaboration.fragment), yUndoPlugin()]
@@ -291,6 +323,7 @@ export default function TiptapEditor({
     editable: editable && !collaboration.readOnly,
     onUpdate: collaboration.onUpdate
   }, [collaboration.doc])
+  const controlsSession = useStableTiptapControls(editor, collaboration.doc)
   useEffect(() => {
     editor?.setEditable(editable && !collaboration.readOnly)
   }, [collaboration.readOnly, editable, editor])
@@ -398,15 +431,13 @@ export default function TiptapEditor({
     const { from } = editor.state.selection
     const lineStart = $from.start()
     const textBeforeCursor = editor.state.doc.textBetween(lineStart, from, '\n')
-    const match = textBeforeCursor.match(/^\/(\S*)$/)
+    const match = textBeforeCursor.match(/^\/(.*)$/)
     if (!match) {
       setSlashState(null)
       return
     }
-    const query = match[1].toLowerCase()
-    const items = commands.filter(item =>
-      [item.label, ...(item.keywords || [])].some(value => value.toLowerCase().includes(query))
-    )
+    const query = match[1]
+    const items = filterTiptapCommands(commands, query)
     const coords = editor.view.coordsAtPos(lineStart)
     const position = getTiptapMenuPosition(coords, {
       width: window.innerWidth,
@@ -445,6 +476,19 @@ export default function TiptapEditor({
   }, [closePageSuggestion, pageSuggestionPopover])
 
   useEffect(() => () => clearPageSuggestionTimers(), [clearPageSuggestionTimers])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return undefined
+    const editorDom = editor.view.dom
+    const selectionSurface = editorDom.closest('.editor-page-body') || editorDom.closest('.tiptap-editor-shell')
+    if (!selectionSurface) return undefined
+    const startMarqueeFromPageMargin = event => {
+      if (!selectionSurface.contains(event.target) || editorDom.contains(event.target)) return
+      beginBlockMarqueeSelection(editor, event)
+    }
+    document.addEventListener('pointerdown', startMarqueeFromPageMargin, true)
+    return () => document.removeEventListener('pointerdown', startMarqueeFromPageMargin, true)
+  }, [editor])
 
   const executeSlashCommand = useCallback((item) => {
     if (!editor || !slashState) return
@@ -557,6 +601,10 @@ export default function TiptapEditor({
     pageSuggestionPopover,
     slashState
   ])
+  const handleEditorPointerDown = useCallback(event => {
+    if (!editor || editor.isDestroyed || editor.view.dom.contains(event.target)) return
+    beginBlockMarqueeSelection(editor, event.nativeEvent)
+  }, [editor])
 
   const handleEditorClick = useCallback((event) => {
     if (!editor?.view.dom.contains(event.target)) return
@@ -569,11 +617,14 @@ export default function TiptapEditor({
       return
     }
     const href = getInternalPageLinkHref(event.target)
-    if (!href) return
-
-    event.preventDefault()
-    if (!shouldNavigatePageLink(editor, event)) return
-    onNavigateToPageLink?.(href)
+    if (href) {
+      event.preventDefault()
+      if (!shouldNavigatePageLink(editor, event)) return
+      onNavigateToPageLink?.(href)
+      return
+    }
+    const externalHref = getExternalLinkHref(event.target)
+    if (externalHref && editor.isEditable && !event.ctrlKey && !event.metaKey) event.preventDefault()
   }, [editor, onNavigateToPageLink, openPageSuggestion])
   const handleEditorPointerOver = useCallback((event) => {
     const target = event.target instanceof Element
@@ -614,7 +665,8 @@ export default function TiptapEditor({
       : null
   ), [editor, tableLabels])
   const contextualControlsReady = Boolean(
-    editor &&
+    controlsSession?.editor === editor &&
+    !editor?.isDestroyed &&
     editor.state.doc.childCount > 0 &&
     (!collaborationRoom || collaboration.synced || collaboration.hydrated)
   )
@@ -625,6 +677,7 @@ export default function TiptapEditor({
       onClickCapture={handleEditorClick}
       onFocusCapture={handleEditorFocus}
       onKeyDownCapture={handleEditorKeyDown}
+      onPointerDown={handleEditorPointerDown}
       onPointerOut={handleEditorPointerOut}
       onPointerOver={handleEditorPointerOver}
     >
@@ -658,15 +711,16 @@ export default function TiptapEditor({
           />
         )}
         {contextualControlsReady && (
-          <TiptapControlsBoundary>
+          <TiptapControlsBoundary key={controlsSession.id}>
             <TiptapBlockControls
-              editor={editor}
+              editor={controlsSession.editor}
               labels={blockLabels}
               renderExtraMenu={renderBlockExtraMenu}
             />
-            <TiptapTableControls editor={editor} labels={tableLabels} />
+            <TiptapTableControls editor={controlsSession.editor} labels={tableLabels} />
           </TiptapControlsBoundary>
         )}
+        {editor && <TiptapTextToolbar editor={editor} />}
         {slashState && editor && (
           <div
             className="tiptap-slash-menu-anchor"

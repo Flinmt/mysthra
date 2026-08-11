@@ -60,4 +60,5 @@ describe('TiptapEditor workspace integration', () => {
     expect(onCollaborationSaveState).toHaveBeenCalledWith({ status: 'saving', dirty: true })
     expect(tiptapMocks.collaboration.setAwarenessField).toHaveBeenCalledWith('visitor', { viewing: true })
   })
+
 })

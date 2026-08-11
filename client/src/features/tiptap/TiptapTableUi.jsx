@@ -32,7 +32,18 @@ function containsTarget(container, target) {
   return target instanceof Node && Boolean(container?.contains(target))
 }
 
+function getActiveEditorView(editor) {
+  if (!editor || editor.isDestroyed) return null
+  try {
+    return editor.view || null
+  } catch {
+    return null
+  }
+}
+
 function getTableInfoFromCellElement(editor, cell) {
+  const view = getActiveEditorView(editor)
+  if (!view) return null
   const row = cell.parentElement
   const table = row?.closest('table')
   if (!row || !table) return null
@@ -43,7 +54,7 @@ function getTableInfoFromCellElement(editor, cell) {
 
   editor.state.doc.descendants((node, position) => {
     if (node.type.name !== 'table') return true
-    const dom = editor.view.nodeDOM(position)
+    const dom = view.nodeDOM(position)
     if (dom === table || (dom instanceof HTMLElement && dom.contains(table))) {
       tablePosition = position
       tableNode = node
@@ -233,8 +244,13 @@ export function TiptapTableControls({ editor, labels }) {
       setLayout(null)
       return
     }
-    const tableDom = editor.view.nodeDOM(info.tablePosition)
-    const cellDom = editor.view.nodeDOM(info.cellPosition)
+    const view = getActiveEditorView(editor)
+    if (!view) {
+      setLayout(null)
+      return
+    }
+    const tableDom = view.nodeDOM(info.tablePosition)
+    const cellDom = view.nodeDOM(info.cellPosition)
     if (!(tableDom instanceof HTMLElement) || !(cellDom instanceof HTMLElement)) {
       setLayout(null)
       return
@@ -294,12 +310,14 @@ export function TiptapTableControls({ editor, labels }) {
   }, [activeCellPosition, updatePosition])
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed) return undefined
+    const view = getActiveEditorView(editor)
+    const editorDom = view?.dom
+    if (!view || !editorDom) return undefined
     const activateFromPointer = event => {
-      if (activeMenu || isAxisDragging) return
+      if (editor.isDestroyed || activeMenu || isAxisDragging) return
       cancelHoverExit()
       const cell = event.target.closest?.('td, th')
-      if (!cell || !editor.view.dom.contains(cell)) {
+      if (!cell || !editorDom.contains(cell)) {
         scheduleHoverExit()
         return
       }
@@ -317,11 +335,11 @@ export function TiptapTableControls({ editor, labels }) {
       }
       scheduleHoverExit()
     }
-    editor.view.dom.addEventListener('pointermove', activateFromPointer)
-    editor.view.dom.addEventListener('pointerleave', clearPointer)
+    editorDom.addEventListener('pointermove', activateFromPointer)
+    editorDom.addEventListener('pointerleave', clearPointer)
     return () => {
-      editor.view.dom.removeEventListener('pointermove', activateFromPointer)
-      editor.view.dom.removeEventListener('pointerleave', clearPointer)
+      editorDom.removeEventListener('pointermove', activateFromPointer)
+      editorDom.removeEventListener('pointerleave', clearPointer)
     }
   }, [
     activeMenu,
@@ -357,7 +375,7 @@ export function TiptapTableControls({ editor, labels }) {
       if (event.key !== 'Escape') return
       setActiveMenu('')
       setLockedCellPosition(null)
-      editor.view.focus()
+      getActiveEditorView(editor)?.focus()
     }
     document.addEventListener('pointerdown', close)
     document.addEventListener('keydown', closeOnEscape)
@@ -369,14 +387,18 @@ export function TiptapTableControls({ editor, labels }) {
 
   useEffect(() => {
     if (!isAxisDragging) return undefined
+    const view = getActiveEditorView(editor)
+    const editorDom = view?.dom
+    if (!view || !editorDom) return undefined
     const handleDragOver = event => {
+      if (editor.isDestroyed) return
       autoScrollEditorDuringDrag(editor, event.clientY)
       const cell = event.target.closest?.('td, th')
       const table = cell?.closest('table')
       const currentLayout = layoutRef.current
       const currentDrag = axisDragRef.current
       if (!cell || !table || !currentLayout || !currentDrag) return
-      const activeTableDom = editor.view.nodeDOM(currentLayout.info.tablePosition)
+      const activeTableDom = view.nodeDOM(currentLayout.info.tablePosition)
       if (!(activeTableDom instanceof HTMLElement) || !activeTableDom.contains(table)) return
       event.preventDefault()
       const row = cell.parentElement
@@ -434,18 +456,19 @@ export function TiptapTableControls({ editor, labels }) {
     document.addEventListener('dragover', handleDragOver)
     document.addEventListener('drop', finish)
     document.addEventListener('dragend', finish)
-    editor.view.dom.addEventListener('drop', finish, true)
+    editorDom.addEventListener('drop', finish, true)
     return () => {
       document.removeEventListener('dragover', handleDragOver)
       document.removeEventListener('drop', finish)
       document.removeEventListener('dragend', finish)
-      editor.view.dom.removeEventListener('drop', finish, true)
+      editorDom.removeEventListener('drop', finish, true)
     }
   }, [editor, isAxisDragging, updateAxisDrag])
 
   if (!layout || !editor?.isEditable) return null
   const { info } = layout
   const run = callback => {
+    if (editor.isDestroyed) return
     callback()
     setActiveMenu('')
     setLockedCellPosition(null)
@@ -473,7 +496,7 @@ export function TiptapTableControls({ editor, labels }) {
         const nextTarget = event.relatedTarget
         if (
           containsTarget(layerRef.current, nextTarget) ||
-          containsTarget(editor.view.dom, nextTarget)
+          containsTarget(getActiveEditorView(editor)?.dom, nextTarget)
         ) {
           cancelHoverExit()
           return

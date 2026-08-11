@@ -49,6 +49,11 @@
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
+.workspace-container .workspace-content-theme ::selection {
+  color: var(--text-primary);
+  background-color: color-mix(in srgb, var(--accent-color) 42%, transparent);
+}
+
 .workspace-container .workspace-content-theme .document-workspace,
 .workspace-container .workspace-content-theme .editor-page,
 .workspace-container .workspace-content-theme .editor-page-scroll {

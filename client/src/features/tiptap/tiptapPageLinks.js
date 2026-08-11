@@ -2,19 +2,20 @@ import Link from '@tiptap/extension-link'
 import { getMarkRange } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { isInternalPageLink } from '../../workspace/utils'
+import { normalizeExternalUrl } from './tiptapExternalLinks'
 
 export const TiptapPageLink = Link.configure({
   autolink: false,
   enableClickSelection: false,
   linkOnPaste: false,
   openOnClick: false,
-  protocols: ['mysthra'],
+  protocols: ['mysthra', 'http', 'https', 'mailto'],
   HTMLAttributes: {
     class: 'tiptap-page-link',
     rel: null,
     target: null
   },
-  isAllowedUri: href => isInternalPageLink(href)
+  isAllowedUri: href => isInternalPageLink(href) || Boolean(normalizeExternalUrl(href))
 })
 
 export function canInsertPageLink(editor) {

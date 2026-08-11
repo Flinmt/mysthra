@@ -132,7 +132,84 @@ export function rootBlockPositionFromPoint(editor, clientX, clientY) {
   return getRootBlockInfo(editor.state, result.pos)
 }
 
-export function rootBlockPositionFromPointer(editor, clientX, clientY) {
+export function getRootBlockDropSlot(editor, clientX, clientY, sourceRange = null) {
+  if (!editor || editor.isDestroyed || !editor.state.doc.childCount) return null
+  const blocks = []
+  editor.state.doc.forEach((node, position) => {
+    const dom = editor.view.nodeDOM(position)
+    if (!(dom instanceof HTMLElement)) return
+    blocks.push({ node, position, rect: dom.getBoundingClientRect() })
+  })
+  if (blocks.length === 0) return null
+
+  const minimumLeft = Math.min(...blocks.map(block => block.rect.left)) - 64
+  const maximumRight = Math.max(...blocks.map(block => block.rect.right))
+  if (clientX < minimumLeft || clientX > maximumRight) return null
+
+  const slots = blocks.map(block => ({
+    position: block.position,
+    top: block.rect.top,
+    left: block.rect.left,
+    width: block.rect.width
+  }))
+  const lastBlock = blocks.at(-1)
+  slots.push({
+    position: lastBlock.position + lastBlock.node.nodeSize,
+    top: lastBlock.rect.bottom,
+    left: lastBlock.rect.left,
+    width: lastBlock.rect.width
+  })
+
+  const slot = slots.reduce((closest, candidate) => (
+    Math.abs(candidate.top - clientY) < Math.abs(closest.top - clientY)
+      ? candidate
+      : closest
+  ))
+  if (sourceRange !== null) {
+    const range = typeof sourceRange === 'number'
+      ? (() => {
+          const source = getRootBlockInfo(editor.state, sourceRange)
+          return source ? { from: source.position, to: source.position + source.node.nodeSize } : null
+        })()
+      : sourceRange
+    if (!range || (slot.position >= range.from && slot.position <= range.to)) return null
+  }
+  return slot
+}
+
+function rootBlockPositionFromTarget(editor, target) {
+  if (!(target instanceof Node) || !editor.view.dom.contains(target)) return null
+  let rootElement = target.nodeType === Node.ELEMENT_NODE
+    ? target
+    : target.parentElement
+  while (rootElement?.parentElement && rootElement.parentElement !== editor.view.dom) {
+    rootElement = rootElement.parentElement
+  }
+  if (rootElement?.parentElement === editor.view.dom) {
+    const index = Array.from(editor.view.dom.children).indexOf(rootElement)
+    const node = editor.state.doc.child(index)
+    if (node) {
+      let position = 0
+      for (let childIndex = 0; childIndex < index; childIndex += 1) {
+        position += editor.state.doc.child(childIndex).nodeSize
+      }
+      return { node, position, index }
+    }
+  }
+  let matched = null
+  editor.state.doc.forEach((node, position, index) => {
+    if (matched) return
+    const dom = editor.view.nodeDOM(position)
+    if (dom === target || (dom instanceof Node && dom.contains(target))) {
+      matched = { node, position, index }
+    }
+  })
+  return matched
+}
+
+export function rootBlockPositionFromPointer(editor, clientX, clientY, target = null) {
+  const targetInfo = rootBlockPositionFromTarget(editor, target)
+  if (targetInfo) return targetInfo
   const info = rootBlockPositionFromPoint(editor, clientX, clientY)
   const dom = info && editor.view.nodeDOM(info.position)
   if (!info || !(dom instanceof HTMLElement)) return null
@@ -171,4 +248,52 @@ export function autoScrollEditorDuringDrag(editor, clientY) {
   const threshold = 48
   if (clientY < rect.top + threshold) target.scrollTop -= 14
   if (clientY > rect.bottom - threshold) target.scrollTop += 14
+}
+
+function sanitizeDragPreview(root) {
+  root.removeAttribute('contenteditable')
+  root.removeAttribute('draggable')
+  root.removeAttribute('id')
+  root.querySelectorAll('[contenteditable], [draggable], [id]').forEach(element => {
+    element.removeAttribute('contenteditable')
+    element.removeAttribute('draggable')
+    element.removeAttribute('id')
+  })
+}
+
+export function createRootBlockDragPreview(editor, blockPositions) {
+  if (!editor || editor.isDestroyed) return null
+  const positions = Array.isArray(blockPositions) ? blockPositions : [blockPositions]
+  const source = editor.view.nodeDOM(positions[0])
+  if (!(source instanceof HTMLElement)) return null
+
+  const sourceRect = source.getBoundingClientRect()
+  const preview = document.createElement('div')
+  positions.slice(0, 3).forEach(position => {
+    const block = editor.view.nodeDOM(position)
+    if (!(block instanceof HTMLElement)) return
+    const clone = block.cloneNode(true)
+    sanitizeDragPreview(clone)
+    preview.append(clone)
+  })
+  preview.className = 'tiptap-block-drag-preview ProseMirror'
+  preview.setAttribute('aria-hidden', 'true')
+  preview.style.width = `${Math.min(560, Math.max(240, sourceRect.width || source.offsetWidth || 240))}px`
+  if (positions.length > 1) {
+    const count = document.createElement('span')
+    count.className = 'tiptap-block-drag-preview-count'
+    count.textContent = String(positions.length)
+    preview.append(count)
+  }
+  const previewHost = source.closest('.tiptap-editor') || document.body
+  previewHost.append(preview)
+
+  return {
+    element: preview,
+    offsetX: 24,
+    offsetY: Math.min(20, Math.max(8, (sourceRect.height || source.offsetHeight || 24) / 2)),
+    destroy() {
+      preview.remove()
+    }
+  }
 }
