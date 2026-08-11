@@ -20,6 +20,7 @@ import {
 } from './tiptapBlockSelection'
 import TiptapBlockControls from './TiptapBlockControls'
 import { createTiptapCommands } from './tiptapCommands'
+import { filterTiptapCommands } from './tiptapCommandSearch'
 import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
 import { getTiptapMenuPosition } from './tiptapMenuPosition'
 import { insertAssetMedia, TiptapAssetAudio, TiptapAssetImage } from './tiptapMedia'
@@ -405,15 +406,13 @@ export default function TiptapEditor({
     const { from } = editor.state.selection
     const lineStart = $from.start()
     const textBeforeCursor = editor.state.doc.textBetween(lineStart, from, '\n')
-    const match = textBeforeCursor.match(/^\/(\S*)$/)
+    const match = textBeforeCursor.match(/^\/(.*)$/)
     if (!match) {
       setSlashState(null)
       return
     }
-    const query = match[1].toLowerCase()
-    const items = commands.filter(item =>
-      [item.label, ...(item.keywords || [])].some(value => value.toLowerCase().includes(query))
-    )
+    const query = match[1]
+    const items = filterTiptapCommands(commands, query)
     const coords = editor.view.coordsAtPos(lineStart)
     const position = getTiptapMenuPosition(coords, {
       width: window.innerWidth,

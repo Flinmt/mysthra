@@ -1,11 +1,12 @@
 import Suggestion from '@tiptap/suggestion'
-import { TIPTAP_COMMANDS } from './TiptapSlashMenu'
+import { TIPTAP_COMMANDS } from './tiptapCommands'
+import { filterTiptapCommands } from './tiptapCommandSearch'
 
 export function createSuggestionExtension(setSlashState) {
   return Suggestion.configure({
     char: '/',
     allowSpaces: false,
-    items: ({ query }) => TIPTAP_COMMANDS.filter(item => item.label.toLowerCase().includes(query.toLowerCase())),
+    items: ({ query }) => filterTiptapCommands(TIPTAP_COMMANDS, query),
     render: () => {
       let selectedIndex = 0
       let currentProps

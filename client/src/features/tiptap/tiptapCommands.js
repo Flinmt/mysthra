@@ -39,23 +39,34 @@ export function createTiptapCommands(t) {
   const mediaGroup = translate(t, 'workspace.tiptap_group_media', 'Mídia')
 
   return [
-    command('paragraph', translate(t, 'workspace.tiptap_command_text', 'Texto'), textGroup, Pilcrow, ['Mod', 'Alt', '0']),
+    command('paragraph', translate(t, 'workspace.tiptap_command_text', 'Texto'), textGroup, Pilcrow, ['Mod', 'Alt', '0'], [
+      'text', 'texto', 'paragraph', 'parágrafo', 'paragrafo', 'plain text'
+    ]),
     ...[1, 2, 3, 4, 5, 6].map(level => command(
       `heading-${level}`,
       translate(t, 'workspace.tiptap_command_heading', `Título ${level}`).replace('{{level}}', level),
       textGroup,
       [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6][level - 1],
-      ['Mod', 'Alt', String(level)]
+      ['Mod', 'Alt', String(level)],
+      [`h${level}`, `heading ${level}`, `titulo ${level}`, `título ${level}`, `cabeçalho ${level}`]
     )),
-    command('blockquote', translate(t, 'workspace.tiptap_command_quote', 'Citação'), textGroup, Quote),
+    command('blockquote', translate(t, 'workspace.tiptap_command_quote', 'Citação'), textGroup, Quote, null, [
+      'quote', 'blockquote', 'citação', 'citacao'
+    ]),
     ...[1, 2, 3, 4, 5, 6].map(level => command(
       `toggle-heading-${level}`,
       translate(t, 'workspace.tiptap_command_toggle_heading', `Título expansível ${level}`).replace('{{level}}', level),
       toggleGroup,
-      [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6][level - 1]
+      [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6][level - 1],
+      null,
+      [`toggle h${level}`, `toggle ${level}`, `titulo expansivel ${level}`, `título recolhível ${level}`]
     )),
-    command('bulletList', translate(t, 'workspace.tiptap_command_list', 'Lista'), listGroup, List, ['Mod', 'Shift', '8']),
-    command('orderedList', translate(t, 'workspace.tiptap_command_ordered_list', 'Lista numerada'), listGroup, ListOrdered, ['Mod', 'Shift', '7']),
+    command('bulletList', translate(t, 'workspace.tiptap_command_list', 'Lista'), listGroup, List, ['Mod', 'Shift', '8'], [
+      'bullet', 'bullets', 'unordered list', 'lista não ordenada', 'marcadores'
+    ]),
+    command('orderedList', translate(t, 'workspace.tiptap_command_ordered_list', 'Lista numerada'), listGroup, ListOrdered, ['Mod', 'Shift', '7'], [
+      'numbered list', 'ordered list', 'lista ordenada', 'números', 'numeros'
+    ]),
     command('callout', translate(t, 'workspace.tiptap_command_callout', 'Destaque'), highlightGroup, Info, null, [
       'callout',
       'aviso',
@@ -65,7 +76,9 @@ export function createTiptapCommands(t) {
       'notice',
       'alert'
     ]),
-    command('horizontalRule', translate(t, 'workspace.tiptap_command_divider', 'Divisor'), structureGroup, Minus),
+    command('horizontalRule', translate(t, 'workspace.tiptap_command_divider', 'Divisor'), structureGroup, Minus, null, [
+      'divider', 'divisor', 'separator', 'separador', 'horizontal rule', 'linha', 'hr'
+    ]),
     command('table', translate(t, 'workspace.tiptap_command_table', 'Tabela'), structureGroup, Grid3X3, null, [
       'table',
       'tabela',

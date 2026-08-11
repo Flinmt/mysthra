@@ -151,6 +151,23 @@ describe('Tiptap media picker integration', () => {
     expect(editor.querySelectorAll('p')).toHaveLength(1)
   })
 
+  it('finds slash commands by aliases and multi-word queries', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<TiptapEditor content="<p></p>" editable worldId="world" />)
+    let editor = document.querySelector('.ProseMirror')
+
+    await user.click(editor)
+    await user.type(editor, '/H2')
+    expect(await screen.findByRole('option', { name: /Título 2/ })).not.toBeNull()
+
+    unmount()
+    render(<TiptapEditor content="<p></p>" editable worldId="world" />)
+    editor = document.querySelector('.ProseMirror')
+    await user.click(editor)
+    await user.type(editor, '/lista numerada')
+    expect(await screen.findByRole('option', { name: /Lista numerada/ })).not.toBeNull()
+  })
+
   it('inserts a callout from the slash menu', async () => {
     const user = userEvent.setup()
     render(<TiptapEditor content="<p></p>" editable worldId="world" />)
