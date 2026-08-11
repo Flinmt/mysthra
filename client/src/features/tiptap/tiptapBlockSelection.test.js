@@ -1,6 +1,8 @@
 import { Editor, Node } from '@tiptap/core'
 import Paragraph from '@tiptap/extension-paragraph'
+import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import Text from '@tiptap/extension-text'
+import { NodeSelection } from '@tiptap/pm/state'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { preventNativeSelectAll } from '../../appKeyboardShortcuts'
 import {
@@ -22,13 +24,13 @@ function paragraph(text) {
   return { type: 'paragraph', content: text ? [{ type: 'text', text }] : undefined }
 }
 
-function createEditor(labels = ['A', 'B', 'C']) {
+function createEditor(labels = ['A', 'B', 'C'], content = null) {
   const element = document.createElement('div')
   document.body.append(element)
   const editor = new Editor({
     element,
-    extensions: [TestDocument, Text, Paragraph, TiptapBlockSelection],
-    content: { type: 'doc', content: labels.map(paragraph) }
+    extensions: [TestDocument, Text, Paragraph, HorizontalRule, TiptapBlockSelection],
+    content: content || { type: 'doc', content: labels.map(paragraph) }
   })
   editors.add(editor)
   return editor
@@ -59,6 +61,27 @@ afterEach(() => {
 })
 
 describe('Tiptap block selection', () => {
+  it('selects a clicked divider without placing a text cursor beside it', () => {
+    const editor = createEditor([], {
+      type: 'doc',
+      content: [paragraph('Before'), { type: 'horizontalRule' }, paragraph('After')]
+    })
+    const dividerPosition = editor.state.doc.child(0).nodeSize
+    const divider = editor.view.dom.querySelector('hr')
+    document.elementFromPoint = () => divider
+
+    divider.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true, cancelable: true, clientX: 1, clientY: 1
+    }))
+    divider.dispatchEvent(new MouseEvent('click', {
+      bubbles: true, cancelable: true, clientX: 1, clientY: 1
+    }))
+
+    expect(editor.state.selection).toBeInstanceOf(NodeSelection)
+    expect(editor.state.selection.from).toBe(dividerPosition)
+    expect(getSelectedRootBlocks(editor).map(block => block.position)).toEqual([dividerPosition])
+  })
+
   it('uses Ctrl+A to select all root blocks without browser selection', () => {
     const editor = createEditor()
     editor.commands.focus()

@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core'
 import { DOMParser as ProseMirrorDOMParser, DOMSerializer, Fragment } from '@tiptap/pm/model'
-import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
+import { NodeSelection, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { getRootBlockInfo } from './tiptapBlocks'
 
@@ -214,6 +214,23 @@ function intersects(rect, blockRect) {
     rect.top <= blockRect.bottom && rect.bottom >= blockRect.top
 }
 
+function selectClickedDivider(view, event) {
+  const divider = event.target instanceof Element
+    ? event.target.closest('hr')
+    : null
+  if (!divider || divider.parentElement !== view.dom) return false
+  const index = Array.from(view.dom.children).indexOf(divider)
+  const block = getRootBlocks(view.state)[index]
+  if (!block || block.node.type.name !== 'horizontalRule') return false
+  event.preventDefault()
+  const transaction = view.state.tr.setSelection(
+    NodeSelection.create(view.state.doc, block.position)
+  )
+  view.dispatch(selectionMeta(transaction, createSelection([block])))
+  view.focus()
+  return true
+}
+
 export function beginBlockMarqueeSelection(editor, event) {
   const target = event.target
   if (target instanceof Element) {
@@ -348,6 +365,8 @@ export const TiptapBlockSelection = Extension.create({
           return false
         },
         handleDOMEvents: {
+          mousedown: (view, event) => selectClickedDivider(view, event),
+          click: (view, event) => selectClickedDivider(view, event),
           pointerdown: (_view, event) => {
             const started = beginBlockMarqueeSelection(editor, event)
             if (!started) clearBlockSelection(editor)

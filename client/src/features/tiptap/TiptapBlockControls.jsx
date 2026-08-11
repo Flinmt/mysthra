@@ -218,13 +218,28 @@ export default function TiptapBlockControls({
       const info = rootBlockPositionFromPointer(
         editor,
         event.clientX,
-        event.clientY
+        event.clientY,
+        event.target
       )
       if (!info) {
         setHoveredPosition(null)
         return
       }
       setHoveredPosition(info.position)
+    }
+    const selectAtomFromPointer = event => {
+      if (editor.isDestroyed || !editor.isEditable) return
+      const info = rootBlockPositionFromPointer(
+        editor,
+        event.clientX,
+        event.clientY,
+        event.target
+      )
+      if (info?.node.type.name !== 'horizontalRule') return
+      cancelHoverExit()
+      setPointerInsideEditor(true)
+      setHoveredPosition(info.position)
+      selectRootBlock(editor, info.position)
     }
     const clearPointer = event => {
       if (containsTarget(layerRef.current, event.relatedTarget)) {
@@ -236,11 +251,13 @@ export default function TiptapBlockControls({
     activateFromSelection()
     editor.on('selectionUpdate', activateFromSelection)
     editor.on('transaction', activateFromSelection)
+    editorDom.addEventListener('pointerdown', selectAtomFromPointer)
     editorDom.addEventListener('pointermove', activateFromPointer)
     editorDom.addEventListener('pointerleave', clearPointer)
     return () => {
       editor.off('selectionUpdate', activateFromSelection)
       editor.off('transaction', activateFromSelection)
+      editorDom.removeEventListener('pointerdown', selectAtomFromPointer)
       editorDom.removeEventListener('pointermove', activateFromPointer)
       editorDom.removeEventListener('pointerleave', clearPointer)
     }

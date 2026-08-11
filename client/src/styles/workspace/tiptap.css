@@ -1182,7 +1182,19 @@
 }
 
 .tiptap-editor .ProseMirror strong { color: var(--text-primary); }
-.tiptap-editor .ProseMirror hr { border: 0; border-top: 1px solid var(--workspace-theme-accent-border); }
+.tiptap-editor .ProseMirror hr {
+  height: 20px;
+  margin-block: 4px;
+  border: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 9px,
+    var(--workspace-theme-accent-border, var(--border-color, rgba(127, 127, 127, .45))) 9px,
+    var(--workspace-theme-accent-border, var(--border-color, rgba(127, 127, 127, .45))) 10px,
+    transparent 10px
+  );
+  cursor: default;
+}
 
 .tiptap-media-block {
   position: relative;

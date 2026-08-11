@@ -1,5 +1,6 @@
 import { Editor, Node } from '@tiptap/core'
 import Paragraph from '@tiptap/extension-paragraph'
+import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import Text from '@tiptap/extension-text'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -40,6 +41,7 @@ function createEditor(content) {
       TiptapTestDocument,
       Text,
       Paragraph,
+      HorizontalRule,
       TiptapListItem,
       TiptapBulletList
     ],
@@ -118,6 +120,28 @@ describe('Tiptap root blocks', () => {
     const lastPosition = editor.state.doc.child(0).nodeSize + editor.state.doc.child(1).nodeSize
     expect(deleteRootBlock(editor, lastPosition)).toBe(true)
     expect(editor.state.doc.content.content.map(node => node.textContent)).toEqual(['A', 'B'])
+  })
+
+  it('locates and manages a divider as a complete root block', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [paragraph('Before'), { type: 'horizontalRule' }, paragraph('After')]
+    })
+    const divider = editor.view.dom.querySelector('hr')
+    const dividerPosition = editor.state.doc.child(0).nodeSize
+
+    expect(rootBlockPositionFromPointer(editor, 0, 0, divider)).toMatchObject({
+      position: dividerPosition,
+      index: 1
+    })
+    expect(duplicateRootBlock(editor, dividerPosition)).toBe(true)
+    expect(editor.state.doc.content.content.map(node => node.type.name)).toEqual([
+      'paragraph', 'horizontalRule', 'horizontalRule', 'paragraph'
+    ])
+    expect(deleteRootBlock(editor, dividerPosition)).toBe(true)
+    expect(editor.state.doc.content.content.map(node => node.type.name)).toEqual([
+      'paragraph', 'horizontalRule', 'paragraph'
+    ])
   })
 
   it('uses one canonical drop slot per boundary and hides no-op slots', () => {

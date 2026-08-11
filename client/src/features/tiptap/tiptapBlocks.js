@@ -177,7 +177,39 @@ export function getRootBlockDropSlot(editor, clientX, clientY, sourceRange = nul
   return slot
 }
 
-export function rootBlockPositionFromPointer(editor, clientX, clientY) {
+function rootBlockPositionFromTarget(editor, target) {
+  if (!(target instanceof Node) || !editor.view.dom.contains(target)) return null
+  let rootElement = target.nodeType === Node.ELEMENT_NODE
+    ? target
+    : target.parentElement
+  while (rootElement?.parentElement && rootElement.parentElement !== editor.view.dom) {
+    rootElement = rootElement.parentElement
+  }
+  if (rootElement?.parentElement === editor.view.dom) {
+    const index = Array.from(editor.view.dom.children).indexOf(rootElement)
+    const node = editor.state.doc.child(index)
+    if (node) {
+      let position = 0
+      for (let childIndex = 0; childIndex < index; childIndex += 1) {
+        position += editor.state.doc.child(childIndex).nodeSize
+      }
+      return { node, position, index }
+    }
+  }
+  let matched = null
+  editor.state.doc.forEach((node, position, index) => {
+    if (matched) return
+    const dom = editor.view.nodeDOM(position)
+    if (dom === target || (dom instanceof Node && dom.contains(target))) {
+      matched = { node, position, index }
+    }
+  })
+  return matched
+}
+
+export function rootBlockPositionFromPointer(editor, clientX, clientY, target = null) {
+  const targetInfo = rootBlockPositionFromTarget(editor, target)
+  if (targetInfo) return targetInfo
   const info = rootBlockPositionFromPoint(editor, clientX, clientY)
   const dom = info && editor.view.nodeDOM(info.position)
   if (!info || !(dom instanceof HTMLElement)) return null
