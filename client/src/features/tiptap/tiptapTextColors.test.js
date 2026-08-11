@@ -1,6 +1,7 @@
 import { Editor, Node } from '@tiptap/core'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
+import Bold from '@tiptap/extension-bold'
 import { Color, TextStyle } from '@tiptap/extension-text-style'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getSelectionTextColor, normalizeTextColor } from './tiptapTextColors'
@@ -13,7 +14,7 @@ function createEditor() {
   document.body.append(element)
   const editor = new Editor({
     element,
-    extensions: [TestDocument, Text, Paragraph, TextStyle, Color],
+    extensions: [TestDocument, Text, Paragraph, Bold, TextStyle, Color],
     content: '<p>Texto colorido</p>'
   })
   editors.add(editor)
@@ -57,5 +58,16 @@ describe('Tiptap text colors', () => {
     editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 })
 
     expect(getSelectionTextColor(editor)).toEqual({ color: '', mixed: true })
+  })
+
+  it('keeps the selected color when the text is bold', () => {
+    const editor = createEditor()
+    editor.commands.setTextSelection({ from: 1, to: 6 })
+    editor.chain().focus().setBold().setColor('#d97872').run()
+
+    const marks = editor.getJSON().content[0].content[0].marks
+    expect(marks.map(mark => mark.type)).toEqual(expect.arrayContaining(['bold', 'textStyle']))
+    expect(marks.find(mark => mark.type === 'textStyle')?.attrs.color).toBe('#d97872')
+    expect(editor.getHTML()).toContain('color: rgb(217, 120, 114)')
   })
 })

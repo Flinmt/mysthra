@@ -152,6 +152,13 @@ describe('workspace style boundaries', () => {
     expect(markdownTheme).not.toMatch(/#(?:8b5cf6|a78bfa|c4b5fd|ddd6fe)/i)
   })
 
+  it('lets bold text inherit an explicitly selected text color', () => {
+    const tiptap = fs.readFileSync(path.join(import.meta.dirname, 'tiptap.css'), 'utf8')
+
+    expect(tiptap).toContain('.tiptap-editor .ProseMirror strong { color: inherit; }')
+    expect(tiptap).not.toContain('.tiptap-editor .ProseMirror strong { color: var(--text-primary); }')
+  })
+
   it('scopes deletion confirmations to the selected world theme', () => {
     const tokens = fs.readFileSync(path.join(import.meta.dirname, 'tokens.css'), 'utf8')
     const overlays = fs.readFileSync(path.join(import.meta.dirname, 'overlays.css'), 'utf8')
