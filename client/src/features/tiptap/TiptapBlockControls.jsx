@@ -25,10 +25,15 @@ import {
   getRootBlockDropSlot,
   getRootBlockInfo,
   insertRootParagraph,
-  moveRootBlock,
   rootBlockPositionFromPointer,
   selectRootBlock
 } from './tiptapBlocks'
+import {
+  getSelectedRootBlocks,
+  moveSelectedRootBlocks,
+  selectRootBlockWithModifiers,
+  setBlockSelection
+} from './tiptapBlockSelection'
 import {
   BLOCK_TRANSFORM_OPTIONS,
   canTransformRootBlock,
@@ -281,7 +286,7 @@ export default function TiptapBlockControls({
         editor,
         event.clientX,
         event.clientY,
-        currentDrag.sourcePosition
+        { from: currentDrag.sourceFrom, to: currentDrag.sourceTo }
       )
       if (!slot) {
         updateDragState(current => ({
@@ -307,7 +312,7 @@ export default function TiptapBlockControls({
       event.stopPropagation()
       const currentDrag = dragStateRef.current
       if (currentDrag && currentDrag.targetPosition !== null) {
-        moveRootBlock(editor, currentDrag.sourcePosition, currentDrag.targetPosition)
+        moveSelectedRootBlocks(editor, currentDrag.targetPosition)
       }
       updateDragState(null)
       setHoveredPosition(null)
@@ -417,9 +422,18 @@ export default function TiptapBlockControls({
         aria-expanded={menuOpen}
         title={labels.menu}
         onPointerEnter={cancelHoverExit}
-        onClick={() => {
+        onClick={event => {
           if (didDragRef.current) {
             didDragRef.current = false
+            return
+          }
+          const toggle = event.ctrlKey || event.metaKey
+          const extend = event.shiftKey
+          selectRootBlockWithModifiers(editor, layout.block.position, { toggle, extend })
+          if (toggle || extend) {
+            setMenuOpen(false)
+            setTransformMenuOpen(false)
+            setLockedPosition(layout.block.position)
             return
           }
           const opening = !menuOpen
@@ -435,8 +449,26 @@ export default function TiptapBlockControls({
             'application/x-mysthra-block',
             String(layout.block.position)
           )
+          let selectedBlocks = getSelectedRootBlocks(editor)
+          if (!selectedBlocks.some(block => block.position === layout.block.position)) {
+            setBlockSelection(
+              editor,
+              layout.block.position,
+              layout.block.position + layout.block.node.nodeSize
+            )
+            selectedBlocks = [{
+              node: layout.block.node,
+              position: layout.block.position
+            }]
+          }
+          const sourceFrom = selectedBlocks[0].position
+          const lastSelected = selectedBlocks.at(-1)
+          const sourceTo = lastSelected.position + lastSelected.node.nodeSize
           clearDragPreview()
-          const preview = createRootBlockDragPreview(editor, layout.block.position)
+          const preview = createRootBlockDragPreview(
+            editor,
+            selectedBlocks.map(block => block.position)
+          )
           if (preview && typeof event.dataTransfer.setDragImage === 'function') {
             dragPreviewRef.current = preview
             event.dataTransfer.setDragImage(preview.element, preview.offsetX, preview.offsetY)
@@ -448,6 +480,8 @@ export default function TiptapBlockControls({
           setLockedPosition(layout.block.position)
           updateDragState({
             sourcePosition: layout.block.position,
+            sourceFrom,
+            sourceTo,
             targetPosition: null,
             indicator: null
           })

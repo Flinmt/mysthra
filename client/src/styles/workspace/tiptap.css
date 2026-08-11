@@ -349,6 +349,20 @@
   border-color: color-mix(in srgb, var(--accent-color) 42%, transparent);
 }
 
+.tiptap-editor .ProseMirror > .tiptap-block-multi-selected {
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-color) 72%, transparent);
+}
+
+.tiptap-block-marquee {
+  position: fixed;
+  z-index: 124;
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 58%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
 .tiptap-block-menu,
 .tiptap-table-axis-menu {
   position: fixed;
@@ -458,6 +472,20 @@
 .tiptap-editor .tiptap-block-drag-preview.ProseMirror > * {
   margin-top: 0;
   margin-bottom: 0;
+}
+
+.tiptap-block-drag-preview-count {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  min-width: 20px;
+  padding: 2px 6px;
+  color: var(--tiptap-menu-text);
+  background: var(--accent-color);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .tiptap-table-active-cell {

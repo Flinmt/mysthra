@@ -9,6 +9,7 @@ import WorldDialog from './features/worlds/WorldDialog'
 import WorldSettingsDialog from './features/worlds/WorldSettingsDialog'
 import { CollaborationSessionCacheProvider } from './hooks/collaborationSessionCache'
 import { getCollaborationUrl } from './hooks/useCollaborationRoom'
+import { preventNativeSelectAll } from './appKeyboardShortcuts'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -16,6 +17,11 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
 
   const { t } = useTranslation()
+
+  useEffect(() => {
+    document.addEventListener('keydown', preventNativeSelectAll)
+    return () => document.removeEventListener('keydown', preventNativeSelectAll)
+  }, [])
 
   useEffect(() => {
     fetch('/api/auth/verify')

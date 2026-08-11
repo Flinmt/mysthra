@@ -87,6 +87,34 @@ describe('Tiptap media picker integration', () => {
     expect(screen.queryByRole('button', { name: /Abrir controles da linha/ })).toBeNull()
   })
 
+  it('starts block marquee selection from the editor outer margin', async () => {
+    render(
+      <section className="editor-page-body">
+        <TiptapEditor
+          content="<p>A</p><p>B</p><p>C</p>"
+          editable
+          worldId="world"
+        />
+      </section>
+    )
+    const editor = document.querySelector('.ProseMirror')
+    await waitFor(() => expect(editor?.children).toHaveLength(3))
+    Array.from(editor.children).forEach((block, index) => {
+      block.getBoundingClientRect = () => ({
+        left: 40, right: 340, width: 300,
+        top: 10 + index * 40, bottom: 40 + index * 40, height: 30
+      })
+    })
+
+    fireEvent.pointerDown(document.querySelector('.editor-page-body'), {
+      clientX: 0, clientY: 5
+    })
+    fireEvent.pointerMove(document, { clientX: 350, clientY: 75 })
+    fireEvent.pointerUp(document)
+
+    expect(editor.querySelectorAll('.tiptap-block-multi-selected')).toHaveLength(2)
+  })
+
   it('opens the image explorer from /image and inserts the confirmed asset', async () => {
     const user = userEvent.setup()
     const onRequestMedia = vi.fn()

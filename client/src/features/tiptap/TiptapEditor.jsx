@@ -14,6 +14,10 @@ import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror'
 import TiptapSlashMenu from './TiptapSlashMenu'
 import { TiptapCallout } from './TiptapCallout'
 import { TiptapBlockAwareness } from './tiptapBlockAwareness'
+import {
+  beginBlockMarqueeSelection,
+  TiptapBlockSelection
+} from './tiptapBlockSelection'
 import TiptapBlockControls from './TiptapBlockControls'
 import { createTiptapCommands } from './tiptapCommands'
 import { TiptapEditingShortcuts } from './tiptapEditingShortcuts'
@@ -274,6 +278,7 @@ export default function TiptapEditor({
       headingPlaceholder: level => t('workspace.tiptap_heading_placeholder', { level }),
       toggleHeadingPlaceholder: level => t('workspace.tiptap_toggle_heading_placeholder', { level })
     }),
+    TiptapBlockSelection,
     ...(collaboration.fragment ? [Extension.create({
       name: 'tiptapYjsCollaboration',
       addProseMirrorPlugins: () => [ySyncPlugin(collaboration.fragment), yUndoPlugin()]
@@ -448,6 +453,19 @@ export default function TiptapEditor({
 
   useEffect(() => () => clearPageSuggestionTimers(), [clearPageSuggestionTimers])
 
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return undefined
+    const editorDom = editor.view.dom
+    const selectionSurface = editorDom.closest('.editor-page-body') || editorDom.closest('.tiptap-editor-shell')
+    if (!selectionSurface) return undefined
+    const startMarqueeFromPageMargin = event => {
+      if (!selectionSurface.contains(event.target) || editorDom.contains(event.target)) return
+      beginBlockMarqueeSelection(editor, event)
+    }
+    document.addEventListener('pointerdown', startMarqueeFromPageMargin, true)
+    return () => document.removeEventListener('pointerdown', startMarqueeFromPageMargin, true)
+  }, [editor])
+
   const executeSlashCommand = useCallback((item) => {
     if (!editor || !slashState) return
     const chain = editor.chain().focus().deleteRange(slashState.range)
@@ -559,6 +577,10 @@ export default function TiptapEditor({
     pageSuggestionPopover,
     slashState
   ])
+  const handleEditorPointerDown = useCallback(event => {
+    if (!editor || editor.isDestroyed || editor.view.dom.contains(event.target)) return
+    beginBlockMarqueeSelection(editor, event.nativeEvent)
+  }, [editor])
 
   const handleEditorClick = useCallback((event) => {
     if (!editor?.view.dom.contains(event.target)) return
@@ -628,6 +650,7 @@ export default function TiptapEditor({
       onClickCapture={handleEditorClick}
       onFocusCapture={handleEditorFocus}
       onKeyDownCapture={handleEditorKeyDown}
+      onPointerDown={handleEditorPointerDown}
       onPointerOut={handleEditorPointerOut}
       onPointerOver={handleEditorPointerOver}
     >
